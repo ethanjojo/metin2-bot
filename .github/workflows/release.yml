@@ -1,0 +1,113 @@
+name: Windows build and release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    outputs:
+      version: ${{ steps.identity.outputs.version }}
+      tag: ${{ steps.identity.outputs.tag }}
+      prerelease: ${{ steps.identity.outputs.prerelease }}
+      artifact: ${{ steps.identity.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.14.0'
+          architecture: x64
+      - name: Install pinned dependencies
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-build.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
+      - name: Release identity
+        id: identity
+        shell: pwsh
+        run: |
+          .\.venv\Scripts\python.exe -m tools.release_metadata --ref $env:GITHUB_REF --sha $env:GITHUB_SHA --run-number $env:GITHUB_RUN_NUMBER --output $env:GITHUB_OUTPUT
+          if ($LASTEXITCODE -ne 0) { throw 'Invalid release identity.' }
+          if ($env:GITHUB_REF.StartsWith('refs/tags/')) {
+            git merge-base --is-ancestor HEAD origin/main
+            if ($LASTEXITCODE -ne 0) { throw 'Stable releases must tag a commit on main.' }
+          }
+      - name: Verify source
+        shell: pwsh
+        run: |
+          .\.venv\Scripts\python.exe -m pip check
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency check failed.' }
+          .\.venv\Scripts\python.exe -m compileall -q metin_bot tools tests packaging_entry.py
+          if ($LASTEXITCODE -ne 0) { throw 'Compilation check failed.' }
+          .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+          .\.venv\Scripts\python.exe -m metin_bot --self-test --self-test-report build/selftest-source.json
+          if ($LASTEXITCODE -ne 0) { throw 'Source self-test failed.' }
+      - name: Build installer
+        shell: pwsh
+        env:
+          BUILD_VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          $compiler = & .\tools\prepare_compiler.ps1
+          .\tools\build.ps1 -Version $env:BUILD_VERSION -BuildNumber $env:GITHUB_RUN_NUMBER -CommitSha $env:GITHUB_SHA -CompilerPath $compiler
+      - name: Verify installed bundle
+        shell: pwsh
+        env:
+          INSTALLER_NAME: ${{ steps.identity.outputs.artifact }}
+          BUILD_VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          .\tools\verify_installer.ps1 -InstallerPath (Join-Path 'dist/release' $env:INSTALLER_NAME) -Version $env:BUILD_VERSION -CommitSha $env:GITHUB_SHA
+      - name: Upload verified release artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-installer
+          path: |
+            dist/release/${{ steps.identity.outputs.artifact }}
+            dist/release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    needs: build
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: windows-2025
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: windows-installer
+          path: dist/release
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.build.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.build.outputs.version }}
+          RELEASE_PRERELEASE: ${{ needs.build.outputs.prerelease }}
+          INSTALLER_NAME: ${{ needs.build.outputs.artifact }}
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          .\tools\publish_release.ps1 -Tag $env:RELEASE_TAG -Version $env:RELEASE_VERSION -CommitSha $env:BUILD_SHA -InstallerName $env:INSTALLER_NAME -Prerelease ($env:RELEASE_PRERELEASE -eq 'true')

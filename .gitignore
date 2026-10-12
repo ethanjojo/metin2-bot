@@ -1,0 +1,31 @@
+__pycache__/
+*.py[cod]
+.venv/
+# Local user data: profiles, selection, PNG templates and all nested temporary files.
+/profiles/
+/ui-settings.json
+/config.json
+/config.queue-backup.json
+# Atomic JSON writes may remain after an interrupted process.
+/*.json.tmp
+# Keep diagnostic source scripts; ignore local screenshots, logs and fixture data.
+diagnostics/*
+!diagnostics/*.py
+*.log
+
+# Build/package outputs and development tooling.
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.idea/
+.vscode/
+.env
+.env.*
+!.env.example
+Thumbs.db
+Desktop.ini
