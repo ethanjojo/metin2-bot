@@ -10,7 +10,11 @@ function gh {
     if ($args[0] -eq 'api') {
         if ($args -contains 'POST') { $script:tagCreated=$true;$global:LASTEXITCODE=0;return }
         if ($Case -eq 'mismatch') { $global:LASTEXITCODE=0;return ('f'*40) }
-        if (!$script:tagCreated -and $Case -eq 'new') { $global:LASTEXITCODE=1;return 'Not found (HTTP 404)' }
+        if (!$script:tagCreated -and $Case -eq 'new') {
+            $global:LASTEXITCODE=1
+            if ($args[1] -match '/commits/') { return 'No commit found for SHA (HTTP 422)' }
+            return 'Not found (HTTP 404)'
+        }
         $global:LASTEXITCODE=0;return $script:sha
     }
     if ($args[1] -eq 'view') {

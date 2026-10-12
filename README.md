@@ -6,7 +6,7 @@ The UI and this guide are in English. Custom profile and skill names are preserv
 
 ## Install the standalone application
 
-Download `MetinBotSetup-<version>-windows-x64.exe` from the repository Releases page, run it and confirm UAC. The installer places the application and bundled Python/libraries in Program Files and creates a Start menu shortcut; a desktop shortcut is optional. Python and pip are not required on the user machine. Starting MetinBot requests UAC through its native manifest. Uninstalling keeps user profiles and settings.
+Download `MetinBotSetup-<version>-windows-x64.exe` from [GitHub Releases](https://github.com/ethanjojo/metin2-bot/releases), run it and confirm UAC. The installer places the application and bundled Python/libraries in Program Files and creates a Start menu shortcut; a desktop shortcut is optional. Python and pip are not required on the user machine. Starting MetinBot requests UAC through its native manifest. Uninstalling keeps user profiles and settings.
 
 The first installed launch offers to import profiles and settings from an old source or data folder. Select the folder containing `profiles/`, `ui-settings.json` or legacy `config.json`; originals are preserved. Choose No for a fresh profile or Cancel to stop without creating new data.
 

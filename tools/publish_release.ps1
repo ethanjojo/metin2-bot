@@ -11,13 +11,16 @@ $checksums=Join-Path $release 'SHA256SUMS.txt'
 $hash=(Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
 if ((Get-Content -LiteralPath $checksums -Raw).Trim() -ne "$hash  $InstallerName") { throw 'Release checksum mismatch.' }
 function Test-RemoteTag([bool]$AllowMissing) {
-    # The commits endpoint resolves both lightweight and annotated tags to a commit.
+    # Check the ref first: a missing commit lookup returns 422, not a missing-ref 404.
     $ref=[Uri]::EscapeDataString($Tag)
-    $resolved=gh api "repos/$env:GH_REPO/commits/$ref" --jq .sha 2>&1
+    $reference=gh api "repos/$env:GH_REPO/git/ref/tags/$ref" --jq .object.sha 2>&1
     if ($LASTEXITCODE -ne 0) {
-        if ($AllowMissing -and (($resolved | Out-String) -match 'HTTP 404')) { return $false }
+        if ($AllowMissing -and (($reference | Out-String) -match 'HTTP 404')) { return $false }
         throw 'Could not verify the remote release tag.'
     }
+    # Resolve both lightweight and annotated tags to their final commit.
+    $resolved=gh api "repos/$env:GH_REPO/commits/$ref" --jq .sha 2>&1
+    if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the remote release tag commit.' }
     if (($resolved | Out-String).Trim() -ne $CommitSha) { throw 'Remote release tag does not point to the tested commit.' }
     return $true
 }
