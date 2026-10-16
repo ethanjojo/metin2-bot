@@ -2,7 +2,7 @@
 
 | Platform | Current status | Remaining acceptance |
 | --- | --- | --- |
-| Windows x64, Windows 10 2004/build 19041 or newer | Rust prerelease; native HWND capture/input and guards implemented, 122 regression tests; GPU UI and isolated child-process transport verified | Real-client cycle, exact-release packaged self-test and hosted clean install/upgrade/uninstall |
+| Windows x64, Windows 10 2004/build 19041 or newer | Rust prerelease; native HWND capture/input and guards implemented, 122 regression tests; GPU UI and isolated child-process transport verified | Real-client cycle and hosted clean install/upgrade/uninstall (local rc.1 packaged self-test passed) |
 | Linux X11 | Editor/vision preview; 120 regression tests, native build/self-test, X11 icon pixel property probe and WSLg UI verified | Capture/input backend, compatible-client acceptance and hardware/HiDPI testing |
 | Linux Wayland | Editor/vision preview; WSLg GUI and app_id protocol verified; installed desktop/hicolor icon integration | Capture/input capability design/backend and native shell appearance acceptance |
 | macOS | Portable editor source, .app/ICNS packaging and AppKit Dock icon implementation; icon module cross-checks for Intel/Apple Silicon | Whole native build/runtime, Dock/Finder/Retina/permissions and capture/input backend |

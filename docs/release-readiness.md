@@ -9,7 +9,7 @@ Scope approved 2026-10-16: repository cleanup, Rust release workflow, current do
 - [x] ZIP/PE/native-dependency verification tools and hosted install/upgrade/uninstall workflow implemented; hosted execution remains open below.
 - [x] Current README, changelog, platform/support and migration documentation; ignore local outputs and private data.
 - [x] Windows 122 / Linux 120 Rust tests, formatting and strict Clippy passed. Release tooling tests and workflow/PowerShell syntax checks passed; final artifact verification is performed at the package stage.
-- [ ] Local Windows prerelease installer, ZIP, checksums and release notes from a committed tree.
+- [x] Local Windows prerelease 0.1.0-rc.1 built from clean commit 04e96d189ca33129721698b404ccc6a34adf7227; installer/ZIP/checksums, extracted inventory and final packaged EXE self-test verified.
 
 Ruling: the Python application is recoverable from Git history at `5af7ea98536f9884969f38b7eb9b1077c5910a49`; retaining a second runnable product/build path would undermine the requested Rust cutover. The user-data import contract stays supported and tested. Game acceptance remains a prerelease limitation, not a reason to publish a stable release.
 
@@ -28,3 +28,9 @@ Verification logs: `build/rust-migration/release-{tests,clippy}.log`, `build/rus
 - Hosted CI execution and clean-machine installation/upgrade/uninstall evidence for the exact release commit.
 - Trusted Windows publisher signing and macOS Developer ID/notarization if desired; no certificate is available.
 - Owner selection of a project license before granting redistribution rights.
+
+## Local handoff
+
+Packages are in `dist/prerelease/0.1.0-rc.1/`: installer, complete ZIP, SHA256SUMS.txt and VERIFICATION.md. The generated report records artifact hashes and file count. The exact EXE self-test is `build/prerelease-rc1-selftest.json`; structured full verification is `build/prerelease-rc1-verification.json`. Both artifacts identify source commit 04e96d189ca33129721698b404ccc6a34adf7227, numeric version 0.1.0.1 and a clean tree. A later documentation-only commit recording these results does not change their provenance.
+
+No remote CI run, GitHub prerelease publication or clean-machine installation was claimed. Stable policy remains blocked until its acceptance conditions pass.
