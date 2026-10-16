@@ -1,5 +1,12 @@
+mod buffs;
+mod calibration;
 mod forms;
 mod preview;
+mod run;
+mod settings;
+mod shell;
+mod state;
+mod widgets;
 use crate::{
     editor::{EditMode, Editor, Gesture, Viewport},
     runtime::{Command, RuntimeHandle, RuntimeSnapshot, SessionKey},
@@ -13,6 +20,7 @@ use std::{path::PathBuf, sync::Arc};
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "ui-smoke", derive(clap::ValueEnum, Debug))]
 pub enum Tab {
+    Run,
     Calibration,
     Buffs,
     Settings,
@@ -34,7 +42,9 @@ pub struct MetinApp {
     revision: u64,
     tab: Tab,
     mode: EditMode,
-    sidebar: bool,
+    calibration_controls: bool,
+    selected_skill: usize,
+    return_to_buffs: bool,
     show_detections: bool,
     live: bool,
     snapshot_requested: Option<std::time::Instant>,
@@ -49,7 +59,9 @@ pub struct MetinApp {
     icon_textures: std::collections::HashMap<String, egui::TextureHandle>,
     detection_cache: Option<preview::DetectionCache>,
     #[cfg(feature = "ui-smoke")]
-    smoke: Option<(PathBuf, u32)>,
+    smoke: Option<(PathBuf, std::time::Instant)>,
+    #[cfg(feature = "ui-smoke")]
+    smoke_requested: bool,
     #[cfg(test)]
     canvas_rect: Option<egui::Rect>,
 }
@@ -74,11 +86,7 @@ impl MetinApp {
             (Profile::create("New profile"), None)
         };
         let settings = UISettings::load(&root).map_err(|e| e.to_string())?;
-        context.set_visuals(if settings.theme == "dark" {
-            egui::Visuals::dark()
-        } else {
-            egui::Visuals::light()
-        });
+        widgets::theme(context, settings.theme == "dark");
         context.send_viewport_cmd(egui::ViewportCommand::SetTheme(
             if settings.theme == "dark" {
                 egui::SystemTheme::Dark
@@ -100,9 +108,11 @@ impl MetinApp {
             snapshot,
             target: None,
             revision: 0,
-            tab: Tab::Calibration,
+            tab: Tab::Run,
             mode: EditMode::World,
-            sidebar: true,
+            calibration_controls: true,
+            selected_skill: 0,
+            return_to_buffs: false,
             show_detections: true,
             live: false,
             snapshot_requested: None,
@@ -118,6 +128,8 @@ impl MetinApp {
             detection_cache: None,
             #[cfg(feature = "ui-smoke")]
             smoke: None,
+            #[cfg(feature = "ui-smoke")]
+            smoke_requested: false,
             #[cfg(test)]
             canvas_rect: None,
         })
@@ -134,7 +146,7 @@ impl MetinApp {
         if let Some(tab) = tab {
             self.tab = tab;
         }
-        self.smoke = Some((path, 0));
+        self.smoke = Some((path, std::time::Instant::now()));
     }
     fn key(&self) -> Option<SessionKey> {
         self.target.map(|target| SessionKey {
@@ -162,16 +174,35 @@ impl MetinApp {
         })
     }
     fn save(&mut self) -> Result<(), String> {
-        let mut profile = self.editor.profile.clone();
-        profile
-            .buffs
-            .skills
-            .retain(|s| !s.shortcut.trim().is_empty());
+        let profile = self.profile_for_save();
         let saved = self
             .store
             .save(&profile, self.editor.template.as_ref())
             .map_err(|e| e.to_string())?;
         self.store.select(saved.id).map_err(|e| e.to_string())?;
+        let kept = self.retained_skill_indices();
+        let retained_units = kept.iter().map(|i| self.units[*i]).collect::<Vec<_>>();
+        self.units.fill(false);
+        for (i, unit) in retained_units.into_iter().enumerate() {
+            self.units[i] = unit;
+        }
+        self.selected_skill = kept
+            .iter()
+            .position(|i| *i >= self.selected_skill)
+            .unwrap_or(kept.len().saturating_sub(1));
+        self.binding = None;
+        self.gesture = None;
+        if let EditMode::BuffIcon { index, inactive } = self.mode {
+            if let Some(index) = kept.iter().position(|i| *i == index) {
+                self.mode = EditMode::BuffIcon { index, inactive };
+            } else {
+                self.mode = EditMode::World;
+                if self.return_to_buffs {
+                    self.navigate(Tab::Buffs);
+                }
+                self.return_to_buffs = false;
+            }
+        }
         self.editor.mark_saved(saved);
         self.profiles = self.store.list().map_err(|e| e.to_string())?;
         self.configure()
@@ -182,7 +213,7 @@ impl MetinApp {
         }
         self.runtime.stop();
         let choice = rfd::MessageDialog::new()
-            .set_title("Unsaved calibration")
+            .set_title("Unsaved profile changes")
             .set_description("Save changes to the current profile before continuing?")
             .set_buttons(rfd::MessageButtons::YesNoCancel)
             .show();
@@ -203,20 +234,17 @@ impl MetinApp {
         if id == self.editor.profile.id || !self.discard_or_save() {
             return;
         }
-        self.runtime.stop();
-        self.send(Command::Detach);
         match self.store.load(id) {
             Ok((profile, template)) => {
-                self.editor = Editor::new(profile, template);
-                self.target = None;
-                self.live = false;
-                self.texture_source = None;
-                self.gesture = None;
+                self.replace_profile(profile, template);
                 if let Err(e) = self.store.select(id) {
                     self.error = Some(e.to_string());
                 }
             }
-            Err(e) => self.error = Some(e.to_string()),
+            Err(e) => {
+                self.runtime.stop();
+                self.error = Some(e.to_string());
+            }
         }
     }
     fn sync(&mut self, context: &egui::Context) {
@@ -265,137 +293,23 @@ impl MetinApp {
             }
         }
     }
-    fn toolbar(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
-            ui.heading("MetinBot");
-            ui.separator();
-            if ui
-                .button(if self.sidebar {
-                    "Hide sidebar"
-                } else {
-                    "Show sidebar"
-                })
-                .clicked()
-            {
-                self.sidebar = !self.sidebar;
-            }
-            let mut selected = self.editor.profile.id;
-            egui::ComboBox::from_id_salt("profile")
-                .selected_text(&self.editor.profile.name)
-                .show_ui(ui, |ui| {
-                    for p in &self.profiles {
-                        ui.selectable_value(&mut selected, p.id, &p.name);
-                    }
-                });
-            if selected != self.editor.profile.id {
-                self.switch_profile(selected);
-            }
-            if ui.button("New profile").clicked() && self.discard_or_save() {
-                self.runtime.stop();
-                self.send(Command::Detach);
-                self.editor = Editor::new(Profile::create("New profile"), None);
-                self.target = None;
-                self.live = false;
-                self.texture_source = None;
-            }
-            if ui
-                .button(if self.editor.dirty() {
-                    "Save *"
-                } else {
-                    "Save"
-                })
-                .clicked()
-                && let Err(error) = self.save()
-            {
-                self.error = Some(error);
-            }
-            if ui
-                .add_enabled(
-                    self.target.is_some() && self.editor.profile.ready(),
-                    egui::Button::new("Start · F7"),
-                )
-                .clicked()
-            {
-                match self.save() {
-                    Ok(()) => {
-                        if let Some(key) = self.key() {
-                            self.send(Command::Arm { key });
-                        }
-                    }
-                    Err(error) => self.error = Some(error),
-                }
-            }
-            if ui.button("Pause · F8").clicked() {
-                self.runtime.stop();
-            }
-            if ui
-                .button(if self.settings.theme == "dark" {
-                    "Light theme"
-                } else {
-                    "Dark theme"
-                })
-                .clicked()
-            {
-                self.settings.theme = if self.settings.theme == "dark" {
-                    "light"
-                } else {
-                    "dark"
-                }
-                .into();
-                ui.ctx().set_visuals(if self.settings.theme == "dark" {
-                    egui::Visuals::dark()
-                } else {
-                    egui::Visuals::light()
-                });
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::SetTheme(
-                    if self.settings.theme == "dark" {
-                        egui::SystemTheme::Dark
-                    } else {
-                        egui::SystemTheme::Light
-                    },
-                ));
-                if let Err(e) = self.settings.save(&self.root) {
-                    self.error = Some(e.to_string());
-                }
-            }
-        });
-    }
-    fn overview(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
-            ui.strong(&self.snapshot.state);
-            ui.label(&self.snapshot.reason)
-                .on_hover_text(&self.snapshot.reason);
-        });
-        ui.horizontal_wrapped(|ui| {
-            let s = &self.snapshot.statistics;
-            ui.label(format!(
-                "Active time  {}",
-                metin_core::duration(s.active_seconds)
-            ));
-            ui.separator();
-            ui.label(format!("Targets ended  {}", s.completed))
-                .on_hover_text("Confirmed panel disappearances; not independent proof of a kill.");
-            ui.separator();
-            ui.label(format!("Clicks  {}", s.clicks));
-            ui.separator();
-            ui.label(format!("Unconfirmed  {}", s.failed));
-            if ui.button("Reset statistics").clicked()
-                && let Some(key) = self.key()
-            {
-                self.send(Command::ResetStatistics { key });
-            }
-        });
-    }
 }
+
 impl MetinApp {
     pub fn render(&mut self, ui: &mut egui::Ui) {
         #[cfg(feature = "ui-smoke")]
-        if let Some((path, count)) = &mut self.smoke {
-            *count += 1;
-            if *count == 4 {
+        if let Some((path, started)) = &self.smoke {
+            if !self.smoke_requested && started.elapsed() >= std::time::Duration::from_millis(700) {
                 let path = path.clone();
+                self.smoke_requested = true;
+                tracing::info!(?path, "UI screenshot requested");
                 let context = ui.ctx().clone();
                 ui.ctx().request_screenshot(move |image| {
+                    tracing::info!(
+                        width = image.size[0],
+                        height = image.size[1],
+                        "UI screenshot received"
+                    );
                     let bytes = image
                         .pixels
                         .iter()
@@ -417,46 +331,28 @@ impl MetinApp {
                     context.send_viewport_cmd(egui::ViewportCommand::Close);
                 });
             }
-            if *count < 5 {
-                ui.ctx().request_repaint();
+            if self.smoke.is_some() {
+                ui.ctx()
+                    .request_repaint_after(std::time::Duration::from_millis(30));
             }
         }
         self.sync(ui.ctx());
         let binding_was_active = self.binding.is_some();
         self.capture_binding(ui.ctx());
         egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));
-        egui::Panel::bottom("overview").show(ui, |ui| {
-            self.overview(ui);
-            if let Some(error) = self.error.clone() {
-                ui.horizontal_wrapped(|ui| {
-                    ui.colored_label(egui::Color32::from_rgb(200, 70, 60), error);
-                    if ui.button("Dismiss").clicked() {
-                        self.error = None;
-                    }
-                });
-            }
-        });
+        egui::Panel::top("navigation").show(ui, |ui| self.navigation(ui));
+        egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         self.hover_mode = None;
-        if self.sidebar {
-            egui::Panel::left("controls")
-                .resizable(true)
-                .default_size(310.)
-                .min_size(230.)
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.selectable_value(&mut self.tab, Tab::Calibration, "Calibration");
-                        ui.selectable_value(&mut self.tab, Tab::Buffs, "Buffs");
-                        ui.selectable_value(&mut self.tab, Tab::Settings, "Settings");
-                    });
-                    ui.separator();
-                    egui::ScrollArea::vertical().show(ui, |ui| match self.tab {
-                        Tab::Calibration => self.calibration_form(ui),
-                        Tab::Buffs => self.buffs_form(ui),
-                        Tab::Settings => self.settings_form(ui),
-                    });
-                });
+        #[cfg(test)]
+        {
+            self.canvas_rect = None;
         }
-        egui::CentralPanel::default().show(ui, |ui| self.preview(ui));
+        egui::CentralPanel::default().show(ui, |ui| match self.tab {
+            Tab::Run => self.run_view(ui),
+            Tab::Calibration => self.calibration_view(ui),
+            Tab::Buffs => self.buffs_view(ui),
+            Tab::Settings => self.settings_view(ui),
+        });
         if !binding_was_active && self.binding.is_none() {
             let input = ui.input(|i| {
                 (
@@ -472,19 +368,20 @@ impl MetinApp {
                 self.gesture = None;
             }
             if input.1
+                && self.tab == Tab::Calibration
                 && !ui.ctx().egui_wants_keyboard_input()
                 && let Err(e) = self.editor.delete(self.mode)
             {
                 self.error = Some(e);
             }
-            if input.2 && input.3 {
+            if input.2 && input.3 && !ui.ctx().egui_wants_keyboard_input() {
                 if input.5 {
                     self.editor.redo();
                 } else {
                     self.editor.undo();
                 }
             }
-            if input.2 && input.4 {
+            if input.2 && input.4 && !ui.ctx().egui_wants_keyboard_input() {
                 self.editor.redo();
             }
         }

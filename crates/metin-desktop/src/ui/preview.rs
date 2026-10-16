@@ -17,33 +17,94 @@ fn same_template(a: &Option<metin_platform::Frame>, b: &Option<metin_platform::F
 impl MetinApp {
     pub(super) fn preview(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
+            if ui
+                .button(if self.calibration_controls {
+                    "Hide steps"
+                } else {
+                    "Show steps"
+                })
+                .on_hover_text("Expand the image canvas or restore the calibration checklist.")
+                .clicked()
+            {
+                self.calibration_controls = !self.calibration_controls;
+            }
             ui.checkbox(&mut self.show_detections, "Detections");
             ui.checkbox(&mut self.live, "Live preview");
-            if ui.button("Fit").clicked() {
+            if widgets::button(
+                ui,
+                widgets::Icon::Target,
+                "Fit",
+                true,
+                "Fit the complete frame in the available canvas and reset zoom.",
+            )
+            .clicked()
+            {
                 self.viewport.reset();
             }
-            if ui.button("−").clicked() {
+            if widgets::button(
+                ui,
+                widgets::Icon::Minus,
+                "",
+                true,
+                "Zoom out. Mouse wheel also zooms around the pointer.",
+            )
+            .clicked()
+            {
                 self.viewport.zoom_at([0., 0.], 1. / 1.25);
             }
-            if ui.button("+").clicked() {
+            if widgets::button(
+                ui,
+                widgets::Icon::Plus,
+                "",
+                true,
+                "Zoom in. Hold the middle mouse button to pan.",
+            )
+            .clicked()
+            {
                 self.viewport.zoom_at([0., 0.], 1.25);
             }
             ui.label(format!("{:.0}%", self.viewport.zoom * 100.));
-            if ui
-                .add_enabled(self.editor.can_undo(), egui::Button::new("Undo"))
-                .clicked()
+            if widgets::button(
+                ui,
+                widgets::Icon::Undo,
+                "",
+                self.editor.can_undo(),
+                "Undo the last profile or calibration edit. Ctrl+Z / Cmd+Z.",
+            )
+            .clicked()
             {
                 self.runtime.stop();
                 self.editor.undo();
             }
-            if ui
-                .add_enabled(self.editor.can_redo(), egui::Button::new("Redo"))
-                .clicked()
+            if widgets::button(
+                ui,
+                widgets::Icon::Redo,
+                "",
+                self.editor.can_redo(),
+                "Redo the last undone edit. Ctrl+Y or Ctrl+Shift+Z.",
+            )
+            .clicked()
             {
                 self.runtime.stop();
                 self.editor.redo();
             }
         });
+        let instruction = match self.mode {
+            EditMode::Color => "Pick color: click a Metin pixel. Wheel: zoom · Middle drag: pan.",
+            EditMode::BuffArea => {
+                "Buff detection area: drag a rectangle around active buff icons. Escape cancels."
+            }
+            EditMode::BuffIcon { inactive: true, .. } => {
+                "Inactive icon: drag around the icon in its inactive state. Escape cancels."
+            }
+            EditMode::BuffIcon {
+                inactive: false, ..
+            } => "Active icon: drag around the icon in its active state. Escape cancels.",
+            _ => {
+                "Drag to draw or move; use edge handles to resize. Escape cancels · Wheel zooms · Middle drag pans."
+            }
+        };
+        ui.add(egui::Label::new(egui::RichText::new(instruction).small()).wrap());
         let current = if self.snapshot.key == self.key() {
             self.snapshot.frame.clone()
         } else {
@@ -58,8 +119,18 @@ impl MetinApp {
         let Some(frame) = frame else {
             ui.add_space(32.);
             ui.heading("Calibrate the game view");
-            ui.label("Select a game window and take a Snapshot with its target panel visible.");
-            ui.label("Then select the search area, Metin color, target panel and fixed crop.");
+            ui.add(
+                egui::Label::new(
+                    "Select a game window and take a Snapshot with its target panel visible.",
+                )
+                .wrap(),
+            );
+            ui.add(
+                egui::Label::new(
+                    "Then select the search area, Metin color, target panel and fixed crop.",
+                )
+                .wrap(),
+            );
             return;
         };
         let stale = !frozen
@@ -264,6 +335,25 @@ impl MetinApp {
                 egui::Stroke::new(if active { 2. } else { 1. }, color),
                 egui::StrokeKind::Inside,
             );
+            let name = match mode {
+                EditMode::World => "Search area",
+                EditMode::Panel => "Target panel",
+                EditMode::Template => "Reference crop",
+                EditMode::BuffArea => "Buff detection area",
+                EditMode::Mask(_) => "Excluded area",
+                EditMode::BuffIcon { inactive: true, .. } => "Inactive icon",
+                EditMode::BuffIcon { .. } => "Active icon",
+                _ => "Color",
+            };
+            if rect.width() > 90. && rect.height() > 24. {
+                painter.text(
+                    rect.min + egui::vec2(7., 5.),
+                    egui::Align2::LEFT_TOP,
+                    name,
+                    egui::FontId::proportional(13.),
+                    color,
+                );
+            }
             if active && frozen {
                 for p in handles(rect) {
                     painter.rect_filled(

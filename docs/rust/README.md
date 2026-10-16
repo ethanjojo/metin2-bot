@@ -34,3 +34,7 @@ CI has a native Windows/Linux/macOS matrix. Creating the workflow is not proof t
 The immutable fixtures under `tests/parity` come from the Python baseline. Temporary `tools/export_*_parity.py` scripts regenerate them while Python is still available. Rust tests replay 648 controller events, 84 buff observations, image/tracker calls, and 327 schema boundary cases. These supplement direct Rust tests for input guards, storage, migration, editor gestures, UI forms and runtime cancellation. They do not assert that every original UI/packaging test has been ported.
 
 `tools/benchmark-python-reference.py` and `cargo run --release -p metin-vision --example benchmark` use the same two fixture workloads, with ten warmups and three runs of 100 samples. They measure detection and panel matching, not capture latency or a complete gameplay cycle.
+
+## Desktop interface
+
+The application now separates Run, Calibration, Buffs and Settings. Run shows activity and actionable Start readiness; Calibration owns the shared image editor; Buffs presents ordered skills with a selected detail and an explicit return from icon capture; Settings groups the existing fields. Painter-drawn icons do not require an icon font. See [UI verification and review scenarios](ui-verification.md).

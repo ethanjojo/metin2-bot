@@ -388,9 +388,10 @@ fn run(
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
+        let hotkeys = backend.hotkeys();
         if let Some(a) = &mut attached {
             let result = (|| -> Result<(), String> {
-                let events = backend.hotkeys().map_err(|e| e.to_string())?;
+                let events = hotkeys.map_err(|e| e.to_string())?;
                 if events.stop {
                     stop.stop();
                     a.controller.pause(now, "Emergency stop (F8).");

@@ -8,6 +8,7 @@ use std::{
 };
 #[derive(Default)]
 struct Controls {
+    hotkey_polls: usize,
     toggle: bool,
     stop: bool,
     fail_key: bool,
@@ -34,7 +35,7 @@ impl PlatformBackend for Fake {
             obstruction: true,
             manual_input: true,
             input: true,
-            emergency_stop: true,
+            emergency_stop: self.controls.lock().unwrap().hotkey_polls > 0,
             reason: String::new(),
         }
     }
@@ -102,6 +103,7 @@ impl PlatformBackend for Fake {
     }
     fn hotkeys(&mut self) -> Result<HotkeyEvents> {
         let mut c = self.controls.lock().unwrap();
+        c.hotkey_polls += 1;
         let events = HotkeyEvents {
             toggle: c.toggle,
             stop: c.stop,
@@ -124,6 +126,14 @@ fn runtime() -> (RuntimeHandle, Arc<Mutex<Controls>>) {
         ),
         controls,
     )
+}
+#[test]
+fn hotkey_capabilities_are_initialized_before_a_window_is_selected() {
+    let (r, controls) = runtime();
+    wait(&r, |s| s.capabilities.automation_ready());
+    assert!(r.latest().unwrap().key.is_none());
+    assert!(controls.lock().unwrap().calls.is_empty());
+    r.shutdown().unwrap();
 }
 fn profile() -> Profile {
     let mut p = Profile::from_json(include_str!(

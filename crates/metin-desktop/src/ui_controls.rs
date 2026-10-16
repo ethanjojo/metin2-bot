@@ -39,13 +39,61 @@ pub fn numeric(ui: &mut egui::Ui, label: &str, name: &str, value: &mut f64) -> b
         .find(|r| r.name == name)
         .expect("known domain rule");
     ui.horizontal(|ui| {
-        ui.label(label);
+        let hint = match name {
+            "sample_interval" => "Time between image samples. Shorter intervals use more CPU.",
+            "stable_frames" => {
+                "Consecutive stable frames required before accepting a detection or panel match."
+            }
+            "threshold" => {
+                "Reference-image similarity required to confirm the target panel (0 to 1)."
+            }
+            "acquire_timeout" => {
+                "Maximum time to confirm the clicked target. Must allow enough stable samples."
+            }
+            "attack_timeout" => "Maximum time spent attacking one target before abandoning it.",
+            "search_timeout" => "How long to search before attempting camera rotation.",
+            "settle_seconds" => {
+                "Wait after the target panel disappears before looking for another target."
+            }
+            "wait_seconds" => {
+                "Delay after sending this skill, before continuing the buff sequence."
+            }
+            "mount_wait_seconds" => "Delay after a mount toggle before continuing.",
+            "key_hold_seconds" => "How long each buff or mount shortcut remains pressed.",
+            "click_hover_seconds" => {
+                "Wait for the cursor to settle over a candidate before clicking."
+            }
+            "click_hold_seconds" => "How long the target-selection mouse button remains pressed.",
+            "rotate_seconds" => "Duration of each camera rotation during target search.",
+            "failed_cooldown" => "How long a failed candidate position is avoided.",
+            "max_rotations" => {
+                "Maximum camera rotations or retries before ending this search attempt."
+            }
+            "max_area_ratio" => "Largest candidate area as a fraction of the full frame.",
+            "hue_tolerance" => {
+                "Allowed difference from the picked HSV hue, including hue wraparound."
+            }
+            "saturation_tolerance" => "Allowed difference from the picked HSV saturation.",
+            "value_tolerance" => "Allowed difference from the picked HSV brightness.",
+            "min_area" => "Minimum candidate area in pixels.",
+            "min_width" => "Minimum candidate width in pixels.",
+            "min_height" => "Minimum candidate height in pixels.",
+            _ => {
+                "Edit this value by dragging or typing. The profile's numeric limits are enforced."
+            }
+        };
+        ui.label(label).on_hover_text(hint);
+        ui.add_space((ui.available_width() - 90.).max(0.));
         ui.add(
             egui::DragValue::new(value)
                 .range(rule.low..=rule.high)
                 .speed(rule.step)
                 .max_decimals(if rule.integral { 0 } else { 4 }),
         )
+        .on_hover_text(format!(
+            "{hint}\nAllowed range: {}–{}.",
+            rule.low, rule.high
+        ))
         .changed()
     })
     .inner
