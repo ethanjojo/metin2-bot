@@ -30,6 +30,9 @@ pub fn matches(dark: bool) -> Result<bool, String> {
         .ok_or("Missing Dock image")?
         .TIFFRepresentation()
         .ok_or("Missing Dock TIFF")?;
+    std::fs::create_dir_all("build").map_err(|e| e.to_string())?;
+    std::fs::write("build/dock-expected.tiff", expected.to_vec()).map_err(|e| e.to_string())?;
+    std::fs::write("build/dock-actual.tiff", actual.to_vec()).map_err(|e| e.to_string())?;
     // AppKit can rewrite TIFF metadata and caches when assigning the Dock image.
     // Compare decoded samples, while still reading the actual application property.
     let expected = objc2_app_kit::NSBitmapImageRep::imageRepWithData(&expected)
@@ -66,6 +69,12 @@ pub fn matches(dark: bool) -> Result<bool, String> {
                 actual.getPixel_atX_y(std::ptr::NonNull::from(&mut right[0]), x, y);
             }
             if left[..samples as usize] != right[..samples as usize] {
+                eprintln!(
+                    "Dock mismatch dark={dark} at ({x},{y}): expected {:?}, actual {:?}, layout {:?}",
+                    &left[..samples as usize],
+                    &right[..samples as usize],
+                    layout(&actual)
+                );
                 return Ok(false);
             }
         }

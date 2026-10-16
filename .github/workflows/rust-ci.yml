@@ -1,6 +1,12 @@
 name: Rust verification
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Native platform to verify
+        type: choice
+        default: all
+        options: [all, windows-2025, ubuntu-24.04, macos-15]
   push:
     branches: ['main', 'codex/**']
     paths: ['crates/**', 'packaging/**', 'Cargo.*', 'rust-toolchain.toml', '.gitattributes', 'tools/*rust*', 'tests/test_unix_packaging.py', 'tests/parity/**', '.github/workflows/rust-ci.yml']
@@ -13,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-2025, ubuntu-24.04, macos-15]
+        os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.platform != 'all' && format('["{0}"]', inputs.platform) || '["windows-2025","ubuntu-24.04","macos-15"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 75
     steps:
@@ -137,6 +143,7 @@ jobs:
           retention-days: 14
           path: |
             build/selftest-rust.json
+            build/dock-*.tiff
             build/gui-native.png
             build/gui-wayland.png
             build/wayland-protocol.log
