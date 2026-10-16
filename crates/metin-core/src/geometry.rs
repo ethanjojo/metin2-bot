@@ -23,7 +23,7 @@ impl Region {
             "Region must have positive dimensions of at least 0.1%.",
         )
     }
-    /// Inclusive pixel endpoints; intentionally matches Python's half-even round.
+    /// Inclusive pixel endpoints use round-to-nearest with ties to even.
     pub fn pixels(self, width: u32, height: u32) -> [u32; 4] {
         let x =
             |v: f64| ((v * f64::from(width)).round_ties_even() as u32).min(width.saturating_sub(1));

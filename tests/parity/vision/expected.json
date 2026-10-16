@@ -7,7 +7,7 @@
       "profile": {
         "id": "d7bdd363-f7d7-4276-b079-b612e53c95ad",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": {
           "left": 0,
           "top": 0,
@@ -92,7 +92,7 @@
       "profile": {
         "id": "e2d9ba63-c32e-421f-8916-b0b101513f55",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": {
           "left": 0,
           "top": 0,
@@ -164,7 +164,7 @@
       "profile": {
         "id": "0ed0fd6e-39b4-49a2-95eb-257600957fc7",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": {
           "left": 0,
           "top": 0,
@@ -256,7 +256,7 @@
       "profile": {
         "id": "40050df3-1713-4f01-8be8-d4f47320f0a7",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": {
           "left": 0,
           "top": 0,
@@ -317,7 +317,7 @@
       "profile": {
         "id": "178dd967-51e5-46ce-93fc-cdf2c95e304a",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": {
           "left": 0,
           "top": 0,
@@ -389,7 +389,7 @@
       "profile": {
         "id": "cf51ee1e-4ef2-4fc4-a06c-6c71a6cd7fc5",
         "name": "Detector fixture",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -494,7 +494,7 @@
       "profile": {
         "id": "7814ce06-3498-450d-965f-7efd1b579590",
         "name": "Detector fixture",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -583,7 +583,7 @@
       "profile": {
         "id": "cd748c36-b0db-4cfa-822d-f03854664696",
         "name": "Detector fixture",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -704,7 +704,7 @@
       "profile": {
         "id": "2006172c-d288-45f1-9338-cd8e7fe35860",
         "name": "Detector fixture",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -817,7 +817,7 @@
       "profile": {
         "id": "cbe74a14-4c8b-4c32-9445-cf5f95189291",
         "name": "Detector fixture",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -919,7 +919,7 @@
       "profile": {
         "id": "7a8c4cac-bb13-4161-b1dc-05cd96a1baf7",
         "name": "Detector fixture",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -1014,7 +1014,7 @@
       "profile": {
         "id": "dd5f6444-a85d-4e31-98f1-a255c8339ffd",
         "name": "Detector fixture",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -1116,7 +1116,7 @@
       "profile": {
         "id": "61dd0307-38df-442b-9b27-cce5e361f818",
         "name": "Detector fixture",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -1218,7 +1218,7 @@
       "profile": {
         "id": "072ba574-351f-4c48-b189-3b8cb22b586d",
         "name": "Detector fixture",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -1462,7 +1462,7 @@
       "profile": {
         "id": "21a2a8e7-2e34-4315-b80d-a2ee8a52e3c5",
         "name": "Detector fixture",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,

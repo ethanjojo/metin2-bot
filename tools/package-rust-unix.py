@@ -1,4 +1,4 @@
-"""Stage native Linux/macOS distributions. Python is needed only at build time."""
+"""Stage native Linux/macOS distributions and dependency notices."""
 import argparse
 import json
 import platform

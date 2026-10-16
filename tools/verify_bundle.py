@@ -39,7 +39,7 @@ def verify_bundle(directory: Path, version: str, commit: str) -> dict:
             raise ValueError(f"Missing native runtime: {name}")
     for name in ("profiles", "ui-settings.json", "config.json", "config.queue-backup.json", "_internal"):
         if (directory / name).exists():
-            raise ValueError("User data or Python runtime included in bundle")
+            raise ValueError("User data or obsolete runtime files included in bundle")
     bundled = {path.name.lower(): path for path in directory.iterdir() if path.is_file()}
     system = Path(os.environ["SystemRoot"]) / "System32"
     for path in directory.iterdir():

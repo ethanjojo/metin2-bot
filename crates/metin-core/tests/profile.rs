@@ -1,12 +1,24 @@
 use metin_core::{Profile, Region, Shortcut};
 
 #[test]
+fn default_process_is_generic_and_explicit_process_names_roundtrip() {
+    let mut profile = Profile::create("Main profile");
+    assert_eq!(profile.process_name, "game-client.exe");
+    profile.process_name = "custom-client.exe".into();
+    let encoded = serde_json::to_string(&profile).unwrap();
+    assert_eq!(
+        Profile::from_json(&encoded).unwrap().process_name,
+        "custom-client.exe"
+    );
+}
+
+#[test]
 fn example_roundtrip_preserves_every_field() {
     let json = include_str!("../../../profile.example.json");
     let profile = Profile::from_json(json).unwrap();
     let output = serde_json::to_string(&profile).unwrap();
     assert_eq!(profile, Profile::from_json(&output).unwrap());
-    assert_eq!(profile.name, "Příklad serveru");
+    assert_eq!(profile.name, "Main profile");
     assert_eq!(
         profile.id.to_string(),
         "8591a09f-25dc-4ca4-b858-cafe68231dfc"
@@ -45,7 +57,7 @@ fn rejects_unknown_fields_wrong_types_and_invalid_ranges() {
 }
 
 #[test]
-fn half_even_pixel_conversion_matches_python() {
+fn half_even_pixel_conversion_matches_reference() {
     let r = Region {
         left: 0.125,
         top: 0.375,

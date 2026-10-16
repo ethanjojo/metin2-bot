@@ -1,2 +1,2 @@
-# Build-time PE inspection only; the application has no Python runtime.
+# Build-time PE inspection for Windows packaging.
 pefile==2024.8.26

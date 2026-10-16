@@ -42,7 +42,7 @@ try {
     Remove-Item -LiteralPath (Join-Path $stage 'build-info.json')
     Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/release-notes.md') -Destination (Join-Path $bundle 'RELEASE-NOTES.md')
     Copy-Item -LiteralPath 'target/release/metinbot.exe' -Destination (Join-Path $bundle 'MetinBot.exe')
-    Copy-Item -LiteralPath 'build/rust-migration/opencv/build/x64/vc16/bin/opencv_world4130.dll' -Destination $bundle
+    Copy-Item -LiteralPath 'build/rust-native/windows/opencv/build/x64/vc16/bin/opencv_world4130.dll' -Destination $bundle
     foreach ($name in @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'concrt140.dll')) {
         $source = Join-Path $CrtDirectory $name
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "Missing redistributable: $source" }
@@ -50,9 +50,9 @@ try {
     }
     $licenses = Join-Path $bundle 'licenses'
     New-Item -ItemType Directory -Path $licenses | Out-Null
-    Copy-Item -LiteralPath 'build/rust-migration/opencv/LICENSE.txt' -Destination (Join-Path $licenses 'OpenCV.txt')
+    Copy-Item -LiteralPath 'build/rust-native/windows/opencv/LICENSE.txt' -Destination (Join-Path $licenses 'OpenCV.txt')
     # Include OpenCV's bundled third-party notices as shipped by the vendor.
-    $thirdParty = 'build/rust-migration/opencv/build/etc/licenses'
+    $thirdParty = 'build/rust-native/windows/opencv/build/etc/licenses'
     if (-not (Test-Path -LiteralPath $thirdParty)) { throw 'OpenCV third-party notices are missing.' }
     Copy-Item -LiteralPath $thirdParty -Destination (Join-Path $licenses 'OpenCV-third-party') -Recurse
     $metadataPath = Join-Path $stage 'cargo-metadata.json'

@@ -2,7 +2,7 @@ use metin_core::Profile;
 use metin_vision::{detect_candidates, load_image, panel_score};
 
 #[test]
-fn golden_candidates_and_panel_scores_match_python() {
+fn golden_candidates_and_panel_scores_match_reference() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/parity");
     let p = Profile::from_json(
         &std::fs::read_to_string(root.join("profiles/calibrated.json")).unwrap(),

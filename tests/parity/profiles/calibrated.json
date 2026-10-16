@@ -1,7 +1,7 @@
 {
   "id": "8591a09f-25dc-4ca4-b858-cafe68231dfc",
   "name": "Fixture",
-  "process_name": "verzumclient_x64.exe",
+  "process_name": "game-client.exe",
   "region": {
     "left": 0.1,
     "top": 0.2,

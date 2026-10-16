@@ -369,7 +369,7 @@ impl ProfileStore {
         let object = read_legacy_object(path)?;
         let resolved = identity.canonicalize()?;
         let identity = resolved.to_string_lossy();
-        // Python Path.resolve uses normal DOS/UNC paths, not Rust's extended prefix.
+        // Stable imported identities use normal DOS/UNC paths without extended prefixes.
         #[cfg(windows)]
         let identity = if let Some(unc) = identity.strip_prefix("\\\\?\\UNC\\") {
             format!("\\\\{unc}")
@@ -383,7 +383,7 @@ impl ProfileStore {
         let profile = if present(&self.folder(id)?.join("profile.json"))? {
             self.load(id)?.0
         } else {
-            let mut p = Profile::create("Verzum");
+            let mut p = Profile::create("Imported profile");
             p.id = id;
             if let Some(name) = object.get("process_name") {
                 p.process_name = serde_json::from_value(name.clone())?;

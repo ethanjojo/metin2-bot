@@ -5,7 +5,7 @@
       "profile": {
         "id": "9ac9cd1c-e8ae-4892-8169-69c71d2e8da3",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -231,7 +231,7 @@
       "profile": {
         "id": "b0d98830-0c00-48bb-b45b-83334a8c18ba",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -529,7 +529,7 @@
       "profile": {
         "id": "56e78f43-0647-4c50-b145-695d6667c4d3",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -846,7 +846,7 @@
       "profile": {
         "id": "1e6066c5-a8e6-4b65-9f99-ec781dda265b",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -1163,7 +1163,7 @@
       "profile": {
         "id": "1bc32ba6-46b2-4baa-b5ba-9385fe5ddfe4",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -1660,7 +1660,7 @@
       "profile": {
         "id": "e3092f17-b884-4361-a606-b31e4620eca3",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -1898,7 +1898,7 @@
       "profile": {
         "id": "51ac6505-4500-4c4a-9873-e8a1a596f626",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -2438,7 +2438,7 @@
       "profile": {
         "id": "fcf0d9a9-cc24-4544-925b-390853c149de",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -2664,7 +2664,7 @@
       "profile": {
         "id": "3219e2aa-d29a-485e-8487-c8fe2aefe6e0",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -3288,7 +3288,7 @@
       "profile": {
         "id": "6cc72796-b380-4992-99ed-c0741efd8344",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -3950,7 +3950,7 @@
       "profile": {
         "id": "726997f7-4f9f-44ea-b7a0-3c47af83beaf",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -4223,7 +4223,7 @@
       "profile": {
         "id": "9f21c39a-7a33-4516-939c-929884bf9652",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -4612,7 +4612,7 @@
       "profile": {
         "id": "d71f413c-5e72-4651-961f-3e3c4e85b528",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -4731,7 +4731,7 @@
       "profile": {
         "id": "71c066d0-0d7c-4236-b033-065cd8d10c01",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -8029,7 +8029,7 @@
       "profile": {
         "id": "f65a307d-f7b4-49b5-bb88-6a25fa6e0684",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -10141,7 +10141,7 @@
       "profile": {
         "id": "97308420-cd1c-4b82-97e4-620553cd643e",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -10458,7 +10458,7 @@
       "profile": {
         "id": "669cfda8-9ceb-4875-ac89-2b113fc8faa0",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -10775,7 +10775,7 @@
       "profile": {
         "id": "6d726a38-404d-4697-8dd4-4b2b1177b150",
         "name": "Start",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -11081,7 +11081,7 @@
       "profile": {
         "id": "8c8314ab-c5de-43f0-ac23-dc36e682a11e",
         "name": "Test",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -11297,7 +11297,7 @@
       "profile": {
         "id": "c3d5a8d7-72ba-4380-9f0d-742930dc6ec6",
         "name": "Reset during attack",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -12318,7 +12318,7 @@
       "profile": {
         "id": "44c4e87e-89b6-4310-a553-11228f91883b",
         "name": "Two toggles",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -13008,7 +13008,7 @@
       "profile": {
         "id": "f04bc00b-6887-46cd-82d8-002064413349",
         "name": "Short intervals",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -22774,7 +22774,7 @@
       "profile": {
         "id": "8232fec9-ce9c-479f-bee6-ff4e78b5a0c2",
         "name": "Animation expiry",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,
@@ -23519,7 +23519,7 @@
       "profile": {
         "id": "0664509c-367b-432f-96ae-1ecf2b36c007",
         "name": "Expiry",
-        "process_name": "verzumclient_x64.exe",
+        "process_name": "game-client.exe",
         "region": null,
         "masks": [],
         "color": null,

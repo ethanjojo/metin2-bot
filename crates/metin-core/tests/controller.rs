@@ -1,7 +1,7 @@
 use metin_core::{ActionKind, Candidate, Controller, Observation, Profile};
 
 #[test]
-fn target_cycle_trace_matches_python() {
+fn target_cycle_trace_matches_reference() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/parity");
     let p = Profile::from_json(
         &std::fs::read_to_string(root.join("profiles/calibrated.json")).unwrap(),

@@ -1,5 +1,16 @@
 use metin_core::Profile;
 use metin_desktop::storage::{ProfileStore, UISettings, import_data};
+
+#[test]
+fn imported_configuration_gets_a_neutral_name_and_keeps_explicit_process_metadata() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("config.json");
+    std::fs::write(&path, r#"{"process_name":"custom-client.exe"}"#).unwrap();
+    let mut store = ProfileStore::open(&tmp.path().join("profiles")).unwrap();
+    let profile = store.migrate_legacy(&path).unwrap().unwrap();
+    assert_eq!(profile.name, "Imported profile");
+    assert_eq!(profile.process_name, "custom-client.exe");
+}
 #[test]
 fn corrupt_canonical_settings_do_not_trigger_legacy_migration_or_create_profiles() {
     let tmp = tempfile::tempdir().unwrap();

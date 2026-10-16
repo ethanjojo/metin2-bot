@@ -15,12 +15,6 @@ __pycache__/
 # Build/package outputs and development tooling.
 build/
 dist/
-*.egg-info/
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.coverage
-htmlcov/
 .idea/
 .vscode/
 /target/

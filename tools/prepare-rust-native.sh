@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Native Linux/macOS build dependency; no global installation or Python runtime.
+# Native Linux/macOS build dependencies in a local prefix.
 native_root="${1:-build/rust-native}"
 commit=fe38fc608f6acb8b68953438a62305d8318f4fcd
 mkdir -p "$native_root"

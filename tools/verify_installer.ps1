@@ -20,7 +20,7 @@ New-Item -ItemType Directory $userRoot | Out-Null
 $sentinel = Join-Path $userRoot 'ci-data-retained.txt'
 Set-Content $sentinel 'preserve during upgrade and uninstall'
 try {
-    # Exercise upgrade cleanup of the former Python dependency directory.
+    # Exercise upgrade cleanup of the obsolete dependency directory.
     $oldRuntime = Join-Path $installation '_internal'
     New-Item -ItemType Directory -Force $oldRuntime | Out-Null
     Set-Content (Join-Path $oldRuntime 'obsolete-runtime.txt') 'legacy fixture'

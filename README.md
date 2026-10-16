@@ -1,64 +1,89 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="packaging/icons/logo-dark.svg">
+  <img src="packaging/icons/logo.svg" alt="MetinBot logo" width="72">
+</picture>
+
 # MetinBot
 
-A local Rust/egui desktop application for calibrating Metin recognition, selecting one target at a time and scheduling buffs. Screenshots, profiles and processing stay on your computer; the application does not read game memory or upload game data.
+A Rust desktop app for visual target recognition, calibration and buff scheduling, built with **egui** and **OpenCV**. Processing and profiles stay on your computer.
 
-**Status: Windows Rust prerelease.** Real-game acceptance is still pending. Linux has a tested editor/vision build; Linux and macOS capture/input are unavailable, so Start is disabled there. macOS native execution still requires verification. See [platform support](docs/rust/platform-support.md) and the [release checklist](docs/release-readiness.md).
+[Download prereleases](https://github.com/ethanjojo/metin2-bot/releases) · [User guide](docs/user-guide.md) · [Development](docs/development.md)
 
-![MetinBot desktop](docs/assets/desktop-dark.png)
+<a href="docs/assets/calibration-dark.png">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/calibration-dark.png">
+  <img src="docs/assets/calibration-light.png" alt="Calibration with search area, excluded areas, target panel and detection boxes" width="1280">
+</picture>
+</a>
 
-## Install on Windows
+*Actual application views using an isolated demonstration profile and a geometric sample scene. These images do not show a live game session.*
 
-Requires Windows x64, Windows 10 2004 / build 19041 or newer, and a D3D11-capable graphics device.
+## What it does
 
-1. Download the Windows **prerelease** installer and `SHA256SUMS.txt` from [GitHub Releases](https://github.com/ethanjojo/metin2-bot/releases). A locally prepared build is not a published GitHub release.
-2. Compare `Get-FileHash .\MetinBotSetup-<version>-windows-x64.exe -Algorithm SHA256` with its checksum entry.
-3. Run the installer and confirm the normal Windows administrator prompt. Launch MetinBot from the Start menu.
-4. On first launch, import an older data folder or start fresh. The application always starts stopped.
+- **Run** — readiness checks, current activity and a preview of detected targets.
+- **Calibration** — window selection, snapshots, color picking, editable regions, zoom and undo/redo.
+- **Buffs** — ordered skills, shortcuts, timed refresh and active/inactive icon recognition.
+- **Settings** — recognition, timing and input safeguards, with light and dark themes.
+- **Profiles** — separate calibration, skills and remembered game-window selection for each setup.
 
-Alternatively, extract the entire Windows ZIP into a writable location and run `MetinBot.exe`. Keep the executable, DLLs, licenses and other package files together. No Rust, Python, Node.js or OpenCV installation is needed on the user's computer.
+## Get started on Windows
 
-The application and installer are currently unsigned. `jojo` is the file metadata publisher, not a verified Windows publisher. Checksums establish file integrity, not publisher identity.
+Requires **Windows x64, Windows 10 version 2004 / build 19041 or newer**, and a D3D11-capable graphics device.
 
-## First setup
+1. Download the installer or portable ZIP and `SHA256SUMS.txt` from [Releases](https://github.com/ethanjojo/metin2-bot/releases). Compare the file's SHA-256 checksum before installing.
+2. Install and launch MetinBot, or extract the **entire** ZIP and run `MetinBot.exe`. Packages include the required runtime libraries.
+3. Create a profile. In **Calibration**, select the game window and take a **Snapshot**.
+4. Set the search area, exclusions, Metin color, target panel and reference crop. Configure **Buffs**, then save.
+5. Review readiness in **Run**. **F7** starts and **F8** pauses. Keep the selected game in the foreground.
 
-Select/create a profile in the top bar, then open **Calibration**. Search for the game window in the profile's window picker and take a **Snapshot**. Define the search area, excluded areas, Metin color, target panel and a distinctive reference crop. Configure skills under **Buffs**, save, and review readiness under **Run**.
+The app starts stopped. Live preview is for observation; take a snapshot before editing. The [user guide](docs/user-guide.md) explains every setup step and common validation messages.
 
-**F7** starts; **F8** pauses. Automation requires the selected game to remain in the foreground. Use live preview for observation and a frozen snapshot for editing. See the [user guide](docs/user-guide.md) for calibration, icons, shortcuts and troubleshooting.
+**Prerelease:** the full in-game cycle still needs acceptance testing. Windows packages request administrator confirmation and are currently unsigned; `jojo` is product metadata, not a verified publisher.
 
-## Data and migration
+## A closer look
 
-Windows data is stored under `%LOCALAPPDATA%\MetinBot`; logs are in `logs/run.log` below it. Profiles include their recognition PNG assets. Back up the complete data directory.
+### Buffs
 
-The Rust application reads/imports the original profile format and legacy `config.json`. Import copies into an empty destination and preserves the source. Uninstall retains user data. Back up before upgrading a prerelease. The original Python application has been removed from the current tree; its historical implementation is recoverable at commit `5af7ea98536f9884969f38b7eb9b1077c5910a49`.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/buffs-dark.png">
+  <img src="docs/assets/buffs-light.png" alt="Buff editor with three ordered skills, shortcut and refresh settings" width="1280" loading="lazy">
+</picture>
 
-## Development
+### Run
 
-Requires Rust **1.99.0**, the platform's C++ build tools, and native OpenCV/Clang dependencies. Dependencies are locked in `Cargo.lock`. Windows development also uses PowerShell 7 and 7-Zip.
+![Run view with readiness information and a calibration snapshot](docs/assets/run-dark.png)
 
-```powershell
-./tools/prepare-rust-native.ps1
-. ./tools/rust-env.ps1
-cargo test --workspace --all-targets --all-features --locked
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-cargo run -p metin-desktop -- --data-dir build/dev-data
-```
+### Settings
 
-Use an explicit development data directory to keep test data separate from normal profiles. `run.cmd` launches an existing Rust release build with the normal Windows elevation prompt; it does not install build tools.
+![Settings with recognition, timing and safety controls](docs/assets/settings-dark.png)
 
-Python is used only by packaging/verification tools. Install `requirements-build.txt` into a build virtual environment and run `python -m unittest discover -s tests -v`. See [build instructions](docs/rust/README.md), [native Linux/macOS packaging](docs/rust/unix-desktop-integration.md) and [release procedure](docs/releasing.md).
+## Platform support
 
-## Project layout
-
-| Path | Purpose |
+| Platform | Current scope |
 | --- | --- |
-| `crates/metin-core` | Profiles, validation, controller and scheduling |
-| `crates/metin-vision` | OpenCV detection and template matching |
-| `crates/metin-platform` | Native capture, input and capability guards |
-| `crates/metin-desktop` | egui application, persistence and runtime worker |
-| `tests/parity` | Sanitized, immutable reference fixtures |
-| `tools`, `packaging` | Build, verification, installer and branding resources |
+| Windows x64 | Prerelease with native window capture and guarded input. Full game-cycle acceptance is pending. |
+| Linux | Editor, recognition and desktop integration preview. Automation is disabled. |
+| macOS | Editor and application bundle support. Full native execution and Dock/Finder appearance still require verification. Automation is disabled. |
 
-Build outputs, downloaded toolchains, screenshots/logs, local settings and profiles are ignored. Icon source files and generated platform icon assets are intentionally versioned; regeneration uses the supplied SVG and pinned sharp 0.35.5, independently of application builds.
+See [platform support](docs/platform-support.md) for verification boundaries.
 
-See [CHANGELOG](CHANGELOG.md) for current changes and [release notes](docs/release-notes.md) for prerelease limitations. Third-party license files are included in distributions. A project source-code license has not yet been selected by the owner; no open-source license grant is implied.
+## Your data
+
+Windows stores profiles, settings and logs in `%LOCALAPPDATA%/MetinBot`. Back up the complete folder, including PNG assets. Import copies a data folder without modifying its source; uninstall retains user data. Other platform paths and troubleshooting are in the [user guide](docs/user-guide.md).
+
+## Build and contribute
+
+The workspace uses **Rust 1.99.0** with locked dependencies. Native OpenCV and Clang are required. Follow [development setup](docs/development.md) for platform prerequisites, tests and reproducible screenshots.
+
+| Directory | Responsibility |
+| --- | --- |
+| `crates/metin-core` | Profiles, validation, targeting and scheduling |
+| `crates/metin-vision` | Detection, image processing and template matching |
+| `crates/metin-platform` | Native capture, input and platform capabilities |
+| `crates/metin-desktop` | egui interface, persistence and runtime worker |
+| `tests/parity` | Reference images, profiles and controller traces |
+| `tools`, `packaging` | Build verification, installers, icons and license notices |
+
+[Changelog](CHANGELOG.md) · [Prerelease notes](docs/release-notes.md) · [Release procedure](docs/releasing.md)
+
+Third-party notices are included in distributions. A source-code license has not yet been selected by the owner.

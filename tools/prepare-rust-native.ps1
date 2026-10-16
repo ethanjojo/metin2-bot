@@ -1,5 +1,5 @@
 param(
-    [string]$NativeRoot = (Join-Path $PSScriptRoot '../build/rust-migration'),
+    [string]$NativeRoot = (Join-Path $PSScriptRoot '../build/rust-native/windows'),
     [string]$SevenZipPath = (Join-Path $env:ProgramFiles '7-Zip/7z.exe')
 )
 $ErrorActionPreference = 'Stop'

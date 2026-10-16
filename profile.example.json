@@ -1,7 +1,7 @@
 {
   "id": "8591a09f-25dc-4ca4-b858-cafe68231dfc",
-  "name": "Příklad serveru",
-  "process_name": "verzumclient_x64.exe",
+  "name": "Main profile",
+  "process_name": "game-client.exe",
   "region": null,
   "masks": [],
   "color": null,

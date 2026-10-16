@@ -1,0 +1,22 @@
+name: Documentation
+on:
+  pull_request:
+    paths: ['README.md', 'CHANGELOG.md', 'docs/**', 'profile.example.json', '.gitignore', 'tests/test_documentation.py', 'tests/test_gitignore.py', '.github/workflows/docs.yml']
+  push:
+    branches: ['main', 'codex/**']
+    paths: ['README.md', 'CHANGELOG.md', 'docs/**', 'profile.example.json', '.gitignore', 'tests/test_documentation.py', 'tests/test_gitignore.py', '.github/workflows/docs.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  documentation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Links, screenshot integrity, example profile and ignore rules
+        run: |
+          python3 -m unittest discover -s tests -p test_documentation.py -v
+          python3 -m unittest discover -s tests -p test_gitignore.py -v

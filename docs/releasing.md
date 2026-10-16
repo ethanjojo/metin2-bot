@@ -1,6 +1,6 @@
-# Rust release procedure
+# Release procedure
 
-The only current application/release path is Rust. Python is a build-time verifier/packager, not a bundled application runtime. Historical Python implementation and evidence remain in Git history.
+Build native packages from the tested Rust workspace. See [development](development.md) for prerequisites and [platform support](platform-support.md) for current scope.
 
 ## Local Windows prerelease
 
@@ -29,13 +29,13 @@ cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --all-targets --all-features --locked
 ```
 
-Tests replay sanitized reference behavior and exercise UI/storage/runtime boundaries. If local post-Clippy build metadata produces missing-rlib errors, `cargo clean -p metin-desktop` clears that package only before retrying tests/build. This is a development cache issue, not an application fallback.
+Tests replay reference behavior and exercise UI/storage/runtime boundaries.
 
 Inspect the final extracted ZIP with `python -m tools.verify_bundle --directory <MetinBot folder> --version <version> --commit <full SHA>`. Run the packaged EXE self-test with the normal UAC confirmation and without development DLL paths. Install/upgrade/uninstall with the production AppId is restricted to a disposable hosted runner; do not spoof its guard to test on a user's real installation.
 
 ## GitHub automation
 
-`release.yml` builds/tests/packages Rust on Windows, verifies PE identity/icons/inventory, installs the package, simulates upgrade removal of the old Python dependency tree, runs the installed EXE without development PATH, uninstalls and verifies user-data retention. Only verified installer/ZIP/checksums reach the publication job. That job alone has contents:write; PR builds cannot publish.
+`release.yml` builds/tests/packages Rust on Windows, verifies PE identity/icons/inventory, installs the package, checks removal of obsolete installation files during upgrade, runs the installed EXE without development PATH, uninstalls and verifies user-data retention. Only verified installer/ZIP/checksums reach the publication job. That job alone has contents:write; PR builds cannot publish.
 
 Pushes to main create dev prereleases. Tags must match the VERSION core: a tag such as v0.1.0-rc.1 creates a prerelease, while v0.1.0 requests stable. Tagged commits must be on main. Manual publishing runs on main only. Publishing creates/resumes a draft for the same tested commit, refuses moved/conflicting tags or changes to published assets, and verifies downloaded installer/ZIP hashes after publication.
 

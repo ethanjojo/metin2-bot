@@ -282,7 +282,7 @@ impl BuffConfig {
 pub struct Profile {
     pub id: Uuid,
     pub name: String,
-    // Kept for Python profile interchange. Desktop window selection uses
+    // Stored process metadata. Desktop window selection uses
     // per-profile UI preferences; this value does not filter the window list.
     #[serde(default = "default_process")]
     pub process_name: String,
@@ -306,7 +306,7 @@ pub struct Profile {
     pub template_region: Option<Region>,
 }
 fn default_process() -> String {
-    "verzumclient_x64.exe".into()
+    "game-client.exe".into()
 }
 impl Profile {
     pub fn create(name: impl Into<String>) -> Self {
