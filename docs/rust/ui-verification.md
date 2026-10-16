@@ -59,3 +59,12 @@ A new reviewer, without the original design history, inspected all 24 native scr
 The default desktop library target passes 31 tests without ui-smoke; the all-feature target includes 32. The whole workspace passes 89 tests on Windows and Linux. Logs for this follow-up are ui-review-{default,tests,fmt,clippy,build}.log in build/rust-migration and build/rust-linux, plus ui-review-self-test.json. The color-delete and label-collision tests reproduced their defects before the fixes and passed afterwards. The worker regression verifies that the explicit arming flag clears when pending Start is canceled.
 
 All 20 Windows screenshots were recaptured after the fixes. The reviewer independently reinspected all four changed calibration theme/size views and found no remaining material issue. Native screenshot evidence and RawInput interaction are distinct: no manual native CUA interaction or system-dialog acceptance is claimed.
+
+## Verified user-review build
+
+Final Windows and Linux fmt, strict all-target/all-feature Clippy, native builds and executable self-tests passed. Both workspaces passed 89 tests, and the standard desktop library target without ui-smoke passed 31 tests on each system. All four Linux screenshots were also recaptured and inspected after the fixes.
+
+Source commit: `687f9f72c9f4a3ea6a473329b1522ba5448170f6`. Optimized Windows build and installer compilation passed. All 449 extracted ZIP inventory files matched SHA-256. No release EXE or installer was launched, installed or published. New artifacts supersede the initial redesign packages for review:
+
+- `rust-packages/f752f29c-71f7-40db-9f88-9b3b6ccbc27b/MetinBot-0.1.0-rust-preview-windows-x64.zip` (33349920 bytes), SHA-256 `81301116919f25aa7610fbf16b9d2f1bcadcce906fb84c0ad3c3488e258730eb`.
+- `rust-packages/f752f29c-71f7-40db-9f88-9b3b6ccbc27b/MetinBotSetup-0.1.0-windows-x64.exe` (22489543 bytes), SHA-256 `78f316b05d650a799c606b6dbaf67fd76d7d1e2c58dcd81cc5f0bd7fd6a8f2c4`.
