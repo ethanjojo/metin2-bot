@@ -1,0 +1,2555 @@
+{
+  "baseline_commit": "54ac1242c754d4e6932cdfb6c37153268771faba",
+  "python": "3.14.0",
+  "opencv": "4.13.0",
+  "numpy": "2.3.5",
+  "test_count": 256,
+  "tests": [
+    {
+      "source": "test_app.AppStartTests.test_statistics_reset_preserves_step_countdown_and_skill_snapshot",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_reset_skill_timer_uses_saved_config_and_rejects_draft",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_reuse_rejects_missing_or_outside_source_region_without_mutation",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_reusing_other_icon_region_captures_current_pixels_and_roundtrips",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_start_activates_selected_game_before_arming",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_buff_picker_delete_and_escape_preserve_world_calibration",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_buff_area_is_independent_and_movable",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_resize_clears_ui_buff_icons_before_dirty_profile_is_read",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_icon_picker_checks_calibration_after_freezing_resized_frame",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_denied_activation_never_arms",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_incomplete_profile_never_activates_or_arms",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_missing_window_never_saves_or_arms",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_snapshot_loading_ends_on_success_timeout_and_activation_error",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_snapshot_cancel_clears_callback_and_allows_another_request",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_mount_confirmation_applies_without_saving_or_marking_profile_dirty",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_mount_can_be_prepared_without_a_window_or_worker_command",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_buff_status_uses_draft_even_when_old_worker_samples_arrive",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_toggle_only_details_are_forwarded_to_skill_rows",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_mount_confirmation_has_own_feedback_independent_of_buff_toggle",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_known_mount_samples_are_remembered_but_unknown_keeps_last_choice",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_run_toggle_pauses_active_or_armed_start_without_saving",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_run_toggle_starts_stopped_bot_via_existing_guarded_arm",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_zoom_buttons_anchor_canvas_center_and_block_during_edit",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_window_refresh_without_match_clears_running_and_armed_status",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_profile_switch_pauses_and_discards_template_and_frame",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_poll_rejects_preview_from_previous_window",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_fatal_worker_error_preserves_frozen_frame_but_updates_reason",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_canvas_drag_moves_existing_area_instead_of_replacing_it",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_escape_discards_preview_without_changing_profile",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_resizing_selected_mask_does_not_append_duplicate",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_new_mask_draws_preview_and_commits_without_index",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_collapsing_new_rectangle_does_not_commit_previous_preview",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_cancel_unsaved_changes_does_not_save",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_save_failure_keeps_editor_open",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_discard_confirmation_allows_leaving_without_saving",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_close_cancel_does_not_shut_worker_down",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_switch_cancel_restores_original_profile_choice",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_save_during_switch_selects_loaded_profile_in_selector",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_undo_back_to_saved_state_clears_dirty_and_redo_restores_it",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_app.AppStartTests.test_zoomed_picker_uses_same_client_coordinates",
+      "parity": [
+        "P01",
+        "P08",
+        "P15",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_detection.BuffDetectionTests.test_icon_and_modes_survive_profile_roundtrip",
+      "parity": [
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_detection.BuffDetectionTests.test_active_icon_can_move_within_buff_area",
+      "parity": [
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_detection.BuffDetectionTests.test_hotbar_copy_is_not_active_and_absence_requires_three_frames",
+      "parity": [
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_detection.BuffDetectionTests.test_black_frame_and_wrong_size_are_unknown_and_reset_evidence",
+      "parity": [
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_detection.BuffDetectionTests.test_absence_with_valid_slow_sampling_and_stale_gap",
+      "parity": [
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_detection.BuffDetectionTests.test_cycle_skips_active_and_unknown_but_refreshes_regular_skill",
+      "parity": [
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_detection.BuffDetectionTests.test_cycle_checks_latest_state_before_each_skill",
+      "parity": [
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_detection.BuffDetectionTests.test_confirmed_absence_activates_toggle",
+      "parity": [
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_detection.BuffDetectionTests.test_first_cycle_checks_icon_after_three_samples_even_with_fast_panel",
+      "parity": [
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_detection.BuffDetectionTests.test_missing_icon_can_be_saved_as_draft_but_blocks_running",
+      "parity": [
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_scheduling.BuffSchedulingTests.test_reset_during_active_target_waits_for_completion",
+      "parity": [
+        "P19",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_scheduling.BuffSchedulingTests.test_short_refresh_intervals_do_not_starve_next_target",
+      "parity": [
+        "P19",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_scheduling.BuffSchedulingTests.test_toggle_between_intervals_preserves_regular_deadline",
+      "parity": [
+        "P19",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_scheduling.BuffSchedulingTests.test_toggle_only_has_no_interval_or_mount_cycle_when_active_or_unknown",
+      "parity": [
+        "P19",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_scheduling.BuffSchedulingTests.test_toggle_expiry_during_target_waits_and_is_checked_before_next_click",
+      "parity": [
+        "P19",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_scheduling.BuffSchedulingTests.test_toggle_expiring_during_regular_animation_is_not_skipped_at_next_click",
+      "parity": [
+        "P19",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_scheduling.BuffSchedulingTests.test_second_toggle_is_checked_without_resending_first_before_same_target",
+      "parity": [
+        "P19",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_ui.BuffListTests.test_names_follow_rows_and_profile_roundtrip",
+      "parity": [
+        "P17",
+        "P19",
+        "P20",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_ui.BuffListTests.test_skill_status_countdown_and_reset_are_separate_and_follow_row_order",
+      "parity": [
+        "P17",
+        "P19",
+        "P20",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_ui.BuffListTests.test_interval_units_convert_without_changing_skill_duration",
+      "parity": [
+        "P17",
+        "P19",
+        "P20",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_ui.BuffListTests.test_dynamic_rows_keep_whole_skill_together_when_sorted_and_removed",
+      "parity": [
+        "P17",
+        "P19",
+        "P20",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_ui.BuffListTests.test_limit_and_picker_follow_current_row_order",
+      "parity": [
+        "P17",
+        "P19",
+        "P20",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_ui.BuffListTests.test_both_thumbnails_follow_sort_and_can_be_replaced_or_deleted_independently",
+      "parity": [
+        "P17",
+        "P19",
+        "P20",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_ui.BuffListTests.test_identical_inactive_capture_is_rejected_without_changing_row",
+      "parity": [
+        "P17",
+        "P19",
+        "P20",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_ui.BuffListTests.test_either_icon_can_be_first_and_reused_when_region_is_saved",
+      "parity": [
+        "P17",
+        "P19",
+        "P20",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buff_ui.BuffListTests.test_intervals_and_timers_belong_to_rows_and_switch_has_no_interval",
+      "parity": [
+        "P17",
+        "P19",
+        "P20",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buffs.BuffTests.test_startup_buffs_before_target_and_resume_preserves_interval",
+      "parity": [
+        "P18",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buffs.BuffTests.test_keys_and_reserved_hotkeys",
+      "parity": [
+        "P18",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buffs.BuffTests.test_validation_round_trip_and_disabled_old_profile",
+      "parity": [
+        "P18",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buffs.BuffTests.test_initial_mount_is_not_profile_data_and_new_cycle_is_unknown",
+      "parity": [
+        "P18",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buffs.BuffTests.test_four_hour_interval_survives_profile_round_trip_and_pause",
+      "parity": [
+        "P18",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buffs.BuffTests.test_mounted_cycle_acknowledges_every_step_and_waits",
+      "parity": [
+        "P18",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buffs.BuffTests.test_foot_combat_never_mounts_and_pause_preserves_interval",
+      "parity": [
+        "P18",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buffs.BuffTests.test_due_buff_waits_for_confirmed_target_end_before_first_key",
+      "parity": [
+        "P18",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buffs.BuffTests.test_mount_preference_is_aligned_before_first_target",
+      "parity": [
+        "P18",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_buffs.BuffTests.test_unknown_mount_blocks_resume_and_panel_interrupts_buffing",
+      "parity": [
+        "P18",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_build.BuildMetadataTests.test_stable_and_prerelease_keep_same_windows_core",
+      "parity": [
+        "P28",
+        "P29"
+      ],
+      "target": "crates/metin-desktop/tests/self_test.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_build.BuildMetadataTests.test_rejects_invalid_or_injectable_release_identifiers",
+      "parity": [
+        "P28",
+        "P29"
+      ],
+      "target": "crates/metin-desktop/tests/self_test.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_build.BuildMetadataTests.test_boundary_values_are_supported",
+      "parity": [
+        "P28",
+        "P29"
+      ],
+      "target": "crates/metin-desktop/tests/self_test.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_build.BuildMetadataTests.test_resource_and_manifest_preserve_version_and_commit",
+      "parity": [
+        "P28",
+        "P29"
+      ],
+      "target": "crates/metin-desktop/tests/self_test.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_build.BuildMetadataTests.test_spec_bundles_only_entrypoint_and_build_metadata",
+      "parity": [
+        "P28",
+        "P29"
+      ],
+      "target": "crates/metin-desktop/tests/self_test.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_calibration.CalibrationTests.test_display_coordinates_and_padding",
+      "parity": [
+        "P03",
+        "P12",
+        "P20"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_calibration.CalibrationTests.test_template_is_frozen_and_must_be_inside_panel",
+      "parity": [
+        "P03",
+        "P12",
+        "P20"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_calibration.CalibrationTests.test_profile_switch_has_no_shared_template",
+      "parity": [
+        "P03",
+        "P12",
+        "P20"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_calibration.CalibrationTests.test_new_frame_dimensions_invalidate_old_calibration",
+      "parity": [
+        "P03",
+        "P12",
+        "P20"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_calibration.CalibrationTests.test_resizing_invalidates_active_buff_templates_but_keeps_skill_settings",
+      "parity": [
+        "P03",
+        "P12",
+        "P20"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_calibration.CalibrationTests.test_color_and_masks_update_immutable_draft",
+      "parity": [
+        "P03",
+        "P12",
+        "P20"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_calibration.CalibrationTests.test_small_panel_anchor_on_large_game_window",
+      "parity": [
+        "P03",
+        "P12",
+        "P20"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_cli.CLITests.test_explicit_directory_is_passed_to_single_app_path_and_default_log",
+      "parity": [
+        "P28"
+      ],
+      "target": "crates/metin-desktop/tests/cli.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_cli.CLITests.test_self_test_is_a_real_isolated_source_process",
+      "parity": [
+        "P28"
+      ],
+      "target": "crates/metin-desktop/tests/cli.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_cli.CLITests.test_self_test_cannot_target_real_data",
+      "parity": [
+        "P28"
+      ],
+      "target": "crates/metin-desktop/tests/cli.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_cli.CLITests.test_first_installed_launch_can_import_source_profiles",
+      "parity": [
+        "P28"
+      ],
+      "target": "crates/metin-desktop/tests/cli.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_cli.CLITests.test_explicit_import_refuses_existing_data",
+      "parity": [
+        "P28"
+      ],
+      "target": "crates/metin-desktop/tests/cli.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_config.ConfigTests.test_invalid_region",
+      "parity": [
+        "P26"
+      ],
+      "target": "crates/metin-core/tests/profile.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_config.ConfigTests.test_invalid_intervals",
+      "parity": [
+        "P26"
+      ],
+      "target": "crates/metin-core/tests/profile.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_config.ConfigTests.test_round_trip",
+      "parity": [
+        "P26"
+      ],
+      "target": "crates/metin-core/tests/profile.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_config.ConfigTests.test_unknown_keys_rejected",
+      "parity": [
+        "P26"
+      ],
+      "target": "crates/metin-core/tests/profile.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_config.ConfigTests.test_pixel_conversion",
+      "parity": [
+        "P26"
+      ],
+      "target": "crates/metin-core/tests/profile.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_config.ConfigTests.test_confirmation_window_allows_stable_frames",
+      "parity": [
+        "P26"
+      ],
+      "target": "crates/metin-core/tests/profile.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_stopped_and_invalid_observation",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_click_once_and_missing_first_panel_not_completion",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_initial_active_panel_blocks_new_click",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_panel_confirmation_then_debounced_loss",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_attack_timeout_never_resets_on_candidates",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_acquisition_timeout_suppresses_same_candidate",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_search_and_rotation_limit",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_sparse_absence_is_not_completion",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_pause_prevents_actions",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_completion_counts_only_confirmed_active_panel_loss_once",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_acquisition_failure_counts_and_remaining_matches_limit",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_unstable_panel_blocks_click_and_eventually_pauses",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_seeking_requires_confirmed_absence_after_panel_flicker",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_controller.ControllerTests.test_seeking_does_not_rotate_on_transient_absence",
+      "parity": [
+        "P07",
+        "P08",
+        "P09",
+        "P22"
+      ],
+      "target": "crates/metin-core/tests/controller.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_data_paths.DataPathsTests.test_default_is_per_user_and_missing_or_relative_environment_is_explicit",
+      "parity": [
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/import.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_data_paths.DataPathsTests.test_source_checkout_and_frozen_executable_selection",
+      "parity": [
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/import.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_data_paths.DataPathsTests.test_injected_directory_never_discovers_real_source",
+      "parity": [
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/import.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_data_paths.DataPathsTests.test_default_migrates_using_discovered_paths",
+      "parity": [
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/import.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_data_paths.DataPathsTests.test_atomic_copy_preserves_original_and_repeat_never_overwrites_or_merges",
+      "parity": [
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/import.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_data_paths.DataPathsTests.test_partial_copy_failure_is_recoverable_and_does_not_publish_partial_data",
+      "parity": [
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/import.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_data_paths.DataPathsTests.test_empty_destination_and_stale_stage_allow_fresh_retry",
+      "parity": [
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/import.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_data_paths.DataPathsTests.test_corrupt_existing_destination_is_reported_without_changes",
+      "parity": [
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/import.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_data_paths.DataPathsTests.test_incomplete_profile_destination_and_file_conflict_are_reported",
+      "parity": [
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/import.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_data_paths.DataPathsTests.test_invalid_source_never_publishes_destination",
+      "parity": [
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/import.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_data_paths.DataPathsTests.test_legacy_backup_conflict_is_reported_without_publishing_or_overwriting",
+      "parity": [
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/import.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_data_paths.DataPathsTests.test_copied_legacy_config_conversion_only_changes_destination",
+      "parity": [
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/import.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_editing.EditingTests.test_handles_win_over_interior_and_outside_creates",
+      "parity": [
+        "P12",
+        "P13"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_editing.EditingTests.test_move_preserves_size_and_clamps_to_image",
+      "parity": [
+        "P12",
+        "P13"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_editing.EditingTests.test_resize_and_crossing_never_inverts_rectangle",
+      "parity": [
+        "P12",
+        "P13"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_editing.EditingTests.test_mask_edit_replaces_only_selected_mask_and_delete_one",
+      "parity": [
+        "P12",
+        "P13"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_editing.EditingTests.test_template_region_survives_reload_and_can_be_adjusted",
+      "parity": [
+        "P12",
+        "P13"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_editing.EditingTests.test_panel_resize_preserves_contained_anchor_and_invalidates_excluded",
+      "parity": [
+        "P12",
+        "P13"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_editing.EditingTests.test_invalid_template_edit_keeps_previous_selection",
+      "parity": [
+        "P12",
+        "P13"
+      ],
+      "target": "crates/metin-desktop/tests/editor.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_editor_tools.EditorToolsTests.test_undo_redo_and_edit_after_undo_discards_future",
+      "parity": [
+        "P13",
+        "P14"
+      ],
+      "target": "crates/metin-desktop/tests/history.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_editor_tools.EditorToolsTests.test_template_snapshots_are_independent_and_restored",
+      "parity": [
+        "P13",
+        "P14"
+      ],
+      "target": "crates/metin-desktop/tests/history.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_editor_tools.EditorToolsTests.test_history_is_bounded_and_does_not_record_duplicate_states",
+      "parity": [
+        "P13",
+        "P14"
+      ],
+      "target": "crates/metin-desktop/tests/history.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_editor_tools.EditorToolsTests.test_zoom_keeps_pixel_under_cursor_and_round_trips",
+      "parity": [
+        "P13",
+        "P14"
+      ],
+      "target": "crates/metin-desktop/tests/history.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_editor_tools.EditorToolsTests.test_padding_rejected_clamping_pan_and_reset",
+      "parity": [
+        "P13",
+        "P14"
+      ],
+      "target": "crates/metin-desktop/tests/history.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_editor_tools.EditorToolsTests.test_zoom_is_bounded_and_resize_preserves_magnification",
+      "parity": [
+        "P13",
+        "P14"
+      ],
+      "target": "crates/metin-desktop/tests/history.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_gitignore.GitIgnoreTests.test_private_runtime_data_is_ignored_and_sources_remain_visible",
+      "parity": [
+        "P31"
+      ],
+      "target": "crates/metin-desktop/tests/release.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_hotbar_buffs.HotbarBuffTests.test_real_hotbar_inactive_confirmed_after_three_samples",
+      "parity": [
+        "P20",
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_hotbar_buffs.HotbarBuffTests.test_missing_both_states_never_means_inactive",
+      "parity": [
+        "P20",
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_hotbar_buffs.HotbarBuffTests.test_ambiguous_both_templates_never_toggle",
+      "parity": [
+        "P20",
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_hotbar_buffs.HotbarBuffTests.test_independently_selected_icon_sizes_roundtrip_and_detect_both_states",
+      "parity": [
+        "P20",
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_hotbar_buffs.HotbarBuffTests.test_startup_sequence_only_sends_toggle_for_known_inactive_hotbar",
+      "parity": [
+        "P20",
+        "P21"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_keybind_entry.KeybindTests.test_shortcuts_capture_modifiers_numbers_and_function_keys",
+      "parity": [
+        "P18"
+      ],
+      "target": "crates/metin-desktop/tests/keybind.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_keybind_entry.KeybindTests.test_capture_commits_chord_once_and_does_not_store_hint",
+      "parity": [
+        "P18"
+      ],
+      "target": "crates/metin-desktop/tests/keybind.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_keybind_entry.KeybindTests.test_escape_focus_loss_clear_and_reserved_keys",
+      "parity": [
+        "P18"
+      ],
+      "target": "crates/metin-desktop/tests/keybind.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_keybind_entry.KeybindTests.test_mount_cannot_be_cleared_and_profile_reload_updates_display",
+      "parity": [
+        "P18"
+      ],
+      "target": "crates/metin-desktop/tests/keybind.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_keybind_entry.KeybindTests.test_recording_consumes_editor_shortcuts_and_tab_preserves_value",
+      "parity": [
+        "P18"
+      ],
+      "target": "crates/metin-desktop/tests/keybind.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_launcher.LauncherTests.test_launch_and_check_use_local_environment_without_real_uac",
+      "parity": [
+        "P29"
+      ],
+      "target": "crates/metin-desktop/tests/release.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_launcher.LauncherTests.test_cancelled_uac_does_not_retry_or_launch",
+      "parity": [
+        "P29"
+      ],
+      "target": "crates/metin-desktop/tests/release.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_launcher.LauncherTests.test_missing_environment_reports_setup_before_any_elevation",
+      "parity": [
+        "P29"
+      ],
+      "target": "crates/metin-desktop/tests/release.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_number_input.NumberInputTests.test_native_arrows_step_clamp_and_notify_without_rounding_offsets",
+      "parity": [
+        "P16"
+      ],
+      "target": "crates/metin-desktop/tests/numeric.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_number_input.NumberInputTests.test_interval_step_tracks_minutes_and_seconds_and_preserves_limits",
+      "parity": [
+        "P16"
+      ],
+      "target": "crates/metin-desktop/tests/numeric.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_preview_ui.EmptyPreviewTests.test_centered_icon_and_context_text_follow_size_and_theme",
+      "parity": [
+        "P03",
+        "P15"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_profiles.ProfileTests.test_incomplete_profile_cannot_start",
+      "parity": [
+        "P01",
+        "P26",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/storage.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_profiles.ProfileTests.test_roundtrip_and_template_isolation",
+      "parity": [
+        "P01",
+        "P26",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/storage.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_profiles.ProfileTests.test_unknown_fields_and_unsafe_paths_rejected",
+      "parity": [
+        "P01",
+        "P26",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/storage.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_profiles.ProfileTests.test_missing_template_rejected",
+      "parity": [
+        "P01",
+        "P26",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/storage.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_profiles.ProfileTests.test_failed_commit_preserves_previous_template",
+      "parity": [
+        "P01",
+        "P26",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/storage.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_profiles.ProfileTests.test_migration_once_preserves_only_applicable_fields",
+      "parity": [
+        "P01",
+        "P26",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/storage.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_profiles.ProfileTests.test_validation_rejects_nan_and_wrong_types",
+      "parity": [
+        "P01",
+        "P26",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/storage.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_profiles.ProfileTests.test_last_selection_is_separate_from_profile_data",
+      "parity": [
+        "P01",
+        "P26",
+        "P27"
+      ],
+      "target": "crates/metin-desktop/tests/storage.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_release.ReleaseTests.test_main_identity_is_unique_and_prerelease",
+      "parity": [
+        "P30"
+      ],
+      "target": "crates/metin-desktop/tests/release.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_release.ReleaseTests.test_stable_tag_matches_single_version_source",
+      "parity": [
+        "P30"
+      ],
+      "target": "crates/metin-desktop/tests/release.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_release.ReleaseTests.test_pr_build_has_separate_identity_and_invalid_values_rejected",
+      "parity": [
+        "P30"
+      ],
+      "target": "crates/metin-desktop/tests/release.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_release.ReleaseTests.test_publication_checks_remote_tags_and_resumes_only_safe_drafts",
+      "parity": [
+        "P30"
+      ],
+      "target": "crates/metin-desktop/tests/release.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_run_ui.OverviewTests.test_loading_icon_animates_inside_button_without_changing_size",
+      "parity": [
+        "P25"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_run_ui.OverviewTests.test_messages_never_change_preview_geometry",
+      "parity": [
+        "P25"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_run_ui.OverviewTests.test_preview_status_never_labels_old_frame_as_live",
+      "parity": [
+        "P25"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_run_ui.OverviewTests.test_snapshot_formats_counts_and_deadline_without_own_clock",
+      "parity": [
+        "P25"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_active_toggle_is_not_sent_during_real_observation_cycle",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_full_target_buff_remount_and_next_click_cycle",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_runtime_sends_mount_keys_and_only_then_tracks_new_state",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_failed_mount_marks_state_unknown_and_f7_cannot_restart",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_rejected_window_key_message_pauses_before_skills",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_invalid_capture_pauses",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_real_observations_click_once_then_wait_for_panel",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_incomplete_profile_cannot_start",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_wrong_calibration_dimensions_pause_before_input",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_geometry_change_pauses",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_stop_during_action_releases_button",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_pause_reason_survives_preview_failure",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_template_snapshot_is_independent",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_close_sets_cancellation",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_preview_identifies_profile_window_and_capture_time",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_runtime.RuntimeTests.test_stopped_preview_detects_without_input",
+      "parity": [
+        "P03",
+        "P07",
+        "P10",
+        "P22",
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/runtime.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_session.SessionTests.test_pause_excludes_idle_time_and_snapshot_is_independent",
+      "parity": [
+        "P25"
+      ],
+      "target": "crates/metin-core/tests/session.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_session.SessionTests.test_duration_handles_hours_and_negative",
+      "parity": [
+        "P25"
+      ],
+      "target": "crates/metin-core/tests/session.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_session.SessionTests.test_pause_accounts_for_last_active_interval",
+      "parity": [
+        "P25"
+      ],
+      "target": "crates/metin-core/tests/session.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_sidebar_scroll.SidebarScrollTests.test_fitting_content_stays_at_top_after_wheel_or_scrollbar",
+      "parity": [
+        "P15"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_sidebar_scroll.SidebarScrollTests.test_overflow_scrolls_and_shrinking_content_resets_offset",
+      "parity": [
+        "P15"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_sidebar_scroll.SidebarScrollTests.test_wheel_and_thumb_follow_real_overflow_and_resize",
+      "parity": [
+        "P15"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_skill_intervals.SkillIntervalTests.test_reset_only_selected_timer_to_due_now_and_preserves_pause",
+      "parity": [
+        "P19",
+        "P24"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_skill_intervals.SkillIntervalTests.test_independent_deadlines_start_after_each_skills_animation",
+      "parity": [
+        "P19",
+        "P24"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_skill_intervals.SkillIntervalTests.test_legacy_global_interval_migrates_only_regular_skills",
+      "parity": [
+        "P19",
+        "P24"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_skill_intervals.SkillIntervalTests.test_invalid_intervals_and_switch_interval_rejected",
+      "parity": [
+        "P19",
+        "P24"
+      ],
+      "target": "crates/metin-core/tests/buffs.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_switch_ui.SwitchTests.test_native_switch_preserves_variable_command_and_unknown_state_across_themes",
+      "parity": [
+        "P23"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_theme.ThemeTests.test_theme_toggle_saves_both_directions_and_preserves_state_on_failure",
+      "parity": [
+        "P16"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_theme.ThemeTests.test_disclosure_preserves_values_and_restores_content",
+      "parity": [
+        "P16"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_theme.ThemeTests.test_preference_roundtrip_is_separate_and_validated",
+      "parity": [
+        "P16"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_theme.ThemeTests.test_switch_restyles_native_widgets_and_keeps_values",
+      "parity": [
+        "P16"
+      ],
+      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_vision.VisionTests.test_hue_wrap_and_blob_point",
+      "parity": [
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_vision.VisionTests.test_masks_and_world_exclude_ui_after_morphology",
+      "parity": [
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_vision.VisionTests.test_minimum_and_maximum_area",
+      "parity": [
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_vision.VisionTests.test_color_picker_reads_body",
+      "parity": [
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_vision.VisionTests.test_minimum_dimensions_reject_small_objects_even_with_enough_area",
+      "parity": [
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_vision.VisionTests.test_click_point_on_detected_pixel_for_hollow_shape",
+      "parity": [
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_vision.VisionTests.test_stable_candidates_and_stale_gap",
+      "parity": [
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_vision.VisionTests.test_matching_panel_inside_roi_only",
+      "parity": [
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_vision.VisionTests.test_invalid_template_rejected",
+      "parity": [
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_vision.VisionTests.test_empty_frame_rejected",
+      "parity": [
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "target": "crates/metin-vision/tests/parity.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_multiple_windows_require_selection",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_mount_chord_releases_key_before_modifier",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_keyboard_messages_address_window_with_scan_and_release_flags",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_unobservable_global_key_state_does_not_reject_window_messages",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_failed_key_message_reports_os_error",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_alt_chord_uses_system_messages_and_context_bit",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_keyboard_release_stays_with_original_window_after_focus_loss",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_keyboard_release_does_not_address_reused_hwnd",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_shortcut_cancellation_releases_all_keys_and_sends_no_more",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_focus_loss_between_modifier_and_key_blocks_chord",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_cancel_after_primary_release_still_releases_modifier",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_focus_loss_blocks_input",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_unobservable_button_state_does_not_abort_accepted_click",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_click_uses_configured_hover_and_hold",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_mouse_messages_address_window_with_client_coordinates",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_failed_mouse_message_reports_os_error",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_mouse_down_rejects_outside_or_unfocused_window",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_mouse_up_uses_original_window_after_focus_loss",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_destroyed_window_retires_mouse_ownership_without_posting_to_replacement",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_mouse_up_is_posted_even_if_original_window_loses_focus",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_geometry_change_interrupts_click",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_user_held_input_blocks_action",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_cancel_releases_owned_inputs",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_sendinput_failure_releases_inputs",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_relative_motion_corrects_acceleration_on_negative_monitor",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_successful_click_releases_inputs",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_cancel_rotation_releases_key",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_physical_mouse_movement_interrupts_before_button_down",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_move_waits_for_delivered_sendinput_position",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_relative_motion_checks_guard_before_every_event",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_undelivered_move_stops_before_click",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_activation_request_does_not_require_immediate_foreground",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_refused_activation_request_reports_false_without_input",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_elevated_game_requires_elevated_bot",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_windows.WindowsTests.test_equal_privileges_allow_input",
+      "parity": [
+        "P02",
+        "P10",
+        "P11",
+        "P29"
+      ],
+      "target": "crates/metin-platform/tests/windows_input.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_worker.WorkerTests.test_skill_timer_reset_is_identity_bound_and_does_not_reset_statistics",
+      "parity": [
+        "P08",
+        "P09",
+        "P11",
+        "P23",
+        "P24",
+        "P25"
+      ],
+      "target": "crates/metin-desktop/tests/worker.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_worker.WorkerTests.test_mount_confirmation_rejects_stale_window_and_preserves_timer",
+      "parity": [
+        "P08",
+        "P09",
+        "P11",
+        "P23",
+        "P24",
+        "P25"
+      ],
+      "target": "crates/metin-desktop/tests/worker.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_worker.WorkerTests.test_buff_countdown_and_mount_survive_save_refresh_and_disable",
+      "parity": [
+        "P08",
+        "P09",
+        "P11",
+        "P23",
+        "P24",
+        "P25"
+      ],
+      "target": "crates/metin-desktop/tests/worker.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_worker.WorkerTests.test_uncertain_mount_survives_refresh_until_explicit_confirmation",
+      "parity": [
+        "P08",
+        "P09",
+        "P11",
+        "P23",
+        "P24",
+        "P25"
+      ],
+      "target": "crates/metin-desktop/tests/worker.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_worker.WorkerTests.test_session_survives_save_but_resets_for_new_window",
+      "parity": [
+        "P08",
+        "P09",
+        "P11",
+        "P23",
+        "P24",
+        "P25"
+      ],
+      "target": "crates/metin-desktop/tests/worker.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_worker.WorkerTests.test_armed_start_waits_for_stable_foreground",
+      "parity": [
+        "P08",
+        "P09",
+        "P11",
+        "P23",
+        "P24",
+        "P25"
+      ],
+      "target": "crates/metin-desktop/tests/worker.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_worker.WorkerTests.test_close_during_input_terminates_and_releases",
+      "parity": [
+        "P08",
+        "P09",
+        "P11",
+        "P23",
+        "P24",
+        "P25"
+      ],
+      "target": "crates/metin-desktop/tests/worker.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_worker.WorkerTests.test_clearing_window_detaches_runtime_before_f7",
+      "parity": [
+        "P08",
+        "P09",
+        "P11",
+        "P23",
+        "P24",
+        "P25"
+      ],
+      "target": "crates/metin-desktop/tests/worker.rs",
+      "status": "pending"
+    },
+    {
+      "source": "test_worker.WorkerTests.test_f8_dominates_simultaneous_f7_event",
+      "parity": [
+        "P08",
+        "P09",
+        "P11",
+        "P23",
+        "P24",
+        "P25"
+      ],
+      "target": "crates/metin-desktop/tests/worker.rs",
+      "status": "pending"
+    }
+  ]
+}

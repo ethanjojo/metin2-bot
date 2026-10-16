@@ -1,0 +1,227 @@
+//! OS integration with explicit capabilities and immutable BGR frames.
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
+use std::time::Instant;
+#[derive(Debug, Clone, thiserror::Error)]
+#[error("{0}")]
+pub struct PlatformError(pub String);
+pub type Result<T> = std::result::Result<T, PlatformError>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Frame {
+    pub width: u32,
+    pub height: u32,
+    pub bgr: Arc<[u8]>,
+}
+impl Frame {
+    pub fn new(width: u32, height: u32, bgr: Vec<u8>) -> Result<Self> {
+        if width == 0
+            || height == 0
+            || width > 16384
+            || height > 16384
+            || bgr.len() != width as usize * height as usize * 3
+        {
+            return Err(PlatformError(
+                "Invalid BGR frame dimensions or buffer length.".into(),
+            ));
+        }
+        Ok(Self {
+            width,
+            height,
+            bgr: bgr.into(),
+        })
+    }
+}
+#[derive(Debug, Clone, Default)]
+pub struct StopToken(Arc<AtomicU64>);
+impl StopToken {
+    pub fn generation(&self) -> u64 {
+        self.0.load(Ordering::SeqCst)
+    }
+    pub fn stop(&self) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+    pub fn cancelled(&self, generation: u64) -> bool {
+        self.generation() != generation
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TargetToken {
+    pub handle: usize,
+    pub pid: u32,
+    pub created: u64,
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct TargetInfo {
+    pub token: TargetToken,
+    pub title: String,
+    pub process_name: String,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TargetState {
+    pub target: TargetToken,
+    pub left: i32,
+    pub top: i32,
+    pub width: u32,
+    pub height: u32,
+    pub visible: bool,
+    pub foreground: bool,
+}
+#[derive(Debug, Clone)]
+pub struct CapturedFrame {
+    pub frame: Frame,
+    pub target: TargetToken,
+    pub captured_at: Instant,
+    pub id: u64,
+    pub geometry: TargetState,
+}
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CapabilityReport {
+    pub capture: bool,
+    pub identity: bool,
+    pub foreground: bool,
+    pub obstruction: bool,
+    pub manual_input: bool,
+    pub input: bool,
+    pub emergency_stop: bool,
+    pub reason: String,
+}
+impl CapabilityReport {
+    pub fn automation_ready(&self) -> bool {
+        self.capture
+            && self.identity
+            && self.foreground
+            && self.obstruction
+            && self.manual_input
+            && self.input
+            && self.emergency_stop
+    }
+}
+#[derive(Debug, Clone, Copy)]
+pub struct HotkeyEvents {
+    pub toggle: bool,
+    pub stop: bool,
+}
+
+/// One selected, verified target. Implementations must retain the original target
+/// for releases and must never redirect an up event to a reused native handle.
+pub trait PlatformBackend: Send {
+    fn capabilities(&self) -> CapabilityReport;
+    fn list_targets(&mut self) -> Result<Vec<TargetInfo>>;
+    fn attach(&mut self, target: TargetToken) -> Result<()>;
+    fn inspect(&mut self) -> Result<TargetState>;
+    fn request_activation(&mut self) -> Result<bool>;
+    fn capture(
+        &mut self,
+        deadline: Instant,
+        stop: &StopToken,
+        generation: u64,
+    ) -> Result<CapturedFrame>;
+    fn check_input_access(&mut self) -> Result<()>;
+    fn key_held(&self, key: u16) -> bool;
+    fn point_clear(&self, point: [i32; 2]) -> bool;
+    fn cursor(&self) -> Result<[i32; 2]>;
+    fn move_relative(&mut self, delta: [i32; 2]) -> Result<()>;
+    fn key(&mut self, key: u16, down: bool, alt: bool) -> Result<()>;
+    fn mouse(&mut self, point: [u32; 2], down: bool) -> Result<()>;
+    fn hotkeys(&mut self) -> Result<HotkeyEvents>;
+    fn emergency_pressed(&mut self) -> Result<bool> {
+        Ok(self.key_held(0x77))
+    }
+}
+mod guarded_input;
+pub use guarded_input::InputExecutor;
+
+#[derive(Debug, Clone, Copy)]
+pub struct KeyboardPacket {
+    pub message: u32,
+    pub flags: u32,
+}
+pub fn keyboard_packet(key: u16, scan: u32, down: bool, alt: bool) -> KeyboardPacket {
+    let system = alt || [0x12, 0xA4, 0xA5].contains(&key);
+    KeyboardPacket {
+        message: match (system, down) {
+            (false, true) => 0x100,
+            (false, false) => 0x101,
+            (true, true) => 0x104,
+            (true, false) => 0x105,
+        },
+        flags: 1
+            | ((scan & 0xff) << 16)
+            | if [0xA3, 0xA5].contains(&key) {
+                1 << 24
+            } else {
+                0
+            }
+            | if down { 0 } else { (1 << 30) | (1 << 31) }
+            | if alt { 1 << 29 } else { 0 },
+    }
+}
+
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+pub use windows::enable_dpi;
+pub fn backend() -> Box<dyn PlatformBackend> {
+    #[cfg(windows)]
+    {
+        Box::new(windows::WindowsBackend::new())
+    }
+    #[cfg(not(windows))]
+    {
+        Box::new(UnavailableBackend)
+    }
+}
+#[cfg(not(windows))]
+struct UnavailableBackend;
+#[cfg(not(windows))]
+impl PlatformBackend for UnavailableBackend {
+    fn capabilities(&self) -> CapabilityReport {
+        CapabilityReport{reason:"This platform's capture/input backend has not been verified. Calibration and profiles remain available.".into(),..Default::default()}
+    }
+    fn list_targets(&mut self) -> Result<Vec<TargetInfo>> {
+        Ok(vec![])
+    }
+    fn attach(&mut self, _: TargetToken) -> Result<()> {
+        Err(PlatformError(self.capabilities().reason))
+    }
+    fn inspect(&mut self) -> Result<TargetState> {
+        Err(PlatformError(self.capabilities().reason))
+    }
+    fn request_activation(&mut self) -> Result<bool> {
+        Err(PlatformError(self.capabilities().reason))
+    }
+    fn capture(&mut self, _: Instant, _: &StopToken, _: u64) -> Result<CapturedFrame> {
+        Err(PlatformError(self.capabilities().reason))
+    }
+    fn check_input_access(&mut self) -> Result<()> {
+        Err(PlatformError(self.capabilities().reason))
+    }
+    fn key_held(&self, _: u16) -> bool {
+        false
+    }
+    fn point_clear(&self, _: [i32; 2]) -> bool {
+        false
+    }
+    fn cursor(&self) -> Result<[i32; 2]> {
+        Err(PlatformError(self.capabilities().reason))
+    }
+    fn move_relative(&mut self, _: [i32; 2]) -> Result<()> {
+        Err(PlatformError(self.capabilities().reason))
+    }
+    fn key(&mut self, _: u16, _: bool, _: bool) -> Result<()> {
+        Err(PlatformError(self.capabilities().reason))
+    }
+    fn mouse(&mut self, _: [u32; 2], _: bool) -> Result<()> {
+        Err(PlatformError(self.capabilities().reason))
+    }
+    fn hotkeys(&mut self) -> Result<HotkeyEvents> {
+        Ok(HotkeyEvents {
+            toggle: false,
+            stop: false,
+        })
+    }
+}

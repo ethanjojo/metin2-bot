@@ -1,0 +1,37 @@
+{
+  "id": "8591a09f-25dc-4ca4-b858-cafe68231dfc",
+  "name": "Fixture",
+  "process_name": "verzumclient_x64.exe",
+  "region": null,
+  "masks": [],
+  "color": null,
+  "panel": {
+    "region": null,
+    "threshold": 0.88,
+    "stable_frames": 3
+  },
+  "timing": {
+    "click_hover_seconds": 0.15,
+    "click_hold_seconds": 0.2,
+    "sample_interval": 0.25,
+    "settle_seconds": 1,
+    "search_timeout": 5,
+    "acquire_timeout": 20,
+    "attack_timeout": 120,
+    "max_rotations": 4,
+    "rotate_seconds": 0.35,
+    "failed_cooldown": 10
+  },
+  "buffs": {
+    "enabled": false,
+    "fight_mounted": true,
+    "mount_shortcut": "Ctrl+G",
+    "mount_wait_seconds": 1.5,
+    "key_hold_seconds": 0.15,
+    "skills": [],
+    "icon_region": null
+  },
+  "frame_size": null,
+  "template_file": null,
+  "template_region": null
+}

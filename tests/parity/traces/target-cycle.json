@@ -1,0 +1,172 @@
+[
+  {
+    "now": 0.0,
+    "panel": false,
+    "action": null,
+    "phase": "initial",
+    "running": true,
+    "stats": {
+      "active_seconds": 0.0,
+      "completed": 0,
+      "clicks": 0,
+      "failed": 0
+    }
+  },
+  {
+    "now": 0.25,
+    "panel": false,
+    "action": null,
+    "phase": "initial",
+    "running": true,
+    "stats": {
+      "active_seconds": 0.0,
+      "completed": 0,
+      "clicks": 0,
+      "failed": 0
+    }
+  },
+  {
+    "now": 0.5,
+    "panel": false,
+    "action": {
+      "kind": "click",
+      "point": [
+        409,
+        309
+      ],
+      "shortcut": null
+    },
+    "phase": "acquiring",
+    "running": true,
+    "stats": {
+      "active_seconds": 0.0,
+      "completed": 0,
+      "clicks": 0,
+      "failed": 0
+    }
+  },
+  {
+    "now": 0.75,
+    "panel": true,
+    "action": null,
+    "phase": "acquiring",
+    "running": true,
+    "stats": {
+      "active_seconds": 0.0,
+      "completed": 0,
+      "clicks": 0,
+      "failed": 0
+    }
+  },
+  {
+    "now": 1.0,
+    "panel": true,
+    "action": null,
+    "phase": "acquiring",
+    "running": true,
+    "stats": {
+      "active_seconds": 0.0,
+      "completed": 0,
+      "clicks": 0,
+      "failed": 0
+    }
+  },
+  {
+    "now": 1.25,
+    "panel": true,
+    "action": null,
+    "phase": "active",
+    "running": true,
+    "stats": {
+      "active_seconds": 0.0,
+      "completed": 0,
+      "clicks": 0,
+      "failed": 0
+    }
+  },
+  {
+    "now": 1.5,
+    "panel": false,
+    "action": null,
+    "phase": "active",
+    "running": true,
+    "stats": {
+      "active_seconds": 0.0,
+      "completed": 0,
+      "clicks": 0,
+      "failed": 0
+    }
+  },
+  {
+    "now": 1.75,
+    "panel": false,
+    "action": null,
+    "phase": "active",
+    "running": true,
+    "stats": {
+      "active_seconds": 0.0,
+      "completed": 0,
+      "clicks": 0,
+      "failed": 0
+    }
+  },
+  {
+    "now": 2.0,
+    "panel": false,
+    "action": null,
+    "phase": "settling",
+    "running": true,
+    "stats": {
+      "active_seconds": 0.0,
+      "completed": 1,
+      "clicks": 0,
+      "failed": 0
+    }
+  },
+  {
+    "now": 3.0,
+    "panel": false,
+    "action": {
+      "kind": "click",
+      "point": [
+        409,
+        309
+      ],
+      "shortcut": null
+    },
+    "phase": "acquiring",
+    "running": true,
+    "stats": {
+      "active_seconds": 0.0,
+      "completed": 1,
+      "clicks": 0,
+      "failed": 0
+    }
+  },
+  {
+    "now": 3.25,
+    "panel": false,
+    "action": null,
+    "phase": "acquiring",
+    "running": true,
+    "stats": {
+      "active_seconds": 0.0,
+      "completed": 1,
+      "clicks": 0,
+      "failed": 0
+    }
+  },
+  {
+    "now": 3.5,
+    "panel": false,
+    "action": null,
+    "phase": "acquiring",
+    "running": true,
+    "stats": {
+      "active_seconds": 0.0,
+      "completed": 1,
+      "clicks": 0,
+      "failed": 0
+    }
+  }
+]

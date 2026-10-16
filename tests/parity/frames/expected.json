@@ -1,0 +1,36 @@
+[
+  {
+    "frame": "search.png",
+    "candidates": [
+      {
+        "x": 400,
+        "y": 300,
+        "width": 20,
+        "height": 20,
+        "point": [
+          409,
+          309
+        ]
+      }
+    ],
+    "panel_score": 0.0,
+    "detection_ms_median": 13.261400001283619
+  },
+  {
+    "frame": "panel.png",
+    "candidates": [
+      {
+        "x": 400,
+        "y": 300,
+        "width": 20,
+        "height": 20,
+        "point": [
+          409,
+          309
+        ]
+      }
+    ],
+    "panel_score": 1.0,
+    "detection_ms_median": 13.49244999801158
+  }
+]

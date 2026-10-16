@@ -1,0 +1,64 @@
+{
+  "id": "8591a09f-25dc-4ca4-b858-cafe68231dfc",
+  "name": "Fixture",
+  "process_name": "verzumclient_x64.exe",
+  "region": {
+    "left": 0.1,
+    "top": 0.2,
+    "right": 0.9,
+    "bottom": 0.9
+  },
+  "masks": [],
+  "color": {
+    "hsv": [
+      0,
+      200,
+      200
+    ],
+    "hue_tolerance": 10,
+    "saturation_tolerance": 65,
+    "value_tolerance": 65,
+    "min_area": 120,
+    "min_width": 12,
+    "min_height": 18,
+    "max_area_ratio": 0.03,
+    "stable_frames": 3
+  },
+  "panel": {
+    "region": {
+      "left": 0,
+      "top": 0,
+      "right": 0.4,
+      "bottom": 0.15
+    },
+    "threshold": 0.88,
+    "stable_frames": 3
+  },
+  "timing": {
+    "click_hover_seconds": 0.15,
+    "click_hold_seconds": 0.2,
+    "sample_interval": 0.25,
+    "settle_seconds": 1,
+    "search_timeout": 5,
+    "acquire_timeout": 20,
+    "attack_timeout": 120,
+    "max_rotations": 4,
+    "rotate_seconds": 0.35,
+    "failed_cooldown": 10
+  },
+  "buffs": {
+    "enabled": false,
+    "fight_mounted": true,
+    "mount_shortcut": "Ctrl+G",
+    "mount_wait_seconds": 1.5,
+    "key_hold_seconds": 0.15,
+    "skills": [],
+    "icon_region": null
+  },
+  "frame_size": [
+    800,
+    600
+  ],
+  "template_file": "template.png",
+  "template_region": null
+}

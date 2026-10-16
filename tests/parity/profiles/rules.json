@@ -1,0 +1,140 @@
+{
+  "hue_tolerance": {
+    "low": 1,
+    "high": 89,
+    "step": 1,
+    "integral": true
+  },
+  "saturation_tolerance": {
+    "low": 1,
+    "high": 255,
+    "step": 1,
+    "integral": true
+  },
+  "value_tolerance": {
+    "low": 1,
+    "high": 255,
+    "step": 1,
+    "integral": true
+  },
+  "min_area": {
+    "low": 4,
+    "high": 100000,
+    "step": 10,
+    "integral": true
+  },
+  "min_width": {
+    "low": 2,
+    "high": 1000,
+    "step": 1,
+    "integral": true
+  },
+  "min_height": {
+    "low": 2,
+    "high": 1000,
+    "step": 1,
+    "integral": true
+  },
+  "stable_frames": {
+    "low": 2,
+    "high": 10,
+    "step": 1,
+    "integral": true
+  },
+  "max_area_ratio": {
+    "low": 0.0001,
+    "high": 0.2,
+    "step": 0.001,
+    "integral": false
+  },
+  "threshold": {
+    "low": 0.5,
+    "high": 0.99,
+    "step": 0.01,
+    "integral": false
+  },
+  "sample_interval": {
+    "low": 0.1,
+    "high": 2,
+    "step": 0.05,
+    "integral": false
+  },
+  "settle_seconds": {
+    "low": 0.5,
+    "high": 10,
+    "step": 0.1,
+    "integral": false
+  },
+  "click_hover_seconds": {
+    "low": 0.05,
+    "high": 1,
+    "step": 0.05,
+    "integral": false
+  },
+  "click_hold_seconds": {
+    "low": 0.05,
+    "high": 1,
+    "step": 0.05,
+    "integral": false
+  },
+  "search_timeout": {
+    "low": 2,
+    "high": 120,
+    "step": 1,
+    "integral": false
+  },
+  "acquire_timeout": {
+    "low": 3,
+    "high": 120,
+    "step": 1,
+    "integral": false
+  },
+  "attack_timeout": {
+    "low": 10,
+    "high": 600,
+    "step": 1,
+    "integral": false
+  },
+  "rotate_seconds": {
+    "low": 0.05,
+    "high": 1,
+    "step": 0.05,
+    "integral": false
+  },
+  "failed_cooldown": {
+    "low": 1,
+    "high": 120,
+    "step": 1,
+    "integral": false
+  },
+  "max_rotations": {
+    "low": 1,
+    "high": 12,
+    "step": 1,
+    "integral": true
+  },
+  "wait_seconds": {
+    "low": 0.2,
+    "high": 30,
+    "step": 0.1,
+    "integral": false
+  },
+  "interval_seconds": {
+    "low": 10,
+    "high": 86400,
+    "step": 1,
+    "integral": false
+  },
+  "mount_wait_seconds": {
+    "low": 0.2,
+    "high": 10,
+    "step": 0.1,
+    "integral": false
+  },
+  "key_hold_seconds": {
+    "low": 0.05,
+    "high": 0.5,
+    "step": 0.05,
+    "integral": false
+  }
+}

@@ -1,0 +1,88 @@
+name: Rust migration verification
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['crates/**', 'Cargo.*', 'rust-toolchain.toml', '.gitattributes', 'tools/*rust*', 'tests/parity/**', '.github/workflows/rust-ci.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+      - name: Rust toolchain
+        run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
+      - name: Linux native prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev cmake pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libegl1-mesa-dev libpng-dev xvfb mesa-vulkan-drivers libgl1-mesa-dri
+      - name: macOS native prerequisites
+        if: runner.os == 'macOS'
+        run: brew install llvm cmake pkg-config coreutils
+      - name: Build native OpenCV (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          bash tools/prepare-rust-native.sh
+          echo "PKG_CONFIG_PATH=$PWD/build/rust-native/opencv/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/build/rust-native/opencv/lib" >> "$GITHUB_ENV"
+          echo "DYLD_LIBRARY_PATH=$PWD/build/rust-native/opencv/lib" >> "$GITHUB_ENV"
+          if [[ "$RUNNER_OS" == 'macOS' ]]; then
+            echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> "$GITHUB_ENV"
+          fi
+      - name: Windows native prerequisites
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tools/prepare-rust-native.ps1
+      - name: Verify Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          . ./tools/rust-env.ps1
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { throw 'Formatting failed' }
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed' }
+          cargo test --workspace --all-targets --all-features --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed' }
+          cargo build --workspace --release --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+          ./target/release/metinbot.exe --self-test --self-test-report build/selftest-rust.json
+          if ($LASTEXITCODE -ne 0) { throw 'Self-test failed' }
+      - name: Verify Linux/macOS
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          cargo test --workspace --all-targets --all-features --locked
+          cargo build --workspace --release --locked
+          target/release/metinbot --self-test --self-test-report build/selftest-rust.json
+      - name: Native GPU fixture screenshot (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build -p metin-desktop --features ui-smoke --locked
+          if [[ "$RUNNER_OS" == 'Linux' ]]; then
+            timeout 60s xvfb-run -a target/debug/metinbot --data-dir build/ci-gui --ui-fixture tests/parity/frames/panel.png --ui-screenshot build/gui-native.png --ui-small
+          else
+            gtimeout 60s target/debug/metinbot --data-dir build/ci-gui --ui-fixture tests/parity/frames/panel.png --ui-screenshot build/gui-native.png --ui-small
+          fi
+          test -s build/gui-native.png
+      - name: Verification reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rust-verification-${{ matrix.os }}
+          retention-days: 14
+          path: |
+            build/selftest-rust.json
+            build/gui-native.png
