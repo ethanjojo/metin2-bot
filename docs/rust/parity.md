@@ -1,6 +1,6 @@
 # Reference parity corpus
 
-`tests/parity/manifest.json` inventories all 256 original test IDs, their P01–P31 contracts and intended Rust replacements. A pending entry is deliberately not an assertion of completed direct coverage. Some planned file splits were consolidated into simple modules; current executable evidence is below.
+`tests/parity/manifest.json` inventories all 256 original test IDs, their P01–P31 contracts and current Rust verification files. A pending entry is deliberately not an assertion of completed direct coverage. All non-null targets exist; the eight distribution entries have a null target until automated Rust distribution acceptance exists. The three direct session replacements name their Rust tests and are marked verified against both Windows and Linux logs. Other entries remain pending until reviewed individually, even where the differential corpus already provides evidence. The exporter preserves reviewed annotations and the baseline identity and rejects silent changes to the reference test inventory.
 
 | Corpus / behavior | Rust verification |
 | --- | --- |

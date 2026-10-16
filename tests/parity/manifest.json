@@ -13,7 +13,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -24,7 +24,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -35,7 +35,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -46,7 +46,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -57,7 +57,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -68,7 +68,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -79,7 +79,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -90,7 +90,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -101,7 +101,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -112,7 +112,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -123,7 +123,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -134,7 +134,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -145,7 +145,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -156,7 +156,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -167,7 +167,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -178,7 +178,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -189,7 +189,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -200,7 +200,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -211,7 +211,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -222,7 +222,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -233,7 +233,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -244,7 +244,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -255,7 +255,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -266,7 +266,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -277,7 +277,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -288,7 +288,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -299,7 +299,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -310,7 +310,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -321,7 +321,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -332,7 +332,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -343,7 +343,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -354,7 +354,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -365,7 +365,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -376,7 +376,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -387,7 +387,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -398,7 +398,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -409,7 +409,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -420,7 +420,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -431,7 +431,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -442,7 +442,7 @@
         "P15",
         "P27"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -596,7 +596,7 @@
         "P20",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -607,7 +607,7 @@
         "P20",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -618,7 +618,7 @@
         "P20",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -629,7 +629,7 @@
         "P20",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -640,7 +640,7 @@
         "P20",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -651,7 +651,7 @@
         "P20",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -662,7 +662,7 @@
         "P20",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -673,7 +673,7 @@
         "P20",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -684,7 +684,7 @@
         "P20",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -1299,7 +1299,7 @@
         "P13",
         "P14"
       ],
-      "target": "crates/metin-desktop/tests/history.rs",
+      "target": "crates/metin-desktop/tests/editor.rs",
       "status": "pending"
     },
     {
@@ -1308,7 +1308,7 @@
         "P13",
         "P14"
       ],
-      "target": "crates/metin-desktop/tests/history.rs",
+      "target": "crates/metin-desktop/tests/editor.rs",
       "status": "pending"
     },
     {
@@ -1317,7 +1317,7 @@
         "P13",
         "P14"
       ],
-      "target": "crates/metin-desktop/tests/history.rs",
+      "target": "crates/metin-desktop/tests/editor.rs",
       "status": "pending"
     },
     {
@@ -1326,7 +1326,7 @@
         "P13",
         "P14"
       ],
-      "target": "crates/metin-desktop/tests/history.rs",
+      "target": "crates/metin-desktop/tests/editor.rs",
       "status": "pending"
     },
     {
@@ -1335,7 +1335,7 @@
         "P13",
         "P14"
       ],
-      "target": "crates/metin-desktop/tests/history.rs",
+      "target": "crates/metin-desktop/tests/editor.rs",
       "status": "pending"
     },
     {
@@ -1344,7 +1344,7 @@
         "P13",
         "P14"
       ],
-      "target": "crates/metin-desktop/tests/history.rs",
+      "target": "crates/metin-desktop/tests/editor.rs",
       "status": "pending"
     },
     {
@@ -1352,8 +1352,10 @@
       "parity": [
         "P31"
       ],
-      "target": "crates/metin-desktop/tests/release.rs",
-      "status": "pending"
+      "target": null,
+      "status": "pending",
+      "planned_target": "crates/metin-desktop/tests/release.rs",
+      "remaining": "Automated Rust distribution acceptance is pending; local packaging evidence is recorded in docs/rust/acceptance.md."
     },
     {
       "source": "test_hotbar_buffs.HotbarBuffTests.test_real_hotbar_inactive_confirmed_after_three_samples",
@@ -1445,24 +1447,30 @@
       "parity": [
         "P29"
       ],
-      "target": "crates/metin-desktop/tests/release.rs",
-      "status": "pending"
+      "target": null,
+      "status": "pending",
+      "planned_target": "crates/metin-desktop/tests/release.rs",
+      "remaining": "Automated Rust distribution acceptance is pending; local packaging evidence is recorded in docs/rust/acceptance.md."
     },
     {
       "source": "test_launcher.LauncherTests.test_cancelled_uac_does_not_retry_or_launch",
       "parity": [
         "P29"
       ],
-      "target": "crates/metin-desktop/tests/release.rs",
-      "status": "pending"
+      "target": null,
+      "status": "pending",
+      "planned_target": "crates/metin-desktop/tests/release.rs",
+      "remaining": "Automated Rust distribution acceptance is pending; local packaging evidence is recorded in docs/rust/acceptance.md."
     },
     {
       "source": "test_launcher.LauncherTests.test_missing_environment_reports_setup_before_any_elevation",
       "parity": [
         "P29"
       ],
-      "target": "crates/metin-desktop/tests/release.rs",
-      "status": "pending"
+      "target": null,
+      "status": "pending",
+      "planned_target": "crates/metin-desktop/tests/release.rs",
+      "remaining": "Automated Rust distribution acceptance is pending; local packaging evidence is recorded in docs/rust/acceptance.md."
     },
     {
       "source": "test_number_input.NumberInputTests.test_native_arrows_step_clamp_and_notify_without_rounding_offsets",
@@ -1486,7 +1494,7 @@
         "P03",
         "P15"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -1574,39 +1582,47 @@
       "parity": [
         "P30"
       ],
-      "target": "crates/metin-desktop/tests/release.rs",
-      "status": "pending"
+      "target": null,
+      "status": "pending",
+      "planned_target": "crates/metin-desktop/tests/release.rs",
+      "remaining": "Automated Rust distribution acceptance is pending; local packaging evidence is recorded in docs/rust/acceptance.md."
     },
     {
       "source": "test_release.ReleaseTests.test_stable_tag_matches_single_version_source",
       "parity": [
         "P30"
       ],
-      "target": "crates/metin-desktop/tests/release.rs",
-      "status": "pending"
+      "target": null,
+      "status": "pending",
+      "planned_target": "crates/metin-desktop/tests/release.rs",
+      "remaining": "Automated Rust distribution acceptance is pending; local packaging evidence is recorded in docs/rust/acceptance.md."
     },
     {
       "source": "test_release.ReleaseTests.test_pr_build_has_separate_identity_and_invalid_values_rejected",
       "parity": [
         "P30"
       ],
-      "target": "crates/metin-desktop/tests/release.rs",
-      "status": "pending"
+      "target": null,
+      "status": "pending",
+      "planned_target": "crates/metin-desktop/tests/release.rs",
+      "remaining": "Automated Rust distribution acceptance is pending; local packaging evidence is recorded in docs/rust/acceptance.md."
     },
     {
       "source": "test_release.ReleaseTests.test_publication_checks_remote_tags_and_resumes_only_safe_drafts",
       "parity": [
         "P30"
       ],
-      "target": "crates/metin-desktop/tests/release.rs",
-      "status": "pending"
+      "target": null,
+      "status": "pending",
+      "planned_target": "crates/metin-desktop/tests/release.rs",
+      "remaining": "Automated Rust distribution acceptance is pending; local packaging evidence is recorded in docs/rust/acceptance.md."
     },
     {
       "source": "test_run_ui.OverviewTests.test_loading_icon_animates_inside_button_without_changing_size",
       "parity": [
         "P25"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -1614,7 +1630,7 @@
       "parity": [
         "P25"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -1622,7 +1638,7 @@
       "parity": [
         "P25"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -1630,7 +1646,7 @@
       "parity": [
         "P25"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -1642,7 +1658,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1654,7 +1670,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1666,7 +1682,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1678,7 +1694,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1690,7 +1706,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1702,7 +1718,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1714,7 +1730,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1726,7 +1742,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1738,7 +1754,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1750,7 +1766,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1762,7 +1778,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1774,7 +1790,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1786,7 +1802,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1798,7 +1814,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1810,7 +1826,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1822,7 +1838,7 @@
         "P22",
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/runtime.rs",
+      "target": "crates/metin-desktop/tests/worker.rs",
       "status": "pending"
     },
     {
@@ -1831,7 +1847,12 @@
         "P25"
       ],
       "target": "crates/metin-core/tests/session.rs",
-      "status": "pending"
+      "status": "verified",
+      "rust_test": "paused_time_is_excluded_and_snapshots_remain_independent",
+      "verified_platforms": [
+        "windows-x64",
+        "linux-x64"
+      ]
     },
     {
       "source": "test_session.SessionTests.test_duration_handles_hours_and_negative",
@@ -1839,7 +1860,12 @@
         "P25"
       ],
       "target": "crates/metin-core/tests/session.rs",
-      "status": "pending"
+      "status": "verified",
+      "rust_test": "duration_formats_hours_and_clamps_negative_time",
+      "verified_platforms": [
+        "windows-x64",
+        "linux-x64"
+      ]
     },
     {
       "source": "test_session.SessionTests.test_pause_accounts_for_last_active_interval",
@@ -1847,14 +1873,19 @@
         "P25"
       ],
       "target": "crates/metin-core/tests/session.rs",
-      "status": "pending"
+      "status": "verified",
+      "rust_test": "explicit_pause_accounts_for_last_active_interval",
+      "verified_platforms": [
+        "windows-x64",
+        "linux-x64"
+      ]
     },
     {
       "source": "test_sidebar_scroll.SidebarScrollTests.test_fitting_content_stays_at_top_after_wheel_or_scrollbar",
       "parity": [
         "P15"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -1862,7 +1893,7 @@
       "parity": [
         "P15"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -1870,7 +1901,7 @@
       "parity": [
         "P15"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -1914,7 +1945,7 @@
       "parity": [
         "P23"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -1922,7 +1953,7 @@
       "parity": [
         "P16"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -1930,7 +1961,7 @@
       "parity": [
         "P16"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -1938,7 +1969,7 @@
       "parity": [
         "P16"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {
@@ -1946,7 +1977,7 @@
       "parity": [
         "P16"
       ],
-      "target": "crates/metin-desktop/tests/ui_state.rs",
+      "target": "crates/metin-desktop/src/ui/tests.rs",
       "status": "pending"
     },
     {

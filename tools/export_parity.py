@@ -18,7 +18,7 @@ from metin_bot.vision import detect_candidates, panel_score
 from metin_bot.controller import Controller, Observation
 
 GROUPS = {
-    'app': ('P01 P08 P15 P27', 'metin-desktop/tests/ui_state.rs'),
+    'app': ('P01 P08 P15 P27', 'metin-desktop/src/ui/tests.rs'),
     'config': ('P26', 'metin-core/tests/profile.rs'),
     'profiles': ('P01 P26 P27', 'metin-desktop/tests/storage.rs'),
     'data_paths': ('P27', 'metin-desktop/tests/import.rs'),
@@ -31,24 +31,24 @@ GROUPS = {
     'buff_scheduling': ('P19 P22', 'metin-core/tests/buffs.rs'),
     'skill_intervals': ('P19 P24', 'metin-core/tests/buffs.rs'),
     'worker': ('P08 P09 P11 P23 P24 P25', 'metin-desktop/tests/worker.rs'),
-    'runtime': ('P03 P07 P10 P22 P23', 'metin-desktop/tests/runtime.rs'),
+    'runtime': ('P03 P07 P10 P22 P23', 'metin-desktop/tests/worker.rs'),
     'windows': ('P02 P10 P11 P29', 'metin-platform/tests/windows_input.rs'),
     'calibration': ('P03 P12 P20', 'metin-desktop/tests/editor.rs'),
     'editing': ('P12 P13', 'metin-desktop/tests/editor.rs'),
-    'editor_tools': ('P13 P14', 'metin-desktop/tests/history.rs'),
-    'preview_ui': ('P03 P15', 'metin-desktop/tests/ui_state.rs'),
-    'buff_ui': ('P17 P19 P20 P23', 'metin-desktop/tests/ui_state.rs'),
+    'editor_tools': ('P13 P14', 'metin-desktop/tests/editor.rs'),
+    'preview_ui': ('P03 P15', 'metin-desktop/src/ui/tests.rs'),
+    'buff_ui': ('P17 P19 P20 P23', 'metin-desktop/src/ui/tests.rs'),
     'keybind_entry': ('P18', 'metin-desktop/tests/keybind.rs'),
     'number_input': ('P16', 'metin-desktop/tests/numeric.rs'),
     'session': ('P25', 'metin-core/tests/session.rs'),
-    'run_ui': ('P25', 'metin-desktop/tests/ui_state.rs'),
-    'theme': ('P16', 'metin-desktop/tests/ui_state.rs'),
-    'switch_ui': ('P23', 'metin-desktop/tests/ui_state.rs'),
-    'sidebar_scroll': ('P15', 'metin-desktop/tests/ui_state.rs'),
+    'run_ui': ('P25', 'metin-desktop/src/ui/tests.rs'),
+    'theme': ('P16', 'metin-desktop/src/ui/tests.rs'),
+    'switch_ui': ('P23', 'metin-desktop/src/ui/tests.rs'),
+    'sidebar_scroll': ('P15', 'metin-desktop/src/ui/tests.rs'),
     'build': ('P28 P29', 'metin-desktop/tests/self_test.rs'),
-    'launcher': ('P29', 'metin-desktop/tests/release.rs'),
-    'release': ('P30', 'metin-desktop/tests/release.rs'),
-    'gitignore': ('P31', 'metin-desktop/tests/release.rs'),
+    'launcher': ('P29', None),
+    'release': ('P30', None),
+    'gitignore': ('P31', None),
 }
 
 def write(path, value):
@@ -57,6 +57,9 @@ def write(path, value):
 
 def main():
     out = ROOT/'tests/parity'
+    manifest_path = out/'manifest.json'
+    previous = json.loads(manifest_path.read_text(encoding='utf-8')) if manifest_path.exists() else {}
+    annotations = {row['source']: row for row in previous.get('tests', [])}
     tests=[]
     for file in sorted((ROOT/'tests').glob('test_*.py')):
         group=file.stem.removeprefix('test_')
@@ -65,9 +68,15 @@ def main():
         for cls in [n for n in tree.body if isinstance(n,ast.ClassDef)]:
             for n in cls.body:
                 if isinstance(n,ast.FunctionDef) and n.name.startswith('test_'):
-                    tests.append(dict(source=f'{file.stem}.{cls.name}.{n.name}', parity=ids.split(), target='crates/'+target, status='pending'))
+                    source = f'{file.stem}.{cls.name}.{n.name}'
+                    row = dict(source=source, parity=ids.split(), target='crates/'+target if target else None, status='pending')
+                    # Preserve reviewed evidence; regenerating fixtures must not erase acceptance work.
+                    row.update({key: value for key, value in annotations.get(source, {}).items() if key not in ('source', 'parity', 'target')})
+                    tests.append(row)
+    if annotations and set(annotations) != {row['source'] for row in tests}:
+        raise ValueError('Reference test inventory changed; explicitly review/rebaseline the manifest before exporting.')
     commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
-    write(out/'manifest.json', dict(baseline_commit=commit, python=sys.version.split()[0], opencv=cv2.__version__,numpy=np.__version__, test_count=len(tests), tests=tests))
+    write(manifest_path, dict(baseline_commit=previous.get('baseline_commit', commit), python=sys.version.split()[0], opencv=cv2.__version__,numpy=np.__version__, test_count=len(tests), tests=tests))
     write(out/'profiles/default.json', Profile.create('Fixture').to_dict() | {'id':'8591a09f-25dc-4ca4-b858-cafe68231dfc'})
     write(out/'profiles/rules.json', {k:asdict(v) for k,v in NUMBER_RULES.items()})
     rng=np.random.default_rng(4)
