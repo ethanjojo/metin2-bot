@@ -21,4 +21,15 @@ Native Windows screenshots were recaptured for Calibration, Settings and Buffs i
 ![Dark calibration with two excluded areas](../../build/ui-redesign/dark-calibration-large-masks.png)
 ![Light small calibration](../../build/ui-redesign/light-calibration-small.png)
 
-Linux final results and package identity are recorded below after verification. No live-client gameplay, macOS native build, Linux/macOS automation backend or installation acceptance is implied by these checks.
+Linux final workspace verification passed **103 tests**, including **43 desktop UI tests**; fmt, strict all-target/all-feature Clippy, native build and executable self-test also passed. Logs: `build/rust-linux/refinement-{tests,fmt,clippy,build}.log`, `refinement-self-test.json`. The same final build rendered the four tab screenshots under `build/ui-redesign/linux/` using WSLg software Vulkan. Calibration was inspected after the final tag-layering change. No hardware GPU performance, live-client gameplay, macOS native build, Linux/macOS automation backend or installation acceptance is implied by these checks.
+
+## Current Windows preview
+
+Source commit: `1e2291fc73aa83f542dd41ad140fcb22670cb3e8`. Optimized release build passed in 3m16s; installer compilation passed. All 449 files in an isolated extracted ZIP matched SHA-256 inventory. No release executable or installer was launched, installed or published; the existing user window remains on the earlier build.
+
+Directory: `build/rust-packages/d13b5ac7-f843-423d-b6d8-d2bc74567796/`.
+
+- `MetinBot-0.1.0-rust-preview-windows-x64.zip` — 33,415,176 bytes; SHA-256 `34a9abe2a7b2e992f3faad464ca098e82d70aace9e474e434173e46fc7cc3fb5`.
+- `MetinBotSetup-0.1.0-windows-x64.exe` — 22,529,384 bytes; SHA-256 `1eaf91a292d13be096b9fb1f520d8dfd4febf82fbd3e2ff0cc319f9d926bb872`.
+
+Logs: `build/rust-migration/refinement-release.log`, `ui-package.log`, `ui-package-verification.json`. This preview supersedes the package in ui-feedback-plan.md for reviewing the five calibration refinements. Save and close the existing window before launching the new version with the same data directory.
