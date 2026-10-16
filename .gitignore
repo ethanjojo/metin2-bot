@@ -27,3 +27,6 @@ Desktop.ini
 ._*
 *.dSYM/
 /tests/tooling/tmp*/
+
+# Local design specs and implementation plans.
+/docs/superpowers/

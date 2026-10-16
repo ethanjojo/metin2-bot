@@ -16,6 +16,7 @@ class GitIgnoreTests(unittest.TestCase):
                  'config.json','config.json.tmp','config.queue-backup.json','config.queue-backup.json.tmp',
                  'diagnostics/run.log','diagnostics/screen.png','diagnostics/compact-ui-fixture-data/profile.json',
                  'build/output','dist/output','.env','target/debug/metinbot.exe',
+                 'docs/superpowers/specs/new-feature.md','docs/superpowers/plans/new-feature.md',
                  '.DS_Store','packaging/._metinbot.icns','debug.dSYM/info'}
         sources={'README.md','run.cmd','tools/launch-rust.ps1','Cargo.lock',
                  'crates/metin-desktop/src/main.rs','packaging/icons/metinbot.icns','profile.example.json'}
