@@ -731,3 +731,532 @@ fn wide_run_overview_keeps_window_connection_visible_without_scrolling() {
     );
     app.runtime.shutdown().unwrap();
 }
+
+// User-review probes use the painted control locations, followed by real
+// egui pointer/key events. No live game target is attached by these tests.
+fn review_hover_label(app: &mut MetinApp, ctx: &egui::Context, label: &str) -> Vec<String> {
+    let mut output = draw_at_size(app, ctx, &mut vec![], egui::vec2(1280., 820.));
+    for _ in 0..3 {
+        output = draw_at_size(app, ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    let pos = text_regions(&output)
+        .into_iter()
+        .find(|(text, _)| text == label)
+        .unwrap_or_else(|| panic!("Missing hover target: {label}"))
+        .1
+        .center();
+    let start = ctx.input(|i| i.time);
+    let mut texts = vec![];
+    for frame in 0..4 {
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                time: Some(start + f64::from(frame) + 1.),
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1280., 820.),
+                )),
+                events: if frame == 0 {
+                    vec![egui::Event::PointerMoved(pos)]
+                } else {
+                    vec![]
+                },
+                ..Default::default()
+            },
+            |ui| app.render(ui),
+        );
+        texts.extend(text_regions(&output).into_iter().map(|(text, _)| text));
+        output.textures_delta.clear();
+    }
+    texts
+}
+
+fn review_key(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+    egui::Event::Key {
+        key,
+        physical_key: Some(key),
+        pressed: true,
+        repeat: false,
+        modifiers,
+    }
+}
+
+#[test]
+fn user_review_disabled_save_and_start_explain_their_state_on_actual_hover() {
+    let (mut app, ctx, _dir) = setup();
+    app.save().unwrap();
+    assert!(!app.has_unsaved_profile());
+    let save_texts = review_hover_label(&mut app, &ctx, "Save");
+    assert!(
+        save_texts
+            .iter()
+            .any(|text| text.contains("Save all profile changes")),
+        "Disabled Save should retain its explanation: {save_texts:?}"
+    );
+    let blocker = app.start_blocker().unwrap().message;
+    let start_texts = review_hover_label(&mut app, &ctx, "Start");
+    assert!(
+        start_texts.contains(&blocker),
+        "Disabled Start should show its actual blocker: {start_texts:?}"
+    );
+    click_label(&mut app, &ctx, "Start");
+    assert!(!app.snapshot.running);
+    assert!(app.target.is_none());
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn user_review_four_calibration_steps_hover_select_and_hide_show_preserve_edits() {
+    let (mut app, ctx, _dir) = setup();
+    let before = app.editor.profile.clone();
+    for (label, mode, hint) in [
+        (
+            "1. Search area    Needed",
+            EditMode::World,
+            "Drag around the game area",
+        ),
+        (
+            "2. Metin color    Needed",
+            EditMode::Color,
+            "Click a representative Metin pixel",
+        ),
+        (
+            "3. Target panel    Needed",
+            EditMode::Panel,
+            "Draw around the target information panel",
+        ),
+        (
+            "4. Reference crop    Needed",
+            EditMode::Template,
+            "Draw a small, distinctive fixed part",
+        ),
+    ] {
+        let old = app.mode;
+        let texts = review_hover_label(&mut app, &ctx, label);
+        assert!(app.mode == old, "Hover must not select the step");
+        assert!(app.hover_mode == Some(mode));
+        assert!(
+            texts.iter().any(|text| text.contains(hint)),
+            "Missing step instructions: {texts:?}"
+        );
+        click_label(&mut app, &ctx, label);
+        assert!(app.mode == mode);
+    }
+    for _ in 0..3 {
+        draw(&mut app, &ctx, vec![]);
+    }
+    let with_steps = app.canvas_rect.unwrap();
+    click_label(&mut app, &ctx, "Hide steps");
+    draw(&mut app, &ctx, vec![]);
+    assert!(!app.calibration_controls);
+    assert!(app.canvas_rect.unwrap().width() > with_steps.width());
+    click_label(&mut app, &ctx, "Show steps");
+    assert!(app.calibration_controls);
+    assert!(app.mode == EditMode::Template);
+    assert_eq!(app.editor.profile, before);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn user_review_shortcut_recording_cancel_reserved_key_and_clear_are_real_key_events() {
+    let (mut app, ctx, _dir) = setup();
+    app.add_skill();
+    app.navigate(Tab::Buffs);
+    click_label(&mut app, &ctx, "F1");
+    assert!(app.binding.is_some());
+    draw(
+        &mut app,
+        &ctx,
+        vec![review_key(egui::Key::Escape, Default::default())],
+    );
+    assert!(app.binding.is_none());
+    assert_eq!(app.editor.profile.buffs.skills[0].shortcut, "F1");
+    click_label(&mut app, &ctx, "F1");
+    draw(
+        &mut app,
+        &ctx,
+        vec![review_key(egui::Key::F7, Default::default())],
+    );
+    assert!(
+        app.binding.is_some(),
+        "A reserved key must not finish recording"
+    );
+    assert!(app.error.is_some());
+    assert_eq!(app.editor.profile.buffs.skills[0].shortcut, "F1");
+    draw(
+        &mut app,
+        &ctx,
+        vec![review_key(
+            egui::Key::A,
+            egui::Modifiers {
+                ctrl: true,
+                ..Default::default()
+            },
+        )],
+    );
+    assert!(app.binding.is_none());
+    assert_eq!(app.editor.profile.buffs.skills[0].shortcut, "Ctrl+A");
+    click_label(&mut app, &ctx, "Ctrl+A");
+    draw(
+        &mut app,
+        &ctx,
+        vec![review_key(egui::Key::Backspace, Default::default())],
+    );
+    assert!(app.binding.is_none());
+    assert!(app.editor.profile.buffs.skills[0].shortcut.is_empty());
+    assert_eq!(app.editor.profile.buffs.skills.len(), 1);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn user_review_buff_mode_and_unit_menus_apply_to_the_selected_skill_only() {
+    let (mut app, ctx, _dir) = setup();
+    app.add_skill();
+    app.add_skill();
+    app.navigate(Tab::Buffs);
+    let first = app.editor.profile.buffs.skills[0].clone();
+    app.editor.profile.buffs.skills[1].interval_seconds = Some(180.);
+    click_label(&mut app, &ctx, "seconds");
+    click_label(&mut app, &ctx, "minutes");
+    assert!(app.units[1]);
+    assert_eq!(
+        app.editor.profile.buffs.skills[1].interval_seconds,
+        Some(180.)
+    );
+    click_label(&mut app, &ctx, "Refresh periodically");
+    click_label(&mut app, &ctx, "Activate when inactive");
+    assert_eq!(
+        app.editor.profile.buffs.skills[1].mode,
+        metin_core::BuffMode::Inactive
+    );
+    assert_eq!(app.editor.profile.buffs.skills[1].interval_seconds, None);
+    click_label(&mut app, &ctx, "Activate when inactive");
+    click_label(&mut app, &ctx, "Refresh periodically");
+    assert_eq!(
+        app.editor.profile.buffs.skills[1].mode,
+        metin_core::BuffMode::Refresh
+    );
+    assert_eq!(
+        app.editor.profile.buffs.skills[1].interval_seconds,
+        Some(120.)
+    );
+    assert_eq!(app.editor.profile.buffs.skills[0], first);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn user_review_pending_snapshot_timeout_and_error_dismiss_offer_recovery() {
+    let (mut app, ctx, _dir) = setup();
+    app.snapshot_requested = Some(std::time::Instant::now());
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(text, _)| text == "Capturing...")
+    );
+    assert!(app.snapshot_requested.is_some());
+    app.snapshot_requested = Some(std::time::Instant::now() - std::time::Duration::from_secs(4));
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(app.snapshot_requested.is_none());
+    assert!(
+        app.error
+            .as_ref()
+            .is_some_and(|text| text.contains("No fresh frame arrived"))
+    );
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(text, _)| text == "Snapshot")
+    );
+    click_label(&mut app, &ctx, "Dismiss");
+    assert!(app.error.is_none());
+    assert!(
+        app.editor.frozen.is_some(),
+        "A failed capture must keep the previous editable snapshot"
+    );
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn user_review_saved_profile_switch_uses_the_combo_and_clears_previous_canvas() {
+    let (mut app, ctx, _dir) = setup();
+    app.editor.profile.name = "First saved profile".into();
+    app.editor.record();
+    app.save().unwrap();
+    let second = Profile::create("Second saved profile");
+    app.store.save(&second, None).unwrap();
+    app.profiles = app.store.list().unwrap();
+    app.navigate(Tab::Run);
+    click_label(&mut app, &ctx, "First saved profile");
+    click_label(&mut app, &ctx, "Second saved profile");
+    assert_eq!(app.editor.profile.id, second.id);
+    assert!(!app.has_unsaved_profile());
+    assert!(app.editor.frozen.is_none());
+    assert!(app.target.is_none());
+    assert!(!app.return_to_buffs);
+    assert!(app.mode == EditMode::World);
+    assert_eq!(app.store.selected().unwrap(), Some(second.id));
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn user_review_keyboard_delete_and_redo_restore_the_same_selected_calibration_area() {
+    let (mut app, ctx, _dir) = setup();
+    let region = metin_core::Region {
+        left: 0.1,
+        top: 0.2,
+        right: 0.8,
+        bottom: 0.9,
+    };
+    app.editor.set_region(EditMode::World, region).unwrap();
+    app.mode = EditMode::World;
+    for _ in 0..3 {
+        draw(&mut app, &ctx, vec![]);
+    }
+    draw(
+        &mut app,
+        &ctx,
+        vec![review_key(egui::Key::Delete, Default::default())],
+    );
+    assert!(app.editor.profile.region.is_none());
+    let ctrl = egui::Modifiers {
+        ctrl: true,
+        ..Default::default()
+    };
+    draw(&mut app, &ctx, vec![review_key(egui::Key::Z, ctrl)]);
+    assert_eq!(app.editor.profile.region, Some(region));
+    draw(&mut app, &ctx, vec![review_key(egui::Key::Y, ctrl)]);
+    assert!(app.editor.profile.region.is_none());
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn user_review_armed_countdown_is_visible_without_offering_another_start() {
+    let (mut app, ctx, _dir) = setup();
+    app.editor.profile = Profile::from_json(include_str!(
+        "../../../../tests/parity/profiles/calibrated.json"
+    ))
+    .unwrap();
+    app.editor.template = Some(
+        metin_vision::decode_png(include_bytes!(
+            "../../../../tests/parity/frames/template.png"
+        ))
+        .unwrap(),
+    );
+    app.target = Some(TargetToken {
+        handle: 1,
+        pid: 2,
+        created: 3,
+    });
+    app.snapshot = Arc::new(RuntimeSnapshot {
+        key: app.key(),
+        arming: true,
+        state: "Armed".into(),
+        reason: "Waiting for stable game focus. Start delay: 3 s; timeout: 12 s.".into(),
+        capabilities: metin_platform::CapabilityReport {
+            capture: true,
+            identity: true,
+            foreground: true,
+            obstruction: true,
+            manual_input: true,
+            input: true,
+            emergency_stop: true,
+            reason: String::new(),
+        },
+        ..Default::default()
+    });
+    // Render the synthetic published state directly, without polling a worker
+    // or sending Arm/Configure to any game window.
+    let mut texts = vec![];
+    for _ in 0..3 {
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1280., 820.),
+                )),
+                ..Default::default()
+            },
+            |ui| {
+                app.toolbar(ui);
+                app.run_view(ui);
+            },
+        );
+        texts = text_regions(&output)
+            .into_iter()
+            .map(|(text, _)| text)
+            .collect();
+        output.textures_delta.clear();
+    }
+    assert!(
+        texts.iter().any(|text| text.starts_with("Starting")),
+        "Countdown must replace Start: {texts:?}"
+    );
+    assert!(texts.iter().any(|text| text.contains("Start delay: 3 s")));
+    assert!(texts.iter().any(|text| text == "Pause · F8"));
+    assert!(!texts.iter().any(|text| text == "Ready to start"));
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn user_review_unknown_mount_confirmation_is_visible_and_applies_without_dirtying_profile() {
+    let (mut app, ctx, dir) = setup();
+    app.target = Some(TargetToken {
+        handle: 1,
+        pid: 2,
+        created: 3,
+    });
+    app.snapshot = Arc::new(RuntimeSnapshot {
+        key: app.key(),
+        mounted: None,
+        ..Default::default()
+    });
+    let before = app.editor.profile.clone();
+    let old_revision = app.revision;
+    let mut button_pos = None;
+    for _ in 0..3 {
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1280., 820.),
+                )),
+                ..Default::default()
+            },
+            |ui| app.buffs_view(ui),
+        );
+        let texts = text_regions(&output);
+        assert!(
+            texts
+                .iter()
+                .any(|(text, _)| text.contains("Mount state unknown"))
+        );
+        button_pos = texts
+            .iter()
+            .find(|(text, _)| text == "Confirm selected state")
+            .map(|(_, rect)| rect.center());
+        output.textures_delta.clear();
+    }
+    let pos = button_pos.expect("Unknown mount must offer explicit confirmation");
+    for pressed in [true, false] {
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1280., 820.),
+                )),
+                events: vec![
+                    egui::Event::PointerMoved(pos),
+                    egui::Event::PointerButton {
+                        pos,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: Default::default(),
+                    },
+                ],
+                ..Default::default()
+            },
+            |ui| app.buffs_view(ui),
+        );
+        output.textures_delta.clear();
+    }
+    assert_eq!(app.revision, old_revision + 1);
+    assert_eq!(app.editor.profile, before);
+    assert!(!app.editor.dirty());
+    assert!(!UISettings::load(dir.path()).unwrap().last_mounted);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn user_review_sampled_color_can_be_cleared_with_the_same_visible_delete_control() {
+    let (mut app, ctx, _dir) = setup();
+    app.editor.color([50, 50]).unwrap();
+    let sampled = app.editor.profile.color.clone();
+    click_label(&mut app, &ctx, "2. Metin color    Ready");
+    assert!(app.mode == EditMode::Color);
+    click_label(&mut app, &ctx, "Delete selected");
+    assert!(
+        app.editor.profile.color.is_none(),
+        "The visible delete action must also clear the sampled color"
+    );
+    draw(
+        &mut app,
+        &ctx,
+        vec![review_key(
+            egui::Key::Z,
+            egui::Modifiers {
+                ctrl: true,
+                ..Default::default()
+            },
+        )],
+    );
+    assert_eq!(app.editor.profile.color, sampled);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn user_review_nested_calibration_labels_remain_readable_when_hover_changes_focus() {
+    let (mut app, ctx, _dir) = setup();
+    // A reference crop often shares the panel's top-left corner. Both labels
+    // must not be painted over the same pixels, including during checklist hover.
+    app.editor.profile.panel.region = Some(metin_core::Region {
+        left: 0.1,
+        top: 0.1,
+        right: 0.7,
+        bottom: 0.4,
+    });
+    app.editor.profile.template_region = Some(metin_core::Region {
+        left: 0.1,
+        top: 0.1,
+        right: 0.4,
+        bottom: 0.25,
+    });
+    app.mode = EditMode::Panel;
+    let labels = |output: &egui::FullOutput| {
+        text_regions(output)
+            .into_iter()
+            .filter(|(text, _)| text == "Target panel" || text == "Reference crop")
+            .collect::<Vec<_>>()
+    };
+    let mut output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    for _ in 0..3 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    let selected = labels(&output);
+    assert!(selected.iter().any(|(text, _)| text == "Target panel"));
+    for (i, (_, rect)) in selected.iter().enumerate() {
+        for (_, other) in selected.iter().skip(i + 1) {
+            assert!(
+                !rect.intersects(*other),
+                "Nested area labels overlap: {selected:?}"
+            );
+        }
+    }
+    let hover_pos = text_regions(&output)
+        .into_iter()
+        .find(|(text, _)| text.starts_with("4. Reference crop"))
+        .expect("Reference crop checklist entry")
+        .1
+        .center();
+    output = draw_at_size(
+        &mut app,
+        &ctx,
+        &mut vec![egui::Event::PointerMoved(hover_pos)],
+        egui::vec2(1280., 820.),
+    );
+    let hovered = labels(&output);
+    assert!(app.hover_mode == Some(EditMode::Template));
+    assert!(hovered.iter().any(|(text, _)| text == "Reference crop"));
+    for (i, (_, rect)) in hovered.iter().enumerate() {
+        for (_, other) in hovered.iter().skip(i + 1) {
+            assert!(
+                !rect.intersects(*other),
+                "Hovered area labels overlap: {hovered:?}"
+            );
+        }
+    }
+    assert!(
+        app.mode == EditMode::Panel,
+        "Hover must not change selection"
+    );
+    app.runtime.shutdown().unwrap();
+}

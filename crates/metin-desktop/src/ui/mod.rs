@@ -17,8 +17,8 @@ use metin_core::Profile;
 use metin_platform::TargetToken;
 use std::{path::PathBuf, sync::Arc};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "ui-smoke", derive(clap::ValueEnum, Debug))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "ui-smoke", derive(clap::ValueEnum))]
 pub enum Tab {
     Run,
     Calibration,
@@ -367,22 +367,18 @@ impl MetinApp {
             if input.0 {
                 self.gesture = None;
             }
-            if input.1
-                && self.tab == Tab::Calibration
-                && !ui.ctx().egui_wants_keyboard_input()
-                && let Err(e) = self.editor.delete(self.mode)
-            {
-                self.error = Some(e);
+            if input.1 && self.tab == Tab::Calibration && !ui.ctx().egui_wants_keyboard_input() {
+                self.delete_selected();
             }
             if input.2 && input.3 && !ui.ctx().egui_wants_keyboard_input() {
                 if input.5 {
-                    self.editor.redo();
+                    self.redo_profile();
                 } else {
-                    self.editor.undo();
+                    self.undo_profile();
                 }
             }
             if input.2 && input.4 && !ui.ctx().egui_wants_keyboard_input() {
-                self.editor.redo();
+                self.redo_profile();
             }
         }
         if ui.input(|i| i.viewport().close_requested()) {

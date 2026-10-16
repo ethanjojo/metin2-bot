@@ -13,11 +13,11 @@ Scope: approved Run / Calibration / Buffs / Settings workbench, retaining existi
 
 ## Automated evidence
 
-Windows and Linux whole-workspace verification: **78 tests each**, all targets and features. `cargo fmt --all -- --check` and strict `cargo clippy --workspace --all-targets --all-features --locked --offline -- -D warnings` are the required final checks. Native debug EXE self-tests cover storage, vision and both headless themes; they explicitly do not claim gameplay or GPU-window acceptance.
+Windows and Linux whole-workspace verification: **89 tests each**, all targets and features. `cargo fmt --all -- --check` and strict `cargo clippy --workspace --all-targets --all-features --locked --offline -- -D warnings` are the required final checks. Native debug EXE self-tests cover storage, vision and both headless themes; they explicitly do not claim gameplay or GPU-window acceptance.
 
 Logs: `build/rust-migration/ui-{workspace-tests,fmt,clippy,build}.log`, `ui-self-test-debug.json`; `build/rust-linux/ui-{tests,fmt,clippy,build}.log`, `ui-self-test.json`.
 
-The 21 desktop UI tests include actual egui pointer navigation, dirty-profile preservation, typing/text undo, drag commit plus Ctrl+Z/Y, Escape, real hover tooltip rendering, selected-skill reorder/remove, Save compaction/crop-return identity, profile replacement, Start routing, process filtering, scrolling into icon capture and returning, small-window bounds, wide Run connection visibility, long names, both themes, and simulated 100/125/150/200% scaling. The worker adds a regression initializing hotkey capabilities before window selection without sending any input.
+The 32 desktop UI tests include actual egui pointer navigation, dirty-profile preservation, typing/text undo, drag commit plus Ctrl+Z/Y, Escape, real hover tooltip rendering, selected-skill reorder/remove, Save compaction/crop-return identity, profile replacement, Start routing, process filtering, scrolling into icon capture and returning, small-window bounds, wide Run connection visibility, long names, both themes, and simulated 100/125/150/200% scaling. The worker adds a regression initializing hotkey capabilities before window selection without sending any input.
 
 ## Native visual evidence
 
@@ -45,9 +45,17 @@ Suggested normal-user review:
 
 No live target/attack/buff cycle was tested: the user reported the game server down. macOS, true OS multi-monitor/Retina/HiDPI interaction, assistive-technology acceptance and clean-machine installation/upgrade remain the migration gates in acceptance.md. Simulated scaling and hover input tests do not establish complete accessibility compliance. Release Windows elevation is not retried after the earlier user-canceled UAC launch; local packaging is not installed over the existing app.
 
-## Local review artifacts
+## Initial redesign artifacts (before user-review fixes)
 
 Source commit: `2d13424dc461e12a35b0d69b50d03e0224c2b91d`. Final optimized Windows release build and Inno Setup compilation passed. Both artifacts are in `build/rust-packages/eadeeca2-baab-416b-9b78-a103964125ee/`. The ZIP was extracted to an isolated directory and all 449 inventory files matched SHA-256. No installer was executed.
 
 - `MetinBot-0.1.0-rust-preview-windows-x64.zip` (33349425 bytes): SHA-256 `f7a919c6602ee378027f9356ba85b1a14362a86f7fb14abb7b1cde987724cf15`.
 - `MetinBotSetup-0.1.0-windows-x64.exe` (22487792 bytes): SHA-256 `b369b3dd39614b99033ac5ee2e6e072204e5f47c830ca0ba5ff31cf6a914c42a`.
+
+## Independent normal-user review follow-up
+
+A new reviewer, without the original design history, inspected all 24 native screenshots and added 11 real egui RawInput user journeys. Seven confirmed findings were fixed: keyboard edits failing to pause; default test-target compilation; repeated Start during the Armed countdown; misleading F7 versus Save & Start help; missing disabled Snapshot explanations; overlapping nested calibration labels; and sampled color deletion differing between mouse and keyboard. See [the independent report](ui-user-review.md) for reproductions and limits.
+
+The default desktop library target passes 31 tests without ui-smoke; the all-feature target includes 32. The whole workspace passes 89 tests on Windows and Linux. Logs for this follow-up are ui-review-{default,tests,fmt,clippy,build}.log in build/rust-migration and build/rust-linux, plus ui-review-self-test.json. The color-delete and label-collision tests reproduced their defects before the fixes and passed afterwards. The worker regression verifies that the explicit arming flag clears when pending Start is canceled.
+
+All 20 Windows screenshots were recaptured after the fixes. The reviewer independently reinspected all four changed calibration theme/size views and found no remaining material issue. Native screenshot evidence and RawInput interaction are distinct: no manual native CUA interaction or system-dialog acceptance is claimed.

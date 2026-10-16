@@ -17,9 +17,20 @@ impl MetinApp {
             }
             if button(ui,Icon::Save,"Save",self.has_unsaved_profile(),"Save all profile changes. Applying a changed profile pauses automation.").clicked() && let Err(e)=self.save() { self.error=Some(e); }
             let blocker=self.start_blocker();
-            let hint=if self.snapshot.running { "Already running. Use Pause or F8 to pause immediately." } else { blocker.as_ref().map_or("Save the profile, activate the selected game window and start after the countdown. F7 also starts.",|b| b.message.as_str()) };
-            let label=if self.has_unsaved_profile() { "Save & Start" } else { "Start" };
-            if widgets::primary_button(ui,Icon::Play,label,blocker.is_none() && !self.snapshot.running,hint).clicked() {
+            let dirty=self.has_unsaved_profile();
+            let hint=if self.snapshot.arming {
+                "Start requested. Waiting for stable game focus and the 3-second delay. Use Pause or F8 to cancel."
+            } else if self.snapshot.running {
+                "Already running. Use Pause or F8 to pause immediately."
+            } else if let Some(blocker)=&blocker {
+                blocker.message.as_str()
+            } else if dirty {
+                "Save these edits, activate the selected game window and start after the countdown. F7 starts the applied profile without saving these edits."
+            } else {
+                "Activate the selected game window and start after the countdown. F7 also starts."
+            };
+            let label=if self.snapshot.arming { "Starting..." } else if dirty { "Save & Start" } else { "Start" };
+            if widgets::primary_button(ui,Icon::Play,label,blocker.is_none() && !self.snapshot.running && !self.snapshot.arming,hint).clicked() {
                 match self.save() { Ok(()) => if let Some(key)=self.key() { self.send(Command::Arm { key }); },Err(e)=>self.error=Some(e) }
             }
             if button(ui,Icon::Pause,"Pause · F8",true,"Pause immediately and release held inputs. F8 remains the emergency pause shortcut.").clicked() { self.runtime.stop(); }
@@ -114,7 +125,8 @@ impl MetinApp {
         }
         ui.horizontal_wrapped(|ui| {
             if button(ui,Icon::Refresh,"Refresh",true,"Refresh the list of matching visible game windows.").clicked() {self.send(Command::RefreshTargets);}
-            if button(ui,Icon::Camera,if self.snapshot_requested.is_some(){"Capturing..."}else{"Snapshot"},self.target.is_some() && self.snapshot_requested.is_none(),"Pause and capture a fresh frame. Show the target panel in the game before capturing.").clicked() {self.runtime.stop();self.snapshot_requested=Some(std::time::Instant::now());}
+            let snapshot_hint=if self.snapshot_requested.is_some() { "Waiting for a fresh frame from the selected game window. Capture times out after 3 seconds." } else if self.target.is_none() { "Select a game window above before taking a Snapshot." } else { "Pause and capture a fresh frame. Show the target panel in the game before capturing." };
+            if button(ui,Icon::Camera,if self.snapshot_requested.is_some(){"Capturing..."}else{"Snapshot"},self.target.is_some() && self.snapshot_requested.is_none(),snapshot_hint).clicked() {self.runtime.stop();self.snapshot_requested=Some(std::time::Instant::now());}
         });
         if no_matches {
             ui.small(if self.snapshot.capabilities.automation_ready() {"No matching windows. Open the client, check the process hint in Settings, then Refresh."} else {"No capture/input backend is available here. Profiles and saved calibration can still be edited."});

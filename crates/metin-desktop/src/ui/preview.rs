@@ -73,8 +73,7 @@ impl MetinApp {
             )
             .clicked()
             {
-                self.runtime.stop();
-                self.editor.undo();
+                self.undo_profile();
             }
             if widgets::button(
                 ui,
@@ -85,8 +84,7 @@ impl MetinApp {
             )
             .clicked()
             {
-                self.runtime.stop();
-                self.editor.redo();
+                self.redo_profile();
             }
         });
         let instruction = match self.mode {
@@ -345,7 +343,10 @@ impl MetinApp {
                 EditMode::BuffIcon { .. } => "Active icon",
                 _ => "Color",
             };
-            if rect.width() > 90. && rect.height() > 24. {
+            if mode == self.hover_mode.unwrap_or(self.mode)
+                && rect.width() > 90.
+                && rect.height() > 24.
+            {
                 painter.text(
                     rect.min + egui::vec2(7., 5.),
                     egui::Align2::LEFT_TOP,

@@ -8,6 +8,24 @@ pub(super) struct Blocker {
     pub tab: Tab,
 }
 impl MetinApp {
+    pub(super) fn undo_profile(&mut self) {
+        self.runtime.stop();
+        self.gesture = None;
+        self.editor.undo();
+    }
+    pub(super) fn redo_profile(&mut self) {
+        self.runtime.stop();
+        self.gesture = None;
+        self.editor.redo();
+    }
+    pub(super) fn delete_selected(&mut self) {
+        self.runtime.stop();
+        self.gesture = None;
+        if let Err(error) = self.editor.delete(self.mode) {
+            self.error = Some(error);
+        }
+    }
+
     pub(super) fn has_unsaved_profile(&self) -> bool {
         self.editor.dirty() || !self.profiles.iter().any(|p| p.id == self.editor.profile.id)
     }

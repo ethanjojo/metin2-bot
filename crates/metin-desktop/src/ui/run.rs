@@ -65,7 +65,9 @@ impl MetinApp {
             } else {
                 widgets::badge(
                     ui,
-                    if self.snapshot.running {
+                    if self.snapshot.arming {
+                        "Start requested: Pause or F8 cancels"
+                    } else if self.snapshot.running {
                         "Profile checks passed"
                     } else {
                         "Ready to start"

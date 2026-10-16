@@ -58,6 +58,7 @@ pub struct RuntimeSnapshot {
     pub state: String,
     pub reason: String,
     pub running: bool,
+    pub arming: bool,
     pub mounted: Option<bool>,
     pub timers: Vec<Option<f64>>,
     pub statistics: Statistics,
@@ -77,6 +78,7 @@ impl Default for RuntimeSnapshot {
             state: "Stopped".into(),
             reason: "Select a profile and game window.".into(),
             running: false,
+            arming: false,
             mounted: Some(false),
             timers: vec![],
             statistics: Statistics::default(),
@@ -376,6 +378,7 @@ fn run(
                     Ok(())
                 })();
                 if let Err(error) = result {
+                    snapshot.arming = armed.is_some();
                     snapshot.state = "Error".into();
                     snapshot.reason = error.clone();
                     if let Some(a) = &mut attached {
@@ -539,6 +542,7 @@ fn run(
                 a.controller.reason.clone()
             };
         }
+        snapshot.arming = armed.is_some();
         snapshot.capabilities = backend.capabilities();
         if snapshot.key != last_published.key
             || snapshot.state != last_published.state
@@ -554,6 +558,7 @@ fn run(
         }
     }
     if let Err(error) = executor.release(backend.as_mut()) {
+        snapshot.arming = false;
         snapshot.state = "Release error".into();
         snapshot.reason = error.to_string();
         snapshot.running = false;

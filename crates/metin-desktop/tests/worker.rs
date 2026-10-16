@@ -204,8 +204,10 @@ fn pause_cancels_pending_start_instead_of_resuming_after_delay() {
     wait(&r, |s| s.revision == 1);
     r.send(Command::Arm { key }).unwrap();
     wait(&r, |s| s.state == "Armed");
+    assert!(r.latest().unwrap().arming);
     r.stop();
     wait(&r, |s| s.state != "Armed");
+    assert!(!r.latest().unwrap().arming);
     std::thread::sleep(Duration::from_millis(3200));
     assert!(!r.latest().unwrap().running);
     assert!(controls.lock().unwrap().calls.is_empty());

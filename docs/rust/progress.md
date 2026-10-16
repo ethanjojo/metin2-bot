@@ -53,4 +53,6 @@ Pre-redesign whole-workspace result: 61 tests passed on Windows and 61 on Linux;
 
 ## Desktop UI redesign
 
-The approved four-destination UI replaces the fixed sidebar/canvas layout. Shared vector icons avoid missing-font glyphs; readiness, save normalization, row mapping and profile replacement have one runtime path. See [ui-verification.md](ui-verification.md) for the 78-test Windows/Linux verification, 21 UI regressions, native screenshot matrix, review corrections and normal-user review scenarios. The original migration gameplay/installer/macOS gates remain open.
+The approved four-destination UI replaces the fixed sidebar/canvas layout. Shared vector icons avoid missing-font glyphs; readiness, save normalization, row mapping and profile replacement have one runtime path. See [ui-verification.md](ui-verification.md) for the 89-test Windows/Linux verification, 32 UI tests, native screenshot matrix, review corrections and normal-user review scenarios. The original migration gameplay/installer/macOS gates remain open.
+
+Independent normal-user review then found seven concrete issues, all fixed with source follow-up, 11 new RawInput scenarios and fresh native screenshot checks. See [ui-user-review.md](ui-user-review.md).

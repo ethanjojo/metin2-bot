@@ -53,8 +53,8 @@ impl MetinApp {
                         }
                         if button(ui,Icon::Plus,"Excluded area",self.editor.profile.masks.len()<30,"Draw an area that target detection should ignore.").clicked(){self.edit_area(EditMode::Mask(None));}
                     }
-                    let can_delete=self.calibration_ready(self.mode) && self.mode!=EditMode::Color;
-                    if button(ui,Icon::Trash,"Delete selected",can_delete,"Delete the selected calibration area or icon. Undo restores the edit.").clicked(){self.runtime.stop();if let Err(e)=self.editor.delete(self.mode){self.error=Some(e);}}
+                    let can_delete=self.calibration_ready(self.mode);
+                    if button(ui,Icon::Trash,"Delete selected",can_delete,if can_delete {"Delete the selected area, sampled color or icon. Undo restores the edit."} else {"Nothing is selected to delete. Select a captured area, sampled color or icon first."}).clicked(){self.delete_selected();}
                     ui.add_space(8.);
                     let ready=[EditMode::World,EditMode::Color,EditMode::Panel,EditMode::Template].iter().all(|m|self.calibration_ready(*m));
                     widgets::badge(ui,if ready{"Recognition areas ready"}else{"Complete the needed areas"},if ready{widgets::GREEN}else{widgets::AMBER});
