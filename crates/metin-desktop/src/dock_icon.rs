@@ -30,5 +30,45 @@ pub fn matches(dark: bool) -> Result<bool, String> {
         .ok_or("Missing Dock image")?
         .TIFFRepresentation()
         .ok_or("Missing Dock TIFF")?;
-    Ok(actual.isEqualToData(&expected))
+    // AppKit can rewrite TIFF metadata and caches when assigning the Dock image.
+    // Compare decoded samples, while still reading the actual application property.
+    let expected = objc2_app_kit::NSBitmapImageRep::imageRepWithData(&expected)
+        .ok_or("Cannot decode expected Dock bitmap")?;
+    let actual = objc2_app_kit::NSBitmapImageRep::imageRepWithData(&actual)
+        .ok_or("Cannot decode actual Dock bitmap")?;
+    let layout = |bitmap: &objc2_app_kit::NSBitmapImageRep| {
+        (
+            bitmap.pixelsWide(),
+            bitmap.pixelsHigh(),
+            bitmap.samplesPerPixel(),
+            bitmap.bitsPerSample(),
+        )
+    };
+    let (width, height, samples, _) = layout(&expected);
+    if layout(&actual) != layout(&expected) {
+        return Err(format!(
+            "Dock bitmap layout differs: {:?} vs {:?}",
+            layout(&actual),
+            layout(&expected)
+        ));
+    }
+    if !(1..=16).contains(&samples) || width <= 0 || height <= 0 {
+        return Err("Unsupported Dock bitmap layout".into());
+    }
+    for y in 0..height {
+        for x in 0..width {
+            let mut left = [0usize; 16];
+            let mut right = [0usize; 16];
+            // SAFETY: coordinates are within both bitmaps, and each output buffer
+            // has at least samplesPerPixel entries, as checked above.
+            unsafe {
+                expected.getPixel_atX_y(std::ptr::NonNull::from(&mut left[0]), x, y);
+                actual.getPixel_atX_y(std::ptr::NonNull::from(&mut right[0]), x, y);
+            }
+            if left[..samples as usize] != right[..samples as usize] {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
 }

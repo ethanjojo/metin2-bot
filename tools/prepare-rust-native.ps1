@@ -13,13 +13,13 @@ function Get-VerifiedArchive([string]$Url, [string]$Name, [string]$Sha256) {
     return $archive
 }
 $opencvArchive = Get-VerifiedArchive 'https://github.com/opencv/opencv/releases/download/4.13.0/opencv-4.13.0-windows.exe' 'opencv-4.13.0-windows.exe' 'F0E98C302464D6860777A7015065E11B9B271B5394E6BA92663F0CF1FC303F2C'
-$llvmArchive = Get-VerifiedArchive 'https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-win64.exe' 'LLVM-19.1.7-win64.exe' 'F19AE5BC4823AC69EC01DC2DED503EC80A04AD2208DDA1595D1F0413C148EF90'
+$llvmArchive = Get-VerifiedArchive 'https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-win64.exe' 'LLVM-20.1.8-win64.exe' '3197846A2B19063687DD56E93E34CD941E3548D907F23A6131571321BDF9FE7B'
 if (-not (Test-Path -LiteralPath (Join-Path $NativeRoot 'opencv/build/include/opencv2/core.hpp'))) {
     & $SevenZipPath x $opencvArchive "-o$NativeRoot" '-y' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'OpenCV extraction failed.' }
 }
-if (-not (Test-Path -LiteralPath (Join-Path $NativeRoot 'llvm19/bin/libclang.dll'))) {
-    & $SevenZipPath x $llvmArchive "-o$(Join-Path $NativeRoot 'llvm19')" 'bin/clang.exe' 'bin/libclang.dll' 'lib/clang/*' '-y' | Out-Null
+if (-not (Test-Path -LiteralPath (Join-Path $NativeRoot 'llvm20/bin/libclang.dll'))) {
+    & $SevenZipPath x $llvmArchive "-o$(Join-Path $NativeRoot 'llvm20')" 'bin/clang.exe' 'bin/libclang.dll' 'lib/clang/*' '-y' | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'LLVM extraction failed.' }
 }
 Write-Output $NativeRoot
