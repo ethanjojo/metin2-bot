@@ -20,6 +20,22 @@ fn area(left: f64, top: f64, right: f64, bottom: f64) -> Region {
     }
 }
 #[test]
+fn reference_crop_accepts_exactly_five_source_pixels_through_the_editor() {
+    let mut editor = Editor::new(Profile::create("Five pixels"), None);
+    editor.freeze(distinctive_frame(0)).unwrap();
+    editor
+        .set_region(EditMode::Panel, area(0., 0., 0.9, 0.9))
+        .unwrap();
+    editor
+        .set_region(
+            EditMode::Template,
+            area(20. / 200., 20. / 200., 24. / 200., 24. / 200.),
+        )
+        .unwrap();
+    let template = editor.template.as_ref().unwrap();
+    assert_eq!([template.width, template.height], [5, 5]);
+}
+#[test]
 fn history_is_limited_to_32_states_skips_noops_and_discards_redo_branch() {
     let mut e = Editor::new(Profile::create("Test"), None);
     for n in 1..=40 {

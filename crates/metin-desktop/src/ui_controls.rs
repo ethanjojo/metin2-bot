@@ -83,6 +83,7 @@ pub fn numeric(ui: &mut egui::Ui, label: &str, name: &str, value: &mut f64) -> b
             }
         };
         ui.label(label).on_hover_text(hint);
+        help(ui, hint);
         ui.add_space((ui.available_width() - 90.).max(0.));
         ui.add(
             egui::DragValue::new(value)
@@ -97,6 +98,32 @@ pub fn numeric(ui: &mut egui::Ui, label: &str, name: &str, value: &mut f64) -> b
         .changed()
     })
     .inner
+}
+/// A visible, keyboard-focusable help affordance; its tooltip never changes layout.
+pub fn help(ui: &mut egui::Ui, hint: &str) -> egui::Response {
+    let response = ui.add(
+        egui::Button::new("")
+            .frame(false)
+            .min_size(egui::vec2(20., 22.)),
+    );
+    response.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::Role::Button, true, format!("Help: {hint}"))
+    });
+    let p = ui.painter();
+    let center = response.rect.center();
+    let stroke = egui::Stroke::new(1.3, ui.visuals().weak_text_color());
+    p.circle_stroke(center, 6.5, stroke);
+    p.circle_filled(center + egui::vec2(0., -3.), 0.9, stroke.color);
+    p.line_segment(
+        [center + egui::vec2(0., -0.5), center + egui::vec2(0., 4.)],
+        stroke,
+    );
+    if response.has_focus() {
+        response.clone().show_tooltip_text(hint);
+    }
+    response
+        .on_hover_text(hint)
+        .on_hover_cursor(egui::CursorIcon::Help)
 }
 pub fn numeric_u32(ui: &mut egui::Ui, label: &str, name: &str, value: &mut u32) -> bool {
     let mut n = f64::from(*value);

@@ -19,10 +19,25 @@ impl MetinApp {
         self.editor.redo();
     }
     pub(super) fn delete_selected(&mut self) {
+        self.delete_area(self.mode);
+    }
+    pub(super) fn delete_area(&mut self, mode: EditMode) {
         self.runtime.stop();
         self.gesture = None;
-        if let Err(error) = self.editor.delete(self.mode) {
+        if let Err(error) = self.editor.delete(mode) {
             self.error = Some(error);
+            return;
+        }
+        self.hover_mode = None;
+        if let EditMode::Mask(Some(deleted)) = mode
+            && let EditMode::Mask(Some(selected)) = self.mode
+        {
+            if selected == deleted {
+                self.mode = EditMode::Mask(None);
+                self.editing = false;
+            } else if selected > deleted {
+                self.mode = EditMode::Mask(Some(selected - 1));
+            }
         }
     }
 

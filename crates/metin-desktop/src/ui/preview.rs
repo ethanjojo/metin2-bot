@@ -116,23 +116,6 @@ impl MetinApp {
                 self.redo_profile();
             }
         });
-        if self.editing {
-            ui.horizontal_wrapped(|ui| {
-                widgets::badge(
-                    ui,
-                    &format!("Editing: {}", tool_name(self.mode)),
-                    widgets::BLUE,
-                );
-                if ui
-                    .button("Done editing")
-                    .on_hover_text("Turn off this tool. Completed edits remain in the profile.")
-                    .clicked()
-                {
-                    self.editing = false;
-                    self.gesture = None;
-                }
-            });
-        }
         let instruction = if !self.editing {
             "Select a tool in the checklist to edit. Wheel zooms; middle drag pans."
         } else {
@@ -157,7 +140,24 @@ impl MetinApp {
                 }
             }
         };
-        ui.add(egui::Label::new(egui::RichText::new(instruction).small()).wrap());
+        // Reserve one unwrapped tool row in every state. Arming, changing or
+        // retiring a tool must not move the image under the user's pointer.
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width(), 32.),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.add_enabled_ui(self.editing, |ui| {
+                    if ui.button("Done editing").on_hover_text("Turn off this tool. Completed edits remain in the profile. Escape also turns it off.").clicked() {
+                        self.editing=false;
+                        self.gesture=None;
+                    }
+                });
+                crate::ui_controls::help(ui,instruction);
+                ui.add(egui::Label::new(egui::RichText::new(if self.editing {
+                    format!("Editing: {}",tool_name(self.mode))
+                } else {"Select an edit tool".into()}).color(if self.editing {widgets::BLUE} else {ui.visuals().weak_text_color()})).truncate());
+            },
+        );
         let current = if self.snapshot.key == self.key() {
             self.snapshot.frame.clone()
         } else {
@@ -361,6 +361,7 @@ impl MetinApp {
         {
             areas.push((self.mode, r));
         }
+        let mut measurement_requests = Vec::new();
         for (mode, r) in areas {
             let active = self.editing && mode == self.mode;
             let color = if active {
@@ -410,6 +411,14 @@ impl MetinApp {
                     );
                 }
             }
+            if self.show_detections {
+                let [x1, y1, x2, y2] = r.pixels(frame.width, frame.height);
+                measurement_requests.push((
+                    rect,
+                    format!("{} × {} px", x2 - x1 + 1, y2 - y1 + 1),
+                    color,
+                ));
+            }
         }
         if self.show_detections {
             let candidates = if frozen {
@@ -440,6 +449,11 @@ impl MetinApp {
                     egui::FontId::monospace(12.),
                     egui::Color32::GREEN,
                 );
+                measurement_requests.push((
+                    rect,
+                    format!("{} × {} px", c.width, c.height),
+                    egui::Color32::GREEN,
+                ));
             }
         }
         if response.dragged_by(egui::PointerButton::Middle) {
@@ -506,6 +520,14 @@ impl MetinApp {
                         egui::Stroke::new(2., egui::Color32::WHITE),
                         egui::StrokeKind::Inside,
                     );
+                    if self.show_detections {
+                        let [x1, y1, x2, y2] = region.pixels(frame.width, frame.height);
+                        measurement_requests.push((
+                            screen_rect(region, &self.viewport),
+                            format!("{} × {} px", x2 - x1 + 1, y2 - y1 + 1),
+                            egui::Color32::WHITE,
+                        ));
+                    }
                     if response.drag_stopped_by(egui::PointerButton::Primary) {
                         if let Err(e) = self.editor.set_region(self.mode, region) {
                             self.error = Some(e);
@@ -519,7 +541,63 @@ impl MetinApp {
                 }
             }
         }
+        // Paint tags last so other rectangles and resize handles cannot draw
+        // through their text when a panel and its crop overlap.
+        let mut measurements = Vec::new();
+        for (rect, text, color) in measurement_requests {
+            measurement(&painter, canvas, rect, text, color, &mut measurements);
+        }
     }
+}
+fn measurement(
+    painter: &egui::Painter,
+    canvas: egui::Rect,
+    area: egui::Rect,
+    text: String,
+    color: egui::Color32,
+    occupied: &mut Vec<egui::Rect>,
+) {
+    if !canvas.intersects(area) {
+        return;
+    }
+    let galley = painter.layout_no_wrap(text, egui::FontId::monospace(12.), color);
+    let size = galley.size() + egui::vec2(8., 4.);
+    if size.x > canvas.width() || size.y > canvas.height() {
+        return;
+    }
+    let x = area.left().clamp(canvas.left(), canvas.right() - size.x);
+    let y = (area.top() - size.y - 3.).clamp(canvas.top(), canvas.bottom() - size.y);
+    let mut label = egui::Rect::from_min_size(egui::pos2(x, y), size);
+    // Shared top edges are common for a panel and its crop. Shift the tag
+    // along that edge rather than painting two measurements over each other.
+    for _ in 0..occupied.len() + 1 {
+        let Some(other) = occupied
+            .iter()
+            .find(|other| other.expand(2.).intersects(label))
+        else {
+            break;
+        };
+        if other.right() + 3. + size.x <= canvas.right() {
+            label = egui::Rect::from_min_size(egui::pos2(other.right() + 3., label.top()), size);
+        } else if other.bottom() + 3. + size.y <= canvas.bottom() {
+            label = egui::Rect::from_min_size(egui::pos2(x, other.bottom() + 3.), size);
+        } else {
+            return;
+        }
+    }
+    if occupied
+        .iter()
+        .any(|other| other.expand(2.).intersects(label))
+    {
+        return;
+    }
+    painter.rect_filled(
+        label,
+        3.,
+        egui::Color32::from_rgba_unmultiplied(12, 18, 24, 225),
+    );
+    painter.galley(label.min + egui::vec2(4., 2.), galley, color);
+    occupied.push(label);
 }
 fn handles(r: egui::Rect) -> [egui::Pos2; 8] {
     [

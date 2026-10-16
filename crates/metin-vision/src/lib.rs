@@ -85,11 +85,17 @@ pub(crate) fn stddev(bytes: &[u8]) -> f64 {
         .sqrt()
 }
 pub fn validate_template(image: &Frame) -> Result<()> {
+    if image.width < 5 || image.height < 5 {
+        return Err(VisionError::Invalid(format!(
+            "The crop is {} × {} pixels; select at least 5 × 5 pixels.",
+            image.width, image.height
+        )));
+    }
     let mut gray = core::Mat::default();
     opencv::imgproc::cvt_color_def(&mat(image)?, &mut gray, opencv::imgproc::COLOR_BGR2GRAY)?;
-    if image.width < 5 || image.height < 5 || stddev(gray.data_bytes()?) < 5. {
+    if stddev(gray.data_bytes()?) < 5. {
         Err(VisionError::Invalid(
-            "Select a distinctive crop of at least 5 × 5 pixels.".into(),
+            "The crop has too little contrast for reliable recognition. Include a fixed edge or symbol; avoid flat backgrounds, changing HP and text.".into(),
         ))
     } else {
         Ok(())

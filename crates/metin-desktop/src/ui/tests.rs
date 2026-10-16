@@ -1,5 +1,64 @@
 use super::*;
 #[test]
+fn refinement_tool_changes_do_not_move_canvas_or_expand_inline_help() {
+    let (mut app, ctx, _dir) = setup();
+    let mut previous = None;
+    for mode in [
+        EditMode::World,
+        EditMode::Color,
+        EditMode::Panel,
+        EditMode::Template,
+        EditMode::Mask(None),
+    ] {
+        app.edit_area(mode);
+        for editing in [false, true] {
+            app.editing = editing;
+            let mut output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+            for _ in 0..3 {
+                output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+            }
+            let canvas = app.canvas_rect.unwrap();
+            if let Some(old) = previous {
+                assert_eq!(canvas, old, "Canvas moved for {mode:?}, editing={editing}");
+            }
+            previous = Some(canvas);
+            assert!(
+                !text_regions(&output)
+                    .iter()
+                    .any(|(text, _)| text.contains("Drag around the game area")),
+                "Help belongs in a hover tooltip"
+            );
+        }
+    }
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn refinement_detection_overlay_reports_source_pixel_dimensions_only_when_enabled() {
+    let (mut app, ctx, _dir) = setup();
+    let region = metin_core::Region {
+        left: 0.1,
+        top: 0.2,
+        right: 0.4,
+        bottom: 0.5,
+    };
+    app.editor.set_region(EditMode::World, region).unwrap();
+    let f = app.editor.frozen.as_ref().unwrap();
+    let [x1, y1, x2, y2] = region.pixels(f.width, f.height);
+    let expected = format!("{} × {} px", x2 - x1 + 1, y2 - y1 + 1);
+    for show in [false, true] {
+        app.show_detections = show;
+        let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+        assert_eq!(
+            text_regions(&output)
+                .iter()
+                .any(|(text, _)| text == &expected),
+            show
+        );
+    }
+    app.runtime.shutdown().unwrap();
+}
+#[test]
 fn runtime_mount_is_persisted_only_for_current_acknowledged_revision() {
     let (mut app, _ctx, dir) = setup();
     let target = TargetToken {
@@ -1198,7 +1257,7 @@ fn user_review_sampled_color_can_be_cleared_with_the_same_visible_delete_control
     let sampled = app.editor.profile.color.clone();
     click_label(&mut app, &ctx, "2. Metin color");
     assert!(app.mode == EditMode::Color);
-    click_label(&mut app, &ctx, "Delete selected");
+    click_after_label(&mut app, &ctx, "2. Metin color", 58.);
     assert!(
         app.editor.profile.color.is_none(),
         "The visible delete action must also clear the sampled color"
@@ -1455,9 +1514,122 @@ fn feedback_color_value_is_visible_and_excluded_area_announces_drawing() {
     assert!(
         text_regions(&output)
             .iter()
+            .any(|(s, _)| s == "Editing: Draw excluded area")
+    );
+    assert!(
+        !text_regions(&output)
+            .iter()
             .any(|(s, _)| s.contains("Draw excluded area: drag a rectangle"))
     );
     app.runtime.shutdown().unwrap();
+}
+
+fn click_after_label(app: &mut MetinApp, ctx: &egui::Context, label: &str, offset: f32) {
+    let mut output = draw_at_size(app, ctx, &mut vec![], egui::vec2(1280., 820.));
+    for _ in 0..3 {
+        output = draw_at_size(app, ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    let rect = text_regions(&output)
+        .into_iter()
+        .find(|(text, _)| text == label)
+        .unwrap()
+        .1;
+    let pos = rect.right_center() + egui::vec2(offset, 0.);
+    for pressed in [true, false] {
+        draw(
+            app,
+            ctx,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Default::default(),
+                },
+            ],
+        );
+    }
+}
+
+#[test]
+fn refinement_row_trash_removes_that_mask_and_preserves_other_selection_and_undo() {
+    let (mut app, ctx, _dir) = setup();
+    let masks = [
+        metin_core::Region {
+            left: 0.1,
+            top: 0.1,
+            right: 0.2,
+            bottom: 0.2,
+        },
+        metin_core::Region {
+            left: 0.3,
+            top: 0.3,
+            right: 0.4,
+            bottom: 0.4,
+        },
+        metin_core::Region {
+            left: 0.5,
+            top: 0.5,
+            right: 0.6,
+            bottom: 0.6,
+        },
+    ];
+    for mask in masks {
+        app.editor.set_region(EditMode::Mask(None), mask).unwrap();
+    }
+    app.edit_area(EditMode::Mask(Some(2)));
+    click_after_label(&mut app, &ctx, "Excluded area 1", 28.);
+    assert_eq!(app.editor.profile.masks, vec![masks[1], masks[2]]);
+    assert!(app.mode == EditMode::Mask(Some(1)));
+    assert_eq!(app.editor.region(app.mode), Some(masks[2]));
+    app.undo_profile();
+    assert_eq!(app.editor.profile.masks, masks);
+    app.edit_area(EditMode::Mask(Some(1)));
+    click_after_label(&mut app, &ctx, "Excluded area 2", 28.);
+    assert!(!app.editing);
+    assert!(app.mode == EditMode::Mask(None));
+    assert_eq!(app.editor.profile.masks, vec![masks[0], masks[2]]);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn refinement_info_icon_has_hover_help_without_taking_layout_space_when_open() {
+    let ctx = egui::Context::default();
+    let mut pos = egui::Pos2::ZERO;
+    let mut found = false;
+    let mut before = None;
+    for step in 0..5 {
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                time: Some(f64::from(step)),
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(800., 560.),
+                )),
+                events: if step == 1 {
+                    vec![egui::Event::PointerMoved(pos)]
+                } else {
+                    vec![]
+                },
+                ..Default::default()
+            },
+            |ui| {
+                let r =
+                    crate::ui_controls::help(ui, "Draw an excluded rectangle on the frozen image.");
+                pos = r.rect.center();
+                if let Some(rect) = before {
+                    assert_eq!(r.rect, rect);
+                }
+                before = Some(r.rect);
+            },
+        );
+        found |= text_regions(&output)
+            .iter()
+            .any(|(s, _)| s == "Draw an excluded rectangle on the frozen image.");
+        output.textures_delta.clear();
+    }
+    assert!(found);
 }
 
 #[test]

@@ -26,7 +26,8 @@ impl MetinApp {
                     if self.return_to_buffs {
                         if button(ui,Icon::Back,"Back to buffs",true,"Return to the selected skill. Captured areas are kept as profile edits.").clicked() {self.return_to_buffs=false;self.navigate(Tab::Buffs);}
                         ui.strong(match self.mode {EditMode::BuffArea=>"Select the buff detection area",EditMode::BuffIcon{inactive:true,..}=>"Select the inactive icon",_=>"Select the active icon"});
-                        ui.label("Drag on the frozen image. Press Escape to cancel a drag. Take a Snapshot if no frozen image is available.");
+                        crate::ui_controls::help(ui,"Drag on the frozen image. Press Escape to cancel a drag. Take a Snapshot if no frozen image is available.");
+                        if widgets::small_icon_button(ui,Icon::Trash,self.calibration_ready(self.mode),"Clear this captured area or icon. Undo restores it.").clicked(){self.delete_selected();}
                     } else {
                         ui.strong("Recognition checklist (4 steps)");
                         for (number,mode,label,hint) in [
@@ -36,10 +37,17 @@ impl MetinApp {
                             (4,EditMode::Template,"Reference crop","Draw a small, distinctive fixed part inside the target panel. Avoid changing HP or text.")
                         ] {
                             let ready=self.calibration_ready(mode);
-                            let response=ui.horizontal(|ui| {widgets::readiness_mark(ui,ready); ui.selectable_label(self.editing && self.mode==mode,format!("{number}. {label}"))}).inner.on_hover_text(hint);
+                            let mut delete=false;
+                            let response=ui.horizontal(|ui| {
+                                widgets::readiness_mark(ui,ready);
+                                let response=ui.selectable_label(self.editing && self.mode==mode,format!("{number}. {label}"));
+                                crate::ui_controls::help(ui,hint);
+                                delete=widgets::small_icon_button(ui,Icon::Trash,ready,&format!("Clear {label}. Undo restores the edit.")).clicked();
+                                response
+                            }).inner.on_hover_text(hint);
                             if response.hovered(){self.hover_mode=Some(mode);}
                             if response.clicked(){self.edit_area(mode);}
-                            if self.mode==mode {ui.small(hint);}
+                            if delete {self.delete_area(mode);}
                             if mode==EditMode::Color {self.color_control(ui);}
                         }
                         ui.separator();
@@ -47,14 +55,18 @@ impl MetinApp {
                         if self.editor.profile.masks.is_empty(){ui.small("Optional: hide chat, minimap or other false detections.");}
                         for i in 0..self.editor.profile.masks.len() {
                             let mode=EditMode::Mask(Some(i));
-                            let response=ui.selectable_label(self.editing && self.mode==mode,format!("Excluded area {}",i+1)).on_hover_text("Select this excluded rectangle to move, resize or delete it.");
+                            let mut delete=false;
+                            let response=ui.horizontal(|ui| {
+                                let response=ui.selectable_label(self.editing && self.mode==mode,format!("Excluded area {}",i+1));
+                                delete=widgets::small_icon_button(ui,Icon::Trash,true,&format!("Delete excluded area {}. Undo restores it.",i+1)).clicked();
+                                response
+                            }).inner.on_hover_text("Select this excluded rectangle to move or resize it. Use its trash icon to delete it.");
                             if response.hovered(){self.hover_mode=Some(mode);}
                             if response.clicked(){self.edit_area(mode);}
+                            if delete {self.delete_area(mode);break;}
                         }
                         if button(ui,Icon::Plus,"Draw excluded area",self.editor.profile.masks.len()<30,"Draw an area that target detection should ignore.").clicked(){self.edit_area(EditMode::Mask(None));}
                     }
-                    let can_delete=self.calibration_ready(self.mode);
-                    if button(ui,Icon::Trash,"Delete selected",can_delete,if can_delete {"Delete the selected area, sampled color or icon. Undo restores the edit."} else {"Nothing is selected to delete. Select a captured area, sampled color or icon first."}).clicked(){self.delete_selected();}
                     ui.add_space(8.);
                     let ready=[EditMode::World,EditMode::Color,EditMode::Panel,EditMode::Template].iter().all(|m|self.calibration_ready(*m));
                     widgets::badge(ui,if ready{"Recognition areas ready"}else{"Complete the needed areas"},if ready{widgets::GREEN}else{widgets::AMBER});
