@@ -2,6 +2,8 @@
 
 User authorized complete implementation on 2026-10-16. Branch: codex/rust-egui-migration.
 
+Latest work: [searchable per-profile window selection](window-selection.md), including current verification and preview artifacts. The Rust Settings process filter is removed; historical migration test counts and packages below identify earlier builds.
+
 Newest calibration follow-up: [ui-calibration-refinement.md](ui-calibration-refinement.md) records the five requested fixes, current verification and preview artifacts. Earlier ledger counts and package identities remain historical.
 
 Latest user-feedback work: all eight UI/capture changes are implemented, including HWND-only Windows Graphics Capture, canonical color editing, explicit canvas tools and controller-driven Run markers. Windows passes 98 tests (39 UI). See [current verification and artifacts](ui-feedback-plan.md) and [independent review](ui-feedback-review.md) for final Linux results and precise acceptance limits. The counts and artifacts in the original migration ledger below are historical.

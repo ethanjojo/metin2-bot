@@ -1,6 +1,59 @@
 use metin_core::Profile;
 use metin_desktop::storage::ProfileStore;
 #[test]
+fn malformed_window_preferences_are_rejected_before_saving_or_loading() {
+    use metin_desktop::storage::{UISettings, WindowPreference};
+    let dir = tempfile::tempdir().unwrap();
+    for (process, title) in [
+        ("../client.exe", "Server"),
+        ("client.exe", ""),
+        ("", "Server"),
+    ] {
+        let mut settings = UISettings::default();
+        settings.profile_windows.insert(
+            uuid::Uuid::new_v4(),
+            WindowPreference {
+                process_name: process.into(),
+                title: title.into(),
+            },
+        );
+        assert!(settings.save(dir.path()).is_err());
+        assert!(!dir.path().join("ui-settings.json").exists());
+        std::fs::write(
+            dir.path().join("ui-settings.json"),
+            serde_json::to_vec(&settings).unwrap(),
+        )
+        .unwrap();
+        assert!(UISettings::load(dir.path()).is_err());
+        std::fs::remove_file(dir.path().join("ui-settings.json")).unwrap();
+    }
+}
+#[test]
+fn per_profile_window_preferences_roundtrip_and_old_settings_still_load() {
+    use metin_desktop::storage::UISettings;
+    let dir = tempfile::tempdir().unwrap();
+    let a = uuid::Uuid::new_v4().to_string();
+    let b = uuid::Uuid::new_v4().to_string();
+    let expected = serde_json::json!({"theme":"dark","last_mounted":true,"profile_windows":{
+        (a):{"process_name":"client-a.exe","title":"Server A"},
+        (b):{"process_name":"client-b.exe","title":"Server B"}
+    }});
+    let path = dir.path().join("ui-settings.json");
+    std::fs::write(&path, expected.to_string()).unwrap();
+    let settings = UISettings::load(dir.path()).unwrap();
+    settings.save(dir.path()).unwrap();
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&std::fs::read(&path).unwrap()).unwrap(),
+        expected
+    );
+    std::fs::write(&path, r#"{"theme":"light","last_mounted":false}"#).unwrap();
+    let settings = UISettings::load(dir.path()).unwrap();
+    settings.save(dir.path()).unwrap();
+    let upgraded: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(upgraded["profile_windows"], serde_json::json!({}));
+}
+#[test]
 fn incomplete_profiles_selection_and_independent_templates_roundtrip() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = ProfileStore::open(dir.path()).unwrap();

@@ -5,11 +5,6 @@ impl MetinApp {
     pub(super) fn settings_view(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().id_salt("settings-scroll").show(ui,|ui| {
             widgets::heading(ui,"Settings","Tune recognition and timing. Existing limits remain enforced when you save or start.");
-            section(ui,"Game window filter",|ui| {
-                ui.label("Process filename");
-                if ui.add(egui::TextEdit::singleline(&mut self.editor.profile.process_name).hint_text("e.g. verzumclient_x64.exe").desired_width(340.)).on_hover_text("A filename hint for finding windows, not a filesystem path. The exact selected window remains the runtime target.").changed(){self.runtime.stop();self.editor.record();}
-                ui.small("Refresh the window list in Calibration after changing this hint.");
-            });
             let mut changed=false;
             if ui.available_width()>=1000. {
                 ui.columns(2,|cols| {changed|=self.recognition_settings(&mut cols[0]);changed|=self.timing_settings(&mut cols[1]);});

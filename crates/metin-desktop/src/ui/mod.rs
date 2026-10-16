@@ -7,6 +7,7 @@ mod settings;
 mod shell;
 mod state;
 mod widgets;
+mod window_selection;
 use crate::{
     editor::{EditMode, Editor, Gesture, Viewport},
     runtime::{Command, RuntimeHandle, RuntimeSnapshot, SessionKey},
@@ -16,6 +17,8 @@ use eframe::egui;
 use metin_core::Profile;
 use metin_platform::TargetToken;
 use std::{path::PathBuf, sync::Arc};
+#[cfg(feature = "ui-smoke")]
+pub use window_selection::WindowPickerFixture;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "ui-smoke", derive(clap::ValueEnum))]
@@ -39,6 +42,10 @@ pub struct MetinApp {
     runtime: RuntimeHandle,
     snapshot: Arc<RuntimeSnapshot>,
     target: Option<TargetToken>,
+    window_search: String,
+    target_list_revision: u64,
+    #[cfg(any(test, feature = "ui-smoke"))]
+    window_fixture: Option<window_selection::WindowFixture>,
     revision: u64,
     tab: Tab,
     mode: EditMode,
@@ -60,9 +67,11 @@ pub struct MetinApp {
     icon_textures: std::collections::HashMap<String, egui::TextureHandle>,
     detection_cache: Option<preview::DetectionCache>,
     #[cfg(feature = "ui-smoke")]
-    smoke: Option<(PathBuf, std::time::Instant)>,
+    smoke: Option<(PathBuf, Option<std::time::Instant>)>,
     #[cfg(feature = "ui-smoke")]
     smoke_requested: bool,
+    #[cfg(feature = "ui-smoke")]
+    smoke_frames: u8,
     #[cfg(test)]
     canvas_rect: Option<egui::Rect>,
 }
@@ -108,6 +117,10 @@ impl MetinApp {
             runtime,
             snapshot,
             target: None,
+            window_search: String::new(),
+            target_list_revision: 0,
+            #[cfg(any(test, feature = "ui-smoke"))]
+            window_fixture: None,
             revision: 0,
             tab: Tab::Run,
             mode: EditMode::World,
@@ -132,6 +145,8 @@ impl MetinApp {
             smoke: None,
             #[cfg(feature = "ui-smoke")]
             smoke_requested: false,
+            #[cfg(feature = "ui-smoke")]
+            smoke_frames: 0,
             #[cfg(test)]
             canvas_rect: None,
         })
@@ -148,7 +163,8 @@ impl MetinApp {
         if let Some(tab) = tab {
             self.tab = tab;
         }
-        self.smoke = Some((path, std::time::Instant::now()));
+        self.smoke = Some((path, None));
+        self.smoke_frames = 0;
     }
     fn key(&self) -> Option<SessionKey> {
         self.target.map(|target| SessionKey {
@@ -250,13 +266,21 @@ impl MetinApp {
         }
     }
     fn sync(&mut self, context: &egui::Context) {
-        if let Ok(snapshot) = self.runtime.latest() {
+        let snapshot = self.runtime.latest();
+        #[cfg(any(test, feature = "ui-smoke"))]
+        let snapshot = self
+            .window_fixture
+            .as_ref()
+            .map(|f| f.snapshot.clone())
+            .map_or(snapshot, Ok);
+        if let Ok(snapshot) = snapshot {
             if snapshot.running && !self.snapshot.running && snapshot.key == self.key() {
                 self.live = true;
                 self.snapshot_requested = None;
             }
             self.snapshot = snapshot;
         }
+        self.reconcile_windows();
         self.remember_mount();
         if self.snapshot_requested.is_some_and(|requested| {
             self.snapshot
@@ -300,7 +324,16 @@ impl MetinApp {
 impl MetinApp {
     pub fn render(&mut self, ui: &mut egui::Ui) {
         #[cfg(feature = "ui-smoke")]
-        if let Some((path, started)) = &self.smoke {
+        if let Some((_, started)) = &mut self.smoke {
+            // Startup shader work can precede the first rendered frame.
+            // Allow actual UI/popup layout and fade-in time before capture.
+            self.smoke_frames = self.smoke_frames.saturating_add(1);
+            if self.smoke_frames >= 3 {
+                started.get_or_insert_with(std::time::Instant::now);
+            }
+        }
+        #[cfg(feature = "ui-smoke")]
+        if let Some((path, Some(started))) = &self.smoke {
             if !self.smoke_requested && started.elapsed() >= std::time::Duration::from_millis(700) {
                 let path = path.clone();
                 self.smoke_requested = true;

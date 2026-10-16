@@ -65,6 +65,7 @@ pub struct RuntimeSnapshot {
     pub timers: Vec<Option<f64>>,
     pub statistics: Statistics,
     pub targets: Vec<TargetInfo>,
+    pub targets_revision: u64,
     pub capabilities: CapabilityReport,
 }
 impl Default for RuntimeSnapshot {
@@ -87,6 +88,7 @@ impl Default for RuntimeSnapshot {
             timers: vec![],
             statistics: Statistics::default(),
             targets: vec![],
+            targets_revision: 0,
             capabilities: CapabilityReport::default(),
         }
     }
@@ -246,6 +248,7 @@ fn run(
                     match envelope.command {
                         Command::RefreshTargets => {
                             snapshot.targets = backend.list_targets().map_err(|e| e.to_string())?;
+                            snapshot.targets_revision += 1;
                         }
                         Command::Detach => {
                             armed = None;

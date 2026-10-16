@@ -1,5 +1,7 @@
 # Acceptance evidence and remaining gates
 
+Current window-picker behavior and preview evidence are in [window-selection.md](window-selection.md). The Settings process filter described by older UI reports has been removed.
+
 Implementation exists for the common application and Windows backend. This is not a declaration that M1 or M2–M4 is complete. The production Python entrypoint remains until the approved cutover gate passes. Source reference: `54ac1242c754d4e6932cdfb6c37153268771faba`.
 
 | Parity | Current evidence | Remaining acceptance |

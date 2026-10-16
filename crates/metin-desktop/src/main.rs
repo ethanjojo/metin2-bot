@@ -95,6 +95,9 @@ fn startup(cli: Cli) -> Result<(), String> {
                     app.load_fixture(path).map_err(std::io::Error::other)?;
                 }
                 if let Some(path) = cli.ui_screenshot {
+                    if let Some(case) = cli.ui_window_picker {
+                        app.set_window_picker_fixture(case);
+                    }
                     app.request_screenshot(path, cli.ui_tab);
                 }
                 app

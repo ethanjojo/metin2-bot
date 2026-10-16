@@ -1,5 +1,7 @@
 # Desktop UI redesign verification
 
+Current window selection is documented in [window-selection.md](window-selection.md). Its searchable per-profile picker supersedes the process filter described in historical sections below.
+
 The newest five calibration refinements are recorded in [ui-calibration-refinement.md](ui-calibration-refinement.md), including precise crop diagnostics, info icons, stable editing strip, per-row deletion and source-pixel dimensions.
 
 Current user-feedback changes and verification are in [ui-feedback-plan.md](ui-feedback-plan.md), with [independent review](ui-feedback-review.md). They supersede the UI/capture behavior and historical package identities below: compact row arrows, conditional icon controls, HWND-only capture, corrected zoom, color picker/readiness marks, explicit editing/cursors and read-only Run target preview.

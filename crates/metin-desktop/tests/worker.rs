@@ -132,6 +132,12 @@ fn hotkey_capabilities_are_initialized_before_a_window_is_selected() {
     let (r, controls) = runtime();
     wait(&r, |s| s.capabilities.automation_ready());
     assert!(r.latest().unwrap().key.is_none());
+    assert_eq!(r.latest().unwrap().targets_revision, 0);
+    r.send(Command::RefreshTargets).unwrap();
+    wait(&r, |s| s.targets_revision == 1);
+    r.send(Command::RefreshTargets).unwrap();
+    wait(&r, |s| s.targets_revision == 2);
+    assert!(!r.latest().unwrap().running);
     assert!(controls.lock().unwrap().calls.is_empty());
     r.shutdown().unwrap();
 }

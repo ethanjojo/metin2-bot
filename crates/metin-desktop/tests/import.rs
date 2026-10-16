@@ -96,6 +96,14 @@ fn import_preserves_selection_settings_and_originals() {
     UISettings {
         theme: "dark".into(),
         last_mounted: true,
+        profile_windows: [(
+            p.id,
+            metin_desktop::storage::WindowPreference {
+                process_name: "client.exe".into(),
+                title: "Server".into(),
+            },
+        )]
+        .into(),
     }
     .save(&source)
     .unwrap();
@@ -104,6 +112,10 @@ fn import_preserves_selection_settings_and_originals() {
     assert_eq!(imported.selected().unwrap(), Some(p.id));
     assert_eq!(imported.load(p.id).unwrap().0, p);
     assert!(UISettings::load(&destination).unwrap().last_mounted);
+    assert_eq!(
+        UISettings::load(&destination).unwrap().profile_windows,
+        UISettings::load(&source).unwrap().profile_windows
+    );
     assert!(
         source
             .join("profiles")

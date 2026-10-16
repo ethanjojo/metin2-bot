@@ -29,4 +29,7 @@ pub struct Cli {
     #[cfg(feature = "ui-smoke")]
     #[arg(long, requires = "ui_screenshot")]
     pub ui_small: bool,
+    #[cfg(feature = "ui-smoke")]
+    #[arg(long,requires_all=["ui_screenshot","ui_fixture"])]
+    pub ui_window_picker: Option<crate::ui::WindowPickerFixture>,
 }

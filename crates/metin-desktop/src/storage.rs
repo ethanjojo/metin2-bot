@@ -132,12 +132,20 @@ fn validate_icons(profile: &Profile) -> Result<()> {
 pub struct UISettings {
     pub theme: String,
     pub last_mounted: bool,
+    pub profile_windows: std::collections::BTreeMap<Uuid, WindowPreference>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WindowPreference {
+    pub process_name: String,
+    pub title: String,
 }
 impl Default for UISettings {
     fn default() -> Self {
         Self {
             theme: "light".into(),
             last_mounted: false,
+            profile_windows: Default::default(),
         }
     }
 }
@@ -149,12 +157,28 @@ impl UISettings {
         }
         reject_link(&path)?;
         let s: Self = serde_json::from_slice(&fs::read(path)?)?;
-        if !["light", "dark"].contains(&s.theme.as_str()) {
-            return Err(invalid("Invalid application theme."));
-        }
+        s.validate()?;
         Ok(s)
     }
+    fn validate(&self) -> Result<()> {
+        if !["light", "dark"].contains(&self.theme.as_str()) {
+            return Err(invalid("Invalid application theme."));
+        }
+        for preference in self.profile_windows.values() {
+            if preference.process_name.trim().is_empty()
+                || preference.process_name.contains(['/', '\\', '\0'])
+                || preference.title.trim().is_empty()
+                || preference.title.contains('\0')
+            {
+                return Err(invalid(
+                    "Invalid remembered window. Expected a process filename and window title.",
+                ));
+            }
+        }
+        Ok(())
+    }
     pub fn save(&self, root: &Path) -> Result<()> {
+        self.validate()?;
         atomic_json(&root.join("ui-settings.json"), self)
     }
 }

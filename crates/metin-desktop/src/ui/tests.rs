@@ -1,4 +1,278 @@
 use super::*;
+#[cfg(feature = "ui-smoke")]
+#[test]
+fn window_selection_native_fixture_really_opens_the_picker_and_keeps_start_blocked() {
+    let (mut app, ctx, _dir) = setup();
+    app.set_window_picker_fixture(WindowPickerFixture::All);
+    let mut output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    for _ in 0..4 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(s, _)| s == "Search title or process…")
+    );
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(s, _)| s.contains("Forest · Warrior · server-a.exe"))
+    );
+    assert!(app.start_blocker().is_some());
+    app.runtime.shutdown().unwrap();
+}
+fn window_catalog() -> Vec<metin_platform::TargetInfo> {
+    vec![
+        metin_platform::TargetInfo {
+            token: TargetToken {
+                handle: 100,
+                pid: 201,
+                created: 1,
+            },
+            title: "Žluťoučký server".into(),
+            process_name: "client-a.exe".into(),
+        },
+        metin_platform::TargetInfo {
+            token: TargetToken {
+                handle: 200,
+                pid: 202,
+                created: 2,
+            },
+            title: "Second server".into(),
+            process_name: "other.exe".into(),
+        },
+    ]
+}
+fn pin_windows(app: &mut MetinApp, targets: Vec<metin_platform::TargetInfo>, revision: u64) {
+    app.snapshot = Arc::new(RuntimeSnapshot {
+        targets,
+        targets_revision: revision,
+        ..Default::default()
+    });
+    app.window_fixture = Some(window_selection::WindowFixture {
+        snapshot: app.snapshot.clone(),
+        open_popup: false,
+    });
+}
+#[test]
+fn window_selection_search_is_temporary_and_can_select_any_process_via_real_clicks() {
+    let (mut app, ctx, dir) = setup();
+    let before = app.editor.profile.clone();
+    let windows = window_catalog();
+    pin_windows(&mut app, windows.clone(), 1);
+    click_label(&mut app, &ctx, "Select a game window");
+    draw(
+        &mut app,
+        &ctx,
+        vec![egui::Event::Text("  OTHER.EXE  ".into())],
+    );
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    let text = text_regions(&output);
+    assert!(
+        text.iter()
+            .any(|(s, _)| s.contains("Second server · other.exe")),
+        "{text:?}"
+    );
+    assert!(
+        !text
+            .iter()
+            .any(|(s, _)| s.contains("Žluťoučký server · client-a.exe"))
+    );
+    click_label(&mut app, &ctx, "Second server · other.exe · PID 202");
+    assert_eq!(app.target, Some(windows[1].token));
+    assert_eq!(app.editor.profile, before);
+    let settings = UISettings::load(dir.path()).unwrap();
+    let remembered = settings.profile_windows.get(&before.id).unwrap();
+    assert_eq!(remembered.process_name, "other.exe");
+    let persisted = std::fs::read_to_string(dir.path().join("ui-settings.json")).unwrap();
+    assert!(!persisted.contains("OTHER.EXE") && !persisted.contains("window_search"));
+    click_label(&mut app, &ctx, "Second server · other.exe");
+    click_label(&mut app, &ctx, "Clear");
+    assert!(app.window_search.is_empty());
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(s, _)| s.contains("Žluťoučký server · client-a.exe"))
+    );
+    draw(
+        &mut app,
+        &ctx,
+        vec![egui::Event::Text("no-such-window".into())],
+    );
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert_eq!(app.window_search, "no-such-window");
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(s, _)| s == "No windows match this search.")
+    );
+    assert_eq!(
+        app.target,
+        Some(windows[1].token),
+        "Filtering does not change the selected window"
+    );
+    app.runtime.shutdown().unwrap();
+}
+#[test]
+fn window_selection_preferences_survive_restart_and_are_independent_for_each_profile() {
+    let (mut app, ctx, dir) = setup();
+    let a = Profile::create("A");
+    let b = Profile::create("B");
+    app.store.save(&a, None).unwrap();
+    app.store.save(&b, None).unwrap();
+    app.store.select(a.id).unwrap();
+    app.replace_profile(a.clone(), None);
+    let windows = window_catalog();
+    pin_windows(&mut app, windows.clone(), 1);
+    app.select_window(windows[0].token).unwrap();
+    app.switch_profile(b.id);
+    app.select_window(windows[1].token).unwrap();
+    app.window_search = "old search".into();
+    app.switch_profile(a.id);
+    assert!(app.window_search.is_empty());
+    app.reconcile_windows();
+    assert_eq!(app.target, Some(windows[0].token));
+    assert!(!app.snapshot.running && !app.snapshot.arming);
+    app.runtime.shutdown().unwrap();
+    drop(app);
+    let mut reopened = MetinApp::from_context(&ctx, dir.path().to_owned()).unwrap();
+    let mut restarted = windows.clone();
+    restarted[0].token = TargetToken {
+        handle: 900,
+        pid: 901,
+        created: 99,
+    };
+    pin_windows(&mut reopened, restarted.clone(), 1);
+    reopened.reconcile_windows();
+    assert_eq!(reopened.target, Some(restarted[0].token));
+    assert_eq!(reopened.settings.profile_windows.len(), 2);
+    reopened.switch_profile(b.id);
+    reopened.reconcile_windows();
+    assert_eq!(reopened.target, Some(restarted[1].token));
+    assert_eq!(reopened.editor.profile, b);
+    reopened.runtime.shutdown().unwrap();
+}
+#[test]
+fn window_selection_restores_only_unique_exact_matches_and_retires_closed_tokens() {
+    let (mut app, ctx, _dir) = setup();
+    let windows = window_catalog();
+    app.settings.profile_windows.insert(
+        app.editor.profile.id,
+        crate::storage::WindowPreference {
+            process_name: windows[0].process_name.to_uppercase(),
+            title: windows[0].title.clone(),
+        },
+    );
+    let mut duplicate = windows[0].clone();
+    duplicate.token = windows[1].token;
+    pin_windows(&mut app, vec![windows[0].clone(), duplicate], 1);
+    app.reconcile_windows();
+    assert!(app.target.is_none());
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(s, _)| s.contains("Several windows match"))
+    );
+    pin_windows(&mut app, windows.clone(), 2);
+    app.reconcile_windows();
+    assert_eq!(app.target, Some(windows[0].token));
+    let mut renamed = windows[0].clone();
+    renamed.title = "Changed title".into();
+    pin_windows(&mut app, vec![renamed], 3);
+    app.reconcile_windows();
+    assert_eq!(
+        app.target,
+        Some(windows[0].token),
+        "A running window keeps its actual token when its title changes"
+    );
+    pin_windows(&mut app, vec![], 4);
+    app.reconcile_windows();
+    assert!(app.target.is_none());
+    assert!(!app.live && app.snapshot_requested.is_none());
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(s, _)| s.contains("Remembered window not found"))
+    );
+    let mut wrong_title = windows[0].clone();
+    wrong_title.title = "Different".into();
+    pin_windows(&mut app, vec![wrong_title], 5);
+    app.reconcile_windows();
+    assert!(app.target.is_none());
+    assert!(!app.snapshot.running && !app.snapshot.arming);
+    app.runtime.shutdown().unwrap();
+}
+#[test]
+fn window_selection_failed_preference_write_does_not_claim_a_saved_selection() {
+    let (mut app, _ctx, dir) = setup();
+    let windows = window_catalog();
+    pin_windows(&mut app, windows.clone(), 1);
+    std::fs::create_dir(dir.path().join("ui-settings.json")).unwrap();
+    assert!(app.select_window(windows[0].token).is_err());
+    assert!(app.target.is_none());
+    assert!(app.settings.profile_windows.is_empty());
+    app.runtime.shutdown().unwrap();
+}
+#[test]
+fn window_selection_unicode_search_and_exact_preference_have_different_purposes() {
+    let windows = window_catalog();
+    for search in ["", " žLUŤOUČKÝ ", "CLIENT-A", "201"] {
+        assert!(window_selection::matches_search(&windows[0], search));
+    }
+    assert!(!window_selection::matches_search(&windows[0], "other"));
+    let preference = crate::storage::WindowPreference {
+        process_name: "CLIENT-A.EXE".into(),
+        title: windows[0].title.clone(),
+    };
+    assert_eq!(
+        window_selection::remembered_matches(&windows, &preference).len(),
+        1
+    );
+}
+#[test]
+fn window_selection_has_search_and_settings_no_longer_have_a_process_filter() {
+    let (mut app, ctx, _dir) = setup();
+    app.navigate(Tab::Settings);
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(
+        !text_regions(&output)
+            .iter()
+            .any(|(text, _)| text == "Game window filter")
+    );
+    app.navigate(Tab::Calibration);
+    app.snapshot = Arc::new(RuntimeSnapshot {
+        targets: vec![metin_platform::TargetInfo {
+            token: TargetToken {
+                handle: 100,
+                pid: 200,
+                created: 300,
+            },
+            title: "Different server".into(),
+            process_name: "other.exe".into(),
+        }],
+        ..Default::default()
+    });
+    app.window_fixture = Some(window_selection::WindowFixture {
+        snapshot: app.snapshot.clone(),
+        open_popup: false,
+    });
+    click_label(&mut app, &ctx, "Select a game window");
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    let text = text_regions(&output);
+    assert!(
+        text.iter().any(|(s, _)| s == "Search title or process…"),
+        "{text:?}"
+    );
+    assert!(
+        text.iter()
+            .any(|(s, _)| s.contains("Different server") && s.contains("other.exe")),
+        "{text:?}"
+    );
+    app.runtime.shutdown().unwrap();
+}
 #[test]
 fn refinement_tool_changes_do_not_move_canvas_or_expand_inline_help() {
     let (mut app, ctx, _dir) = setup();
@@ -545,7 +819,7 @@ fn screenshot_request_survives_a_discarded_layout_pass() {
     let (mut app, ctx, dir) = setup();
     app.smoke = Some((
         dir.path().join("test.png"),
-        std::time::Instant::now() - std::time::Duration::from_secs(1),
+        Some(std::time::Instant::now() - std::time::Duration::from_secs(1)),
     ));
     let mut output = ctx.run_ui(
         egui::RawInput {
@@ -727,21 +1001,6 @@ fn switching_profiles_retires_the_previous_skill_crop_mode() {
     app.runtime.shutdown().unwrap();
 }
 #[test]
-fn process_hint_matches_filenames_without_case_or_substring_surprises() {
-    assert!(state::matches_process(
-        "VerzumClient_X64.EXE",
-        "verzumclient_x64.exe"
-    ));
-    assert!(!state::matches_process(
-        "other-verzumclient_x64.exe",
-        "verzumclient_x64.exe"
-    ));
-    assert!(!state::matches_process(
-        "notepad.exe",
-        "verzumclient_x64.exe"
-    ));
-}
-#[test]
 fn long_profile_names_keep_pause_and_navigation_visible_in_small_window() {
     let (mut app, ctx, _dir) = setup();
     app.editor.profile.name =
@@ -868,6 +1127,9 @@ fn review_key(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
 fn user_review_disabled_save_and_start_explain_their_state_on_actual_hover() {
     let (mut app, ctx, _dir) = setup();
     app.save().unwrap();
+    // Keep the tooltip's input state stable while the real worker finishes
+    // initial hotkey registration; this test exercises hover, not its timing.
+    pin_windows(&mut app, vec![], 1);
     assert!(!app.has_unsaved_profile());
     let save_texts = review_hover_label(&mut app, &ctx, "Save");
     assert!(

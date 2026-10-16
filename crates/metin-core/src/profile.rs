@@ -282,6 +282,8 @@ impl BuffConfig {
 pub struct Profile {
     pub id: Uuid,
     pub name: String,
+    // Kept for Python profile interchange. Desktop window selection uses
+    // per-profile UI preferences; this value does not filter the window list.
     #[serde(default = "default_process")]
     pub process_name: String,
     #[serde(default)]

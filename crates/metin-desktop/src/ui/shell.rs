@@ -104,32 +104,11 @@ impl MetinApp {
         });
     }
     pub(super) fn window_picker(&mut self, ui: &mut egui::Ui) {
-        ui.label("Game window");
-        let old = self.target;
-        let targets = self
-            .snapshot
-            .targets
-            .iter()
-            .filter(|w| state::matches_process(&w.process_name, &self.editor.profile.process_name))
-            .collect::<Vec<_>>();
-        let no_matches = targets.is_empty();
-        egui::ComboBox::from_id_salt("game-window").truncate().width(ui.available_width().min(340.)).selected_text(self.snapshot.targets.iter().find(|w| Some(w.token)==self.target).map(|w|w.title.as_str()).unwrap_or("Select a game window")).show_ui(ui,|ui| {
-            for window in &targets { ui.selectable_value(&mut self.target,Some(window.token),format!("{} · {}",window.title,window.process_name)); }
-        }).response.on_hover_text("Select the exact game window. Its process identity remains the target even if titles change.");
-        if self.target != old {
-            self.runtime.stop();
-            if let Err(e) = self.configure() {
-                self.error = Some(e);
-            }
-            self.snapshot_requested = None;
-        }
+        self.window_choice(ui);
         ui.horizontal_wrapped(|ui| {
-            if button(ui,Icon::Refresh,"Refresh",true,"Refresh the list of matching visible game windows.").clicked() {self.send(Command::RefreshTargets);}
+            if button(ui,Icon::Refresh,"Refresh",true,"Refresh all visible application windows. This does not start the bot.").clicked() {self.send(Command::RefreshTargets);}
             let snapshot_hint=if self.snapshot_requested.is_some() { "Waiting for a fresh frame from the selected game window. Capture times out after 3 seconds." } else if self.target.is_none() { "Select a game window above before taking a Snapshot." } else { "Pause and capture a fresh frame. Show the target panel in the game before capturing." };
             if button(ui,Icon::Camera,if self.snapshot_requested.is_some(){"Capturing..."}else{"Snapshot"},self.target.is_some() && self.snapshot_requested.is_none(),snapshot_hint).clicked() {self.runtime.stop();self.snapshot_requested=Some(std::time::Instant::now());}
         });
-        if no_matches {
-            ui.small(if self.snapshot.capabilities.automation_ready() {"No matching windows. Open the client, check the process hint in Settings, then Refresh."} else {"No capture/input backend is available here. Profiles and saved calibration can still be edited."});
-        }
     }
 }

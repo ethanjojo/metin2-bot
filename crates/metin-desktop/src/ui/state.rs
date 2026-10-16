@@ -1,7 +1,4 @@
 use super::*;
-pub(super) fn matches_process(filename: &str, hint: &str) -> bool {
-    filename.eq_ignore_ascii_case(hint)
-}
 
 pub(super) struct Blocker {
     pub message: String,
@@ -73,6 +70,9 @@ impl MetinApp {
         self.send(Command::Detach);
         self.editor = Editor::new(profile, template);
         self.target = None;
+        self.window_search.clear();
+        self.target_list_revision = 0;
+        self.send(Command::RefreshTargets);
         self.live = false;
         self.texture_source = None;
         self.gesture = None;
