@@ -26,3 +26,16 @@ The rebuilt native own-window probe passed capture while independently verified 
 Windows visual evidence: all 20 existing theme/size/empty-state screens were recaptured, plus four inactive-mode Buffs screens. Independent review inspected 16 relevant Run/Calibration/Buffs screenshots and rechecked all eight Buffs screenshots after the final disabled-arrow contrast fix. No open finding remains; see [the review](ui-feedback-review.md). Armed tools/cursors and live colored markers are interaction/source tests, not claims of manual native game interaction.
 
 Linux: 97 whole-workspace tests, including 39 desktop UI tests; fmt, strict Clippy, native debug build and executable self-test passed. Logs: `build/rust-linux/feedback-{tests,fmt,clippy,build}.log`, `feedback-self-test.json`. The extra Windows test covers compositor timestamp age conversion. macOS native build, Linux/macOS gameplay backends, real-client combat/buffs, hardware HiDPI and clean-machine installation remain unverified. The existing user window and profiles have not been replaced or modified.
+
+All four Linux WSLg screens were recaptured and inspected at 800x560 with the final debug build: `build/ui-redesign/linux/{run,calibration,buffs,settings}.png`. Rendering used software Vulkan; this is not hardware performance evidence.
+
+## Current preview artifacts
+
+Source: `1f06df2e4810ce82b4d5ec9d754922dddda74c93`. Clean-source optimized Windows release build passed in 4m30s; installer compilation passed with the explicit build-19041 minimum. Neither release executable nor installer was launched. Debug self-tests above do not establish packaged UAC/installation acceptance.
+
+Artifacts are in `build/rust-packages/1d966d74-9df6-41c6-8d6b-e908baa9f566/`:
+
+- `MetinBot-0.1.0-rust-preview-windows-x64.zip` — 33,406,859 bytes, SHA-256 `06a62b41a9412f7bd1262f3ecb91bd1d025d304d76e9cf416654c86f954a5af4`.
+- `MetinBotSetup-0.1.0-windows-x64.exe` — 22,524,601 bytes, SHA-256 `9787200b387b81f691a15e1409563e1d625a4e2377714b0f0f7a8caf65612a96`.
+
+All 449 files in the extracted ZIP matched their inventory hashes. Report: `build/rust-migration/ui-package-verification.json`; logs: `feedback-release.log`, `ui-package.log`. These artifacts supersede all earlier Rust UI preview packages. The existing running window still contains the previous build and must be closed after saving before reviewing this one. No push, publication or production installation was performed.
