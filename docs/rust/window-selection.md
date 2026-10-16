@@ -23,4 +23,21 @@ Windows passed 112 whole-workspace tests, including 49 UI tests, and 47 UI tests
 
 The Windows visual matrix is `build/window-picker-ui/{dark,light}-{all,filtered,empty,ambiguous,missing,selected}-{large,small}.png` (24 native screenshots at 1280×820 and 800×560). Four updated Settings screenshots are in `build/ui-redesign/{dark,light}-settings-{large,small}.png`. Popup width is bounded, long rows truncate, no-result/Clear states remain readable and ambiguous equal titles expose distinct PIDs. The currently open user app and production profiles are untouched.
 
-Final Linux results, final visual inspection and package identity are recorded below after completion.
+Linux passed 111 whole-workspace tests (49 UI), 47 standard-build UI tests, fmt, strict all-target/all-feature Clippy, native build and executable self-test. Logs: `build/rust-linux/window-selection-{tests,default,fmt,clippy,build}.log`, `window-selection-self-test.json`. Four native WSLg screenshots at 800×560 cover All, Filtered, Ambiguous and Missing in both themes under `build/window-picker-ui/linux/`. Rendering uses software Vulkan/llvmpipe, not hardware performance acceptance.
+
+All 28 Windows screenshots and all four Linux screenshots were opened and inspected. The final popup is readable and bounded in both sizes/themes, Clear and empty search are visible, equal titles expose different PIDs, and the Settings filter section is absent. No open visual finding remains from this inspection. Pointer/typing/restore behavior is backed by RawInput/storage/worker tests; this is not a claim of manual OS interaction, real-client gameplay, macOS acceptance or clean-machine installation.
+
+![Dark searchable picker](../../build/window-picker-ui/dark-all-large.png)
+![Light filtered picker, small](../../build/window-picker-ui/light-filtered-small.png)
+![Linux ambiguous choices](../../build/window-picker-ui/linux/dark-ambiguous.png)
+
+## Verified Windows preview
+
+Source commit: `ab4612aeb5f048fadab203758b58dabf44583b9a`. Optimized release build passed in 3m45s and Inno installer compilation passed. All 449 files in an isolated extracted ZIP matched their inventory SHA-256 hashes. Neither release executable nor installer was launched, installed or published. The existing running app is unchanged.
+
+Artifacts: `build/rust-packages/26f49ff7-9ded-4518-979a-5c7762212f04/`.
+
+- `MetinBot-0.1.0-rust-preview-windows-x64.zip` — 33,433,818 bytes; SHA-256 `0565a4612e43e565de9e666973f17f0c058e6d078e07f7db09465468d1adc655`.
+- `MetinBotSetup-0.1.0-windows-x64.exe` — 22,535,934 bytes; SHA-256 `13ea395567abbc65c5aa2ffde46b2b322789705a6e3a5f95e622bca323d6a52b`.
+
+Logs: `build/rust-migration/window-selection-release.log`, `ui-package.log`, `ui-package-verification.json`. These artifacts supersede earlier previews for reviewing window selection. Save and close the earlier app before opening this preview with the same user data. No push, production installation or release publication was performed.
