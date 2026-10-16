@@ -2,6 +2,8 @@
 
 User authorized complete implementation on 2026-10-16. Branch: codex/rust-egui-migration.
 
+Latest user-feedback work: all eight UI/capture changes are implemented, including HWND-only Windows Graphics Capture, canonical color editing, explicit canvas tools and controller-driven Run markers. Windows passes 98 tests (39 UI). See [current verification and artifacts](ui-feedback-plan.md) and [independent review](ui-feedback-review.md) for final Linux results and precise acceptance limits. The counts and artifacts in the original migration ledger below are historical.
+
 ## Verified baseline
 
 - Python: 256 tests passed, 50.421 seconds; full log build/rust-migration/python-baseline.log.

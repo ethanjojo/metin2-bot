@@ -7,7 +7,7 @@ use std::{
 };
 use windows_sys::Win32::{
     Foundation::*,
-    Graphics::Gdi::*,
+    Graphics::Gdi::ClientToScreen,
     Security::*,
     System::Threading::*,
     UI::{HiDpi::*, Input::KeyboardAndMouse::*, WindowsAndMessaging::*},
@@ -77,11 +77,13 @@ pub struct WindowsBackend {
     registered: bool,
     registration_error: Option<String>,
     pending: HotkeyEvents,
+    capture: Option<window_capture::WindowCapture>,
 }
 impl WindowsBackend {
     pub fn new() -> Self {
         Self {
             target: None,
+            capture: None,
             frame_id: 0,
             registered: false,
             registration_error: None,
@@ -209,6 +211,7 @@ impl PlatformBackend for WindowsBackend {
     }
     fn attach(&mut self, target: TargetToken) -> Result<()> {
         self.verify(target)?;
+        self.capture = None;
         self.target = Some(target);
         self.register()?;
         Ok(())
@@ -255,6 +258,7 @@ impl PlatformBackend for WindowsBackend {
         if stop.cancelled(generation) || Instant::now() > deadline {
             return Err(PlatformError("Capture cancelled.".into()));
         }
+        let requested = Instant::now();
         let before = self.inspect()?;
         if !before.visible
             || before.width == 0
@@ -266,75 +270,29 @@ impl PlatformBackend for WindowsBackend {
                 "The selected window is hidden, minimized or has invalid dimensions.".into(),
             ));
         }
-        // SAFETY: DCs/bitmap are owned locally. DIB has checked dimensions, 32-bit
-        // top-down storage, and is copied before bitmap deletion on every path.
-        let bytes = unsafe {
-            let screen = GetDC(null_mut());
-            if screen.is_null() {
-                return Err(os_error("GetDC failed"));
+        if self.capture.is_none() {
+            self.capture = Some(window_capture::WindowCapture::new(before.target)?);
+        }
+        let captured = self
+            .capture
+            .as_mut()
+            .expect("capture initialized")
+            .frame(before, requested, deadline, stop, generation);
+        let (bytes, captured_at) = match captured {
+            Ok(value) => value,
+            Err(error) => {
+                self.capture = None;
+                return Err(error);
             }
-            let dc = CreateCompatibleDC(screen);
-            if dc.is_null() {
-                ReleaseDC(null_mut(), screen);
-                return Err(os_error("CreateCompatibleDC failed"));
-            }
-            let mut info: BITMAPINFO = zeroed();
-            info.bmiHeader.biSize = size_of::<BITMAPINFOHEADER>() as u32;
-            info.bmiHeader.biWidth = before.width as i32;
-            info.bmiHeader.biHeight = -(before.height as i32);
-            info.bmiHeader.biPlanes = 1;
-            info.bmiHeader.biBitCount = 32;
-            info.bmiHeader.biCompression = BI_RGB;
-            let mut bits = null_mut();
-            let bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &mut bits, null_mut(), 0);
-            if bitmap.is_null() || bits.is_null() {
-                DeleteDC(dc);
-                ReleaseDC(null_mut(), screen);
-                return Err(os_error("CreateDIBSection failed"));
-            }
-            let old = SelectObject(dc, bitmap);
-            if old.is_null() || old as isize == -1 {
-                DeleteObject(bitmap);
-                DeleteDC(dc);
-                ReleaseDC(null_mut(), screen);
-                return Err(os_error("Selecting capture bitmap failed"));
-            }
-            let ok = BitBlt(
-                dc,
-                0,
-                0,
-                before.width as i32,
-                before.height as i32,
-                screen,
-                before.left,
-                before.top,
-                SRCCOPY | CAPTUREBLT,
-            );
-            // GDI batches drawing; synchronize before reading DIB memory.
-            let result = if ok != 0 && GdiFlush() != 0 {
-                let raw = std::slice::from_raw_parts(
-                    bits as *const u8,
-                    before.width as usize * before.height as usize * 4,
-                );
-                Ok(raw
-                    .as_chunks::<4>()
-                    .0
-                    .iter()
-                    .flat_map(|p| [p[0], p[1], p[2]])
-                    .collect::<Vec<_>>())
-            } else {
-                Err(os_error("Screen capture failed"))
-            };
-            SelectObject(dc, old);
-            DeleteObject(bitmap);
-            DeleteDC(dc);
-            ReleaseDC(null_mut(), screen);
-            result?
         };
         let after = self.inspect()?;
-        if before != after || stop.cancelled(generation) || Instant::now() > deadline {
+        if before != after
+            || stop.cancelled(generation)
+            || Instant::now() > deadline
+            || captured_at.elapsed() > window_capture::MAX_FRAME_AGE
+        {
             return Err(PlatformError(
-                "Window geometry/focus changed during capture or capture timed out.".into(),
+                "Window geometry/focus changed, the source frame became stale, or capture timed out.".into(),
             ));
         }
         if bytes.iter().copied().max().unwrap_or(0) < 8 {
@@ -344,7 +302,7 @@ impl PlatformBackend for WindowsBackend {
         Ok(CapturedFrame {
             frame: Frame::new(before.width, before.height, bytes)?,
             target: before.target,
-            captured_at: Instant::now(),
+            captured_at,
             id: self.frame_id,
             geometry: before,
         })
@@ -498,3 +456,6 @@ pub fn enable_dpi() {
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     }
 }
+
+#[path = "window_capture.rs"]
+mod window_capture;

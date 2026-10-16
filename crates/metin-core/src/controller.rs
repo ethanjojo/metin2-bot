@@ -97,6 +97,42 @@ impl Controller {
             pending_action: None,
         }
     }
+    /// Uses the same failure exclusion as acquisition; previews must not invent
+    /// a separate target-selection algorithm.
+    pub fn next_candidate<'a>(&self, candidates: &'a [Candidate]) -> Option<&'a Candidate> {
+        candidates.iter().find(|c| self.available_candidate(c))
+    }
+    fn same_target(c: &Candidate, point: [u32; 2]) -> bool {
+        c.point[0].abs_diff(point[0]) <= 15.max(c.width)
+            && c.point[1].abs_diff(point[1]) <= 15.max(c.height)
+    }
+    fn available_candidate(&self, c: &Candidate) -> bool {
+        !self
+            .failed
+            .iter()
+            .any(|(point, _)| Self::same_target(c, *point))
+    }
+    pub fn next_preview_target(&self, candidates: &[Candidate]) -> Option<[u32; 2]> {
+        if !self.running {
+            return None;
+        }
+        candidates
+            .iter()
+            .find(|c| {
+                self.available_candidate(c)
+                    && self
+                        .selected_target()
+                        .is_none_or(|point| !Self::same_target(c, point))
+            })
+            .map(|c| c.point)
+    }
+    pub fn selected_target(&self) -> Option<[u32; 2]> {
+        if self.running && matches!(self.phase, Phase::Acquiring | Phase::Active) {
+            self.clicked
+        } else {
+            None
+        }
+    }
     fn status(&mut self, state: &str, reason: impl Into<String>) {
         self.state = state.into();
         self.reason = reason.into();
@@ -376,12 +412,7 @@ impl Controller {
             return self.buff_step(now, &o.buffs);
         }
         self.failed.retain(|(_, until)| now < *until);
-        if let Some(c) = o.candidates.iter().find(|c| {
-            !self.failed.iter().any(|(p, _)| {
-                c.point[0].abs_diff(p[0]) <= 15.max(c.width)
-                    && c.point[1].abs_diff(p[1]) <= 15.max(c.height)
-            })
-        }) {
+        if let Some(c) = self.next_candidate(&o.candidates) {
             let point = c.point;
             self.clicked = Some(point);
             self.attempted.clear();

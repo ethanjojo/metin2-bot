@@ -76,3 +76,49 @@ fn stale_ack_cannot_advance_pending_action() {
     c.ack(0.5, a.id, true).unwrap();
     assert!(c.buffs.pending.is_none());
 }
+
+#[test]
+fn preview_next_target_excludes_current_and_failed_candidates_without_changing_acquisition() {
+    let mut p = Profile::from_json(include_str!(
+        "../../../tests/parity/profiles/calibrated.json"
+    ))
+    .unwrap();
+    p.buffs.enabled = false;
+    p.panel.stable_frames = 1;
+    let mut c = Controller::new(p);
+    c.start(0.).unwrap();
+    c.phase = metin_core::Phase::Seeking;
+    let candidates = vec![
+        Candidate {
+            x: 10,
+            y: 10,
+            width: 20,
+            height: 20,
+            point: [20, 20],
+        },
+        Candidate {
+            x: 100,
+            y: 100,
+            width: 20,
+            height: 20,
+            point: [110, 110],
+        },
+    ];
+    let o = Observation {
+        ready: true,
+        candidates: candidates.clone(),
+        ..Default::default()
+    };
+    assert_eq!(c.next_preview_target(&candidates), Some([20, 20]));
+    let action = c.step(0.1, &o).unwrap();
+    assert_eq!(action.kind, ActionKind::Click { point: [20, 20] });
+    c.ack(0.1, action.id, true).unwrap();
+    assert_eq!(c.selected_target(), Some([20, 20]));
+    assert_eq!(c.next_preview_target(&candidates), Some([110, 110]));
+    c.step(c.profile.timing.acquire_timeout + 0.2, &o);
+    assert_eq!(c.next_preview_target(&candidates), Some([110, 110]));
+    assert_eq!(c.next_candidate(&candidates).unwrap().point, [110, 110]);
+    c.pause(20., "Test pause");
+    assert!(c.selected_target().is_none());
+    assert!(c.next_preview_target(&candidates).is_none());
+}

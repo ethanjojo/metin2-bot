@@ -22,13 +22,19 @@ impl MetinApp {
                 egui::ScrollArea::vertical().id_salt("skill-list").show(ui,|ui| {
                     ui.strong(format!("Skill order  {}/8",self.editor.profile.buffs.skills.len()));
                     ui.small("Select a skill to edit its details.");
+                    let mut reorder=None;
                     for (i,skill) in self.editor.profile.buffs.skills.iter().enumerate() {
                         let name=if skill.name.is_empty(){format!("Skill {}",i+1)}else{skill.name.clone()};
-                        let text=format!("{}. {}",i+1,name);
-                        if ui.add_sized([list_width-10.,34.],egui::Button::new(text).truncate().selected(self.selected_skill==i)).on_hover_text(format!("{} · {} · {}",name,skill.shortcut,if skill.mode==metin_core::BuffMode::Refresh{"Periodic refresh"}else{"Activate when inactive"})).clicked(){self.selected_skill=i;self.binding=None;}
-                        ui.small(format!("{} · {} · {}",name,skill.shortcut,if skill.mode==metin_core::BuffMode::Refresh{"Periodic"}else{"When inactive"}));
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x=4.;
+                            if ui.add_sized([list_width-70.,32.],egui::Button::new(format!("{}. {}",i+1,name)).truncate().selected(self.selected_skill==i)).on_hover_text(format!("{} - {}",name,skill.shortcut)).clicked() { self.selected_skill=i; self.binding=None; }
+                            if widgets::small_icon_button(ui,Icon::Up,i>0,"Move this skill up in the sequence").clicked() { reorder=Some((i,i-1)); }
+                            if widgets::small_icon_button(ui,Icon::Down,i+1<self.editor.profile.buffs.skills.len(),"Move this skill down in the sequence").clicked() { reorder=Some((i,i+1)); }
+                        });
+                        ui.small(format!("{} - {}",skill.shortcut,if skill.mode==metin_core::BuffMode::Refresh{"Periodic"}else{"When inactive"}));
                         ui.add_space(5.);
                     }
+                    if let Some((a,b))=reorder {self.reorder_skill(a,b);}
                     if button(ui,Icon::Plus,"Add skill",self.editor.profile.buffs.skills.len()<8,"Add a skill with the next available shortcut. Up to eight skills are supported.").clicked(){self.add_skill();}
                     ui.separator();
                     ui.small("F7 and F8 are reserved for Start and Pause.");
@@ -106,28 +112,6 @@ impl MetinApp {
             ui.horizontal_wrapped(|ui| {
                 if button(
                     ui,
-                    Icon::Up,
-                    "Move up",
-                    index > 0,
-                    "Use this skill earlier in the sequence.",
-                )
-                .clicked()
-                {
-                    self.reorder_skill(index, index - 1);
-                }
-                if button(
-                    ui,
-                    Icon::Down,
-                    "Move down",
-                    index + 1 < self.editor.profile.buffs.skills.len(),
-                    "Use this skill later in the sequence.",
-                )
-                .clicked()
-                {
-                    self.reorder_skill(index, index + 1);
-                }
-                if button(
-                    ui,
                     Icon::Trash,
                     "Remove",
                     true,
@@ -189,6 +173,9 @@ impl MetinApp {
             }
         });
         if index >= self.editor.profile.buffs.skills.len() || self.selected_skill != index {
+            return;
+        }
+        if self.editor.profile.buffs.skills[index].mode != metin_core::BuffMode::Inactive {
             return;
         }
         section(ui, "Icon recognition", |ui| {

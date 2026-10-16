@@ -18,6 +18,7 @@ pub enum Icon {
     Refresh,
     Back,
     Check,
+    Cross,
     Target,
     Buff,
     Settings,
@@ -121,6 +122,10 @@ pub fn icon(p: &egui::Painter, center: Pos2, kind: Icon, color: Color32) {
             (1., -2.),
             (1., -7.),
         ]),
+        Icon::Cross => {
+            line(&[(-5., -5.), (5., 5.)]);
+            line(&[(-5., 5.), (5., -5.)]);
+        }
         Icon::Settings => {
             for y in [-5., 0., 5.] {
                 line(&[(-7., y), (7., y)]);
@@ -190,6 +195,40 @@ pub fn button(
         }
         response.on_hover_text(hint).on_disabled_hover_text(hint)
     })
+}
+pub fn small_icon_button(
+    ui: &mut egui::Ui,
+    kind: Icon,
+    enabled: bool,
+    hint: &str,
+) -> egui::Response {
+    let response = ui.add_enabled(
+        enabled,
+        egui::Button::new("").min_size(egui::vec2(26., 28.)),
+    );
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, hint));
+    let color = ui.style().interact(&response).fg_stroke.color;
+    let color = if response.enabled() {
+        color
+    } else {
+        color.gamma_multiply(ui.visuals().disabled_alpha())
+    };
+    icon(ui.painter(), response.rect.center(), kind, color);
+    response.on_hover_text(hint).on_disabled_hover_text(hint)
+}
+pub fn readiness_mark(ui: &mut egui::Ui, ready: bool) {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(18., 22.), egui::Sense::hover());
+    icon(
+        ui.painter(),
+        rect.center(),
+        if ready { Icon::Check } else { Icon::Cross },
+        if ready { GREEN } else { RED },
+    );
+    response.on_hover_text(if ready {
+        "Configured"
+    } else {
+        "Not configured yet"
+    });
 }
 pub fn primary_button(
     ui: &mut egui::Ui,

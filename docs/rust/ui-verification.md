@@ -1,5 +1,7 @@
 # Desktop UI redesign verification
 
+Current user-feedback changes and verification are in [ui-feedback-plan.md](ui-feedback-plan.md), with [independent review](ui-feedback-review.md). They supersede the UI/capture behavior and historical package identities below: compact row arrows, conditional icon controls, HWND-only capture, corrected zoom, color picker/readiness marks, explicit editing/cursors and read-only Run target preview.
+
 Scope: approved Run / Calibration / Buffs / Settings workbench, retaining existing profiles, editor, buff execution and guarded runtime. No Python cutover, native Linux/macOS gameplay backend, production installation, push or publication is included.
 
 ## Delivered behavior

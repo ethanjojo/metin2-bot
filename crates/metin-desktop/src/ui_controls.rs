@@ -118,3 +118,22 @@ pub fn egui_key(key: egui::Key) -> Option<CapturedKey> {
         None
     }
 }
+
+/// OpenCV HSV is computed on 8-bit sRGB. egui Hsva uses linear RGB;
+/// route the picker through sRGB to avoid displaying a brighter sampled color.
+pub fn sampled_hsv_to_srgb(hsv: [u16; 3]) -> [u8; 3] {
+    egui::ecolor::rgb_from_hsv((
+        hsv[0] as f32 / 180.,
+        hsv[1] as f32 / 255.,
+        hsv[2] as f32 / 255.,
+    ))
+    .map(|v| (v * 255.).round().clamp(0., 255.) as u8)
+}
+pub fn sampled_srgb_to_hsv(rgb: [u8; 3]) -> [u16; 3] {
+    let (h, s, v) = egui::ecolor::hsv_from_rgb(rgb.map(|v| f32::from(v) / 255.));
+    [
+        (h * 180.).round().clamp(0., 179.) as u16,
+        (s * 255.).round().clamp(0., 255.) as u16,
+        (v * 255.).round().clamp(0., 255.) as u16,
+    ]
+}

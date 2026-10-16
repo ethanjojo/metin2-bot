@@ -65,7 +65,7 @@ fn setup() -> (MetinApp, egui::Context, tempfile::TempDir) {
             .as_path(),
     )
     .unwrap();
-    app.navigate(Tab::Calibration);
+    app.edit_area(EditMode::World);
     (app, ctx, dir)
 }
 #[test]
@@ -367,7 +367,30 @@ fn skill_buttons_move_the_selected_skill_and_keep_detail_identity() {
         });
     }
     app.navigate(Tab::Buffs);
-    click_label(&mut app, &ctx, "Move down");
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    let y = text_regions(&output)
+        .into_iter()
+        .find(|(s, _)| s == "1. Skill 1")
+        .unwrap()
+        .1
+        .center()
+        .y;
+    let pos = egui::pos2(245., y);
+    for pressed in [true, false] {
+        draw(
+            &mut app,
+            &ctx,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Default::default(),
+                },
+            ],
+        );
+    }
     assert_eq!(app.selected_skill, 1);
     assert_eq!(app.editor.profile.buffs.skills[1].shortcut, "F1");
     click_label(&mut app, &ctx, "Remove");
@@ -684,6 +707,8 @@ fn long_profile_names_keep_pause_and_navigation_visible_in_small_window() {
 fn scrolling_buff_detail_reaches_icon_capture_and_returns_to_the_same_skill() {
     let (mut app, ctx, _dir) = setup();
     app.add_skill();
+    app.editor.profile.buffs.skills[0].mode = metin_core::BuffMode::Inactive;
+    app.editor.profile.buffs.skills[0].interval_seconds = None;
     app.navigate(Tab::Buffs);
     for _ in 0..3 {
         draw(&mut app, &ctx, vec![]);
@@ -715,7 +740,7 @@ fn scrolling_buff_detail_reaches_icon_capture_and_returns_to_the_same_skill() {
     app.runtime.shutdown().unwrap();
 }
 #[test]
-fn wide_run_overview_keeps_window_connection_visible_without_scrolling() {
+fn wide_run_overview_keeps_game_preview_visible_without_scrolling() {
     let (mut app, ctx, _dir) = setup();
     app.navigate(Tab::Run);
     let mut output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
@@ -724,10 +749,10 @@ fn wide_run_overview_keeps_window_connection_visible_without_scrolling() {
     }
     let connection = text_regions(&output)
         .into_iter()
-        .find(|(text, _)| text == "Game window");
+        .find(|(text, _)| text == "Game preview");
     assert!(
         connection.is_some_and(|(_, rect)| rect.bottom() < 740.),
-        "Window connection should be visible in a wide Run overview"
+        "Game preview should be visible in a wide Run overview"
     );
     app.runtime.shutdown().unwrap();
 }
@@ -810,22 +835,22 @@ fn user_review_four_calibration_steps_hover_select_and_hide_show_preserve_edits(
     let before = app.editor.profile.clone();
     for (label, mode, hint) in [
         (
-            "1. Search area    Needed",
+            "1. Search area",
             EditMode::World,
             "Drag around the game area",
         ),
         (
-            "2. Metin color    Needed",
+            "2. Metin color",
             EditMode::Color,
             "Click a representative Metin pixel",
         ),
         (
-            "3. Target panel    Needed",
+            "3. Target panel",
             EditMode::Panel,
             "Draw around the target information panel",
         ),
         (
-            "4. Reference crop    Needed",
+            "4. Reference crop",
             EditMode::Template,
             "Draw a small, distinctive fixed part",
         ),
@@ -1171,7 +1196,7 @@ fn user_review_sampled_color_can_be_cleared_with_the_same_visible_delete_control
     let (mut app, ctx, _dir) = setup();
     app.editor.color([50, 50]).unwrap();
     let sampled = app.editor.profile.color.clone();
-    click_label(&mut app, &ctx, "2. Metin color    Ready");
+    click_label(&mut app, &ctx, "2. Metin color");
     assert!(app.mode == EditMode::Color);
     click_label(&mut app, &ctx, "Delete selected");
     assert!(
@@ -1258,5 +1283,277 @@ fn user_review_nested_calibration_labels_remain_readable_when_hover_changes_focu
         app.mode == EditMode::Panel,
         "Hover must not change selection"
     );
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn feedback_one_wheel_notch_does_not_repeat_zoom_during_smoothing() {
+    let (mut app, ctx, _dir) = setup();
+    for _ in 0..3 {
+        draw(&mut app, &ctx, vec![]);
+    }
+    let pos = app.canvas_rect.unwrap().center();
+    draw(
+        &mut app,
+        &ctx,
+        vec![
+            egui::Event::PointerMoved(pos),
+            egui::Event::MouseWheel {
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Unknown,
+                unit: egui::MouseWheelUnit::Line,
+                delta: egui::vec2(0., 1.),
+                modifiers: Default::default(),
+            },
+        ],
+    );
+    for _ in 0..90 {
+        draw(&mut app, &ctx, vec![]);
+    }
+    assert!(
+        app.viewport.zoom > 1. && app.viewport.zoom <= 1.3,
+        "One notch must be a bounded proportional zoom: {}",
+        app.viewport.zoom
+    );
+    app.runtime.shutdown().unwrap();
+}
+#[test]
+fn feedback_periodic_skills_do_not_offer_unused_icon_recognition() {
+    let (mut app, ctx, _dir) = setup();
+    app.add_skill();
+    app.navigate(Tab::Buffs);
+    let mut output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    for _ in 0..3 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    assert!(
+        !text_regions(&output)
+            .iter()
+            .any(|(s, _)| s == "Icon recognition")
+    );
+    app.editor.profile.buffs.skills[0].mode = metin_core::BuffMode::Inactive;
+    for _ in 0..3 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(s, _)| s == "Icon recognition")
+    );
+    app.runtime.shutdown().unwrap();
+}
+#[test]
+fn feedback_run_has_read_only_game_preview_instead_of_duplicate_connection_card() {
+    let (mut app, ctx, _dir) = setup();
+    app.navigate(Tab::Run);
+    let mut output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    for _ in 0..3 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    let text = text_regions(&output);
+    assert!(text.iter().any(|(s, _)| s == "Game preview"));
+    assert!(!text.iter().any(|(s, _)| s == "Connected profile"));
+    assert!(app.canvas_rect.is_none());
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn feedback_tools_have_explicit_done_state_and_hit_test_cursors() {
+    let (mut app, ctx, _dir) = setup();
+    let region = metin_core::Region {
+        left: 0.2,
+        top: 0.2,
+        right: 0.7,
+        bottom: 0.7,
+    };
+    app.editor.set_region(EditMode::World, region).unwrap();
+    for _ in 0..3 {
+        draw(&mut app, &ctx, vec![]);
+    }
+    // Derive pixel positions from actual fixture size, not presumed DPI.
+    let size = [
+        app.editor.frozen.as_ref().unwrap().width,
+        app.editor.frozen.as_ref().unwrap().height,
+    ];
+    let position = |app: &MetinApp, x: f64, y: f64| {
+        let p = app
+            .viewport
+            .to_canvas([x * f64::from(size[0]), y * f64::from(size[1])]);
+        app.canvas_rect.unwrap().min + egui::vec2(p[0] as f32, p[1] as f32)
+    };
+    for (x, y, cursor) in [
+        (0.2, 0.2, egui::CursorIcon::ResizeNwSe),
+        (0.45, 0.2, egui::CursorIcon::ResizeVertical),
+        (0.45, 0.45, egui::CursorIcon::Move),
+        (0.9, 0.9, egui::CursorIcon::Crosshair),
+    ] {
+        let pos = position(&app, x, y);
+        let output = draw_at_size(
+            &mut app,
+            &ctx,
+            &mut vec![egui::Event::PointerMoved(pos)],
+            egui::vec2(1280., 820.),
+        );
+        assert_eq!(output.platform_output.cursor_icon, cursor);
+    }
+    click_label(&mut app, &ctx, "Done editing");
+    assert!(!app.editing);
+    let pos = position(&app, 0.3, 0.3);
+    let before = app.editor.profile.clone();
+    for pressed in [true, false] {
+        draw(
+            &mut app,
+            &ctx,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Default::default(),
+                },
+            ],
+        );
+    }
+    assert_eq!(app.editor.profile, before);
+    assert!(app.gesture.is_none());
+    click_label(&mut app, &ctx, "2. Metin color");
+    assert!(app.editing);
+    let pos = position(&app, 0.4, 0.4);
+    let output = draw_at_size(
+        &mut app,
+        &ctx,
+        &mut vec![egui::Event::PointerMoved(pos)],
+        egui::vec2(1280., 820.),
+    );
+    assert_eq!(
+        output.platform_output.cursor_icon,
+        egui::CursorIcon::Crosshair
+    );
+    app.runtime.shutdown().unwrap();
+}
+#[test]
+fn feedback_color_value_is_visible_and_excluded_area_announces_drawing() {
+    let (mut app, ctx, _dir) = setup();
+    app.editor.profile.color = Some(metin_core::ColorConfig {
+        hsv: [90, 200, 180],
+        ..Default::default()
+    });
+    let mut output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    for _ in 0..3 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(s, _)| s == "HSV 90, 200, 180")
+    );
+    click_label(&mut app, &ctx, "Draw excluded area");
+    assert!(app.editing);
+    assert!(app.mode == EditMode::Mask(None));
+    output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(s, _)| s.contains("Draw excluded area: drag a rectangle"))
+    );
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn feedback_color_picker_preserves_opencv_srgb_instead_of_linear_brightness() {
+    for rgb in [
+        [255, 0, 0],
+        [0, 255, 0],
+        [0, 0, 255],
+        [90, 160, 210],
+        [123, 55, 201],
+        [180, 180, 180],
+        [0, 0, 0],
+    ] {
+        let frame = metin_platform::Frame::new(1, 1, vec![rgb[2], rgb[1], rgb[0]]).unwrap();
+        let hsv = metin_vision::pick_color(&frame, [0, 0]).unwrap();
+        let displayed = crate::ui_controls::sampled_hsv_to_srgb(hsv);
+        for i in 0..3 {
+            assert!(
+                displayed[i].abs_diff(rgb[i]) <= 4,
+                "Sampled swatch differs: {rgb:?} -> {hsv:?} -> {displayed:?}"
+            );
+        }
+        let selected = crate::ui_controls::sampled_srgb_to_hsv(rgb);
+        let hue = selected[0].abs_diff(hsv[0]);
+        assert!(hue.min(180 - hue) <= 1);
+        assert!(selected[1].abs_diff(hsv[1]) <= 1);
+        assert!(selected[2].abs_diff(hsv[2]) <= 1);
+    }
+}
+
+#[test]
+fn feedback_run_preview_draws_distinct_current_next_and_other_markers_without_editing() {
+    let (mut app, ctx, _dir) = setup();
+    app.navigate(Tab::Run);
+    app.target = Some(TargetToken {
+        handle: 1,
+        pid: 2,
+        created: 3,
+    });
+    app.snapshot = Arc::new(RuntimeSnapshot {
+        key: app.key(),
+        frame: Some(metin_platform::Frame::new(300, 300, vec![0; 300 * 300 * 3]).unwrap()),
+        captured_at: Some(std::time::Instant::now()),
+        running: true,
+        selected_target: Some([50, 50]),
+        next_target: Some([150, 150]),
+        candidates: [50, 150, 250]
+            .map(|p| metin_core::Candidate {
+                x: p - 20,
+                y: p - 20,
+                width: 40,
+                height: 40,
+                point: [p, p],
+            })
+            .to_vec(),
+        ..Default::default()
+    });
+    fn rectangles(shape: &egui::Shape, colors: &mut Vec<egui::Color32>) {
+        match shape {
+            egui::Shape::Rect(r) => colors.push(r.stroke.color),
+            egui::Shape::Vec(shapes) => {
+                for s in shapes {
+                    rectangles(s, colors);
+                }
+            }
+            _ => {}
+        }
+    }
+    let before = app.editor.profile.clone();
+    let mut colors = vec![];
+    for _ in 0..3 {
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1280., 820.),
+                )),
+                ..Default::default()
+            },
+            |ui| app.run_view(ui),
+        );
+        colors.clear();
+        for shape in &output.shapes {
+            rectangles(&shape.shape, &mut colors);
+        }
+        output.textures_delta.clear();
+    }
+    for color in [widgets::AMBER, widgets::GREEN, widgets::BLUE] {
+        assert_eq!(
+            colors.iter().filter(|c| **c == color).count(),
+            1,
+            "Each detection class needs one distinct rectangle"
+        );
+    }
+    assert_eq!(app.editor.profile, before);
+    assert!(app.canvas_rect.is_none());
+    assert!(!app.editing);
     app.runtime.shutdown().unwrap();
 }

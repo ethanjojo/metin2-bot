@@ -15,6 +15,34 @@ fn same_template(a: &Option<metin_platform::Frame>, b: &Option<metin_platform::F
     }
 }
 impl MetinApp {
+    pub(super) fn update_frame_texture(
+        &mut self,
+        ctx: &egui::Context,
+        frame: &metin_platform::Frame,
+    ) {
+        if self
+            .texture_source
+            .as_ref()
+            .is_none_or(|previous| !Arc::ptr_eq(&previous.bgr, &frame.bgr))
+        {
+            let rgb = frame
+                .bgr
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .flat_map(|p| [p[2], p[1], p[0]])
+                .collect::<Vec<_>>();
+            let image =
+                egui::ColorImage::from_rgb([frame.width as usize, frame.height as usize], &rgb);
+            if let Some(texture) = &mut self.texture {
+                texture.set(image, egui::TextureOptions::LINEAR);
+            } else {
+                self.texture =
+                    Some(ctx.load_texture("game-frame", image, egui::TextureOptions::LINEAR));
+            }
+            self.texture_source = Some(frame.clone());
+        }
+    }
     pub(super) fn preview(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
             if ui
@@ -28,8 +56,9 @@ impl MetinApp {
             {
                 self.calibration_controls = !self.calibration_controls;
             }
-            ui.checkbox(&mut self.show_detections, "Detections");
-            ui.checkbox(&mut self.live, "Live preview");
+            ui.checkbox(&mut self.show_detections, "Detections").on_hover_text("Show detected Metin candidates on this image.");
+            if ui.checkbox(&mut self.live, "Live preview").on_hover_text("Show only the selected game window. Live frames cannot be edited; take a Snapshot first.").changed() && self.live {self.editing=false;self.gesture=None;}
+
             if widgets::button(
                 ui,
                 widgets::Icon::Target,
@@ -87,19 +116,45 @@ impl MetinApp {
                 self.redo_profile();
             }
         });
-        let instruction = match self.mode {
-            EditMode::Color => "Pick color: click a Metin pixel. Wheel: zoom · Middle drag: pan.",
-            EditMode::BuffArea => {
-                "Buff detection area: drag a rectangle around active buff icons. Escape cancels."
-            }
-            EditMode::BuffIcon { inactive: true, .. } => {
-                "Inactive icon: drag around the icon in its inactive state. Escape cancels."
-            }
-            EditMode::BuffIcon {
-                inactive: false, ..
-            } => "Active icon: drag around the icon in its active state. Escape cancels.",
-            _ => {
-                "Drag to draw or move; use edge handles to resize. Escape cancels · Wheel zooms · Middle drag pans."
+        if self.editing {
+            ui.horizontal_wrapped(|ui| {
+                widgets::badge(
+                    ui,
+                    &format!("Editing: {}", tool_name(self.mode)),
+                    widgets::BLUE,
+                );
+                if ui
+                    .button("Done editing")
+                    .on_hover_text("Turn off this tool. Completed edits remain in the profile.")
+                    .clicked()
+                {
+                    self.editing = false;
+                    self.gesture = None;
+                }
+            });
+        }
+        let instruction = if !self.editing {
+            "Select a tool in the checklist to edit. Wheel zooms; middle drag pans."
+        } else {
+            match self.mode {
+                EditMode::Color => {
+                    "Pick color: click a Metin pixel. Wheel: zoom · Middle drag: pan."
+                }
+                EditMode::Mask(None) => {
+                    "Draw excluded area: drag a rectangle over chat, minimap or false detections. Escape cancels."
+                }
+                EditMode::BuffArea => {
+                    "Buff detection area: drag a rectangle around active buff icons. Escape cancels."
+                }
+                EditMode::BuffIcon { inactive: true, .. } => {
+                    "Inactive icon: drag around the icon in its inactive state. Escape cancels."
+                }
+                EditMode::BuffIcon {
+                    inactive: false, ..
+                } => "Active icon: drag around the icon in its active state. Escape cancels.",
+                _ => {
+                    "Drag to draw or move; use edge handles to resize. Escape cancels · Wheel zooms · Middle drag pans."
+                }
             }
         };
         ui.add(egui::Label::new(egui::RichText::new(instruction).small()).wrap());
@@ -109,10 +164,10 @@ impl MetinApp {
             None
         };
         let frozen = !self.live && self.editor.frozen.is_some();
-        let frame = if frozen {
-            self.editor.frozen.clone()
-        } else {
+        let frame = if self.live {
             current
+        } else {
+            self.editor.frozen.clone()
         };
         let Some(frame) = frame else {
             ui.add_space(32.);
@@ -196,31 +251,7 @@ impl MetinApp {
         if !frozen {
             ui.label("Live preview sends no input. Take a Snapshot before editing.");
         }
-        if self
-            .texture_source
-            .as_ref()
-            .is_none_or(|previous| !Arc::ptr_eq(&previous.bgr, &frame.bgr))
-        {
-            let rgb = frame
-                .bgr
-                .as_chunks::<3>()
-                .0
-                .iter()
-                .flat_map(|p| [p[2], p[1], p[0]])
-                .collect::<Vec<_>>();
-            let image =
-                egui::ColorImage::from_rgb([frame.width as usize, frame.height as usize], &rgb);
-            if let Some(texture) = &mut self.texture {
-                texture.set(image, egui::TextureOptions::LINEAR);
-            } else {
-                self.texture = Some(ui.ctx().load_texture(
-                    "game-frame",
-                    image,
-                    egui::TextureOptions::LINEAR,
-                ));
-            }
-            self.texture_source = Some(frame.clone());
-        }
+        self.update_frame_texture(ui.ctx(), &frame);
         let (canvas, response) = ui.allocate_exact_size(
             ui.available_size().max(egui::vec2(1., 1.)),
             egui::Sense::click_and_drag(),
@@ -252,12 +283,27 @@ impl MetinApp {
                 f64::from(p.y - canvas.top()),
             ]
         });
-        if response.hovered() {
-            let wheel = ui.input(|i| i.smooth_scroll_delta.y);
+        if response.hovered() && ui.ctx().current_pass_index() == 0 {
+            let wheel = ui.input(|i| {
+                i.events
+                    .iter()
+                    .filter_map(|event| match event {
+                        egui::Event::MouseWheel { unit, delta, .. } => Some(
+                            delta.y
+                                * match unit {
+                                    egui::MouseWheelUnit::Point => 1.,
+                                    egui::MouseWheelUnit::Line => 16.,
+                                    egui::MouseWheelUnit::Page => canvas.height(),
+                                },
+                        ),
+                        _ => None,
+                    })
+                    .sum::<f32>()
+            });
             if wheel != 0. {
                 self.viewport.zoom_at(
                     local.unwrap_or([0., 0.]),
-                    if wheel > 0. { 1.1 } else { 1. / 1.1 },
+                    1.25_f64.powf(f64::from(wheel) / 50.),
                 );
             }
         }
@@ -316,7 +362,7 @@ impl MetinApp {
             areas.push((self.mode, r));
         }
         for (mode, r) in areas {
-            let active = mode == self.mode;
+            let active = self.editing && mode == self.mode;
             let color = if active {
                 egui::Color32::from_rgb(93, 161, 255)
             } else if self.hover_mode == Some(mode) {
@@ -396,7 +442,30 @@ impl MetinApp {
                 );
             }
         }
-        if frozen && self.binding.is_none() {
+        if response.dragged_by(egui::PointerButton::Middle) {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+        } else if let Some(gesture) = self.gesture {
+            ui.ctx().set_cursor_icon(gesture_cursor(gesture));
+        } else if response.hovered()
+            && self.editing
+            && let Some(start) = local.and_then(|p| self.viewport.to_image(p, false))
+        {
+            let cursor = if !frozen {
+                egui::CursorIcon::NotAllowed
+            } else if self.mode == EditMode::Color {
+                egui::CursorIcon::Crosshair
+            } else {
+                gesture_cursor(gesture_at(
+                    start,
+                    pointer.unwrap(),
+                    self.editor
+                        .region(self.mode)
+                        .map(|r| (r, screen_rect(r, &self.viewport))),
+                ))
+            };
+            ui.ctx().set_cursor_icon(cursor);
+        }
+        if self.editing && frozen && self.binding.is_none() {
             if self.mode == EditMode::Color
                 && response.clicked()
                 && let Some(point) = local.and_then(|p| self.viewport.to_image(p, false))
@@ -417,35 +486,13 @@ impl MetinApp {
                     if let Some(start) = self.viewport.to_image(start_local, false) {
                         let position =
                             canvas.min + egui::vec2(start_local[0] as f32, start_local[1] as f32);
-                        self.gesture =
-                            Some(if let Some(original) = self.editor.region(self.mode) {
-                                let rect = screen_rect(original, &self.viewport);
-                                let handle = handles(rect)
-                                    .iter()
-                                    .position(|p| p.distance(position) <= 9.);
-                                if let Some(i) = handle {
-                                    Gesture::Resize {
-                                        start,
-                                        original,
-                                        handle: [
-                                            [-1, -1],
-                                            [0, -1],
-                                            [1, -1],
-                                            [1, 0],
-                                            [1, 1],
-                                            [0, 1],
-                                            [-1, 1],
-                                            [-1, 0],
-                                        ][i],
-                                    }
-                                } else if rect.contains(position) {
-                                    Gesture::Move { start, original }
-                                } else {
-                                    Gesture::Create { start }
-                                }
-                            } else {
-                                Gesture::Create { start }
-                            });
+                        self.gesture = Some(gesture_at(
+                            start,
+                            position,
+                            self.editor
+                                .region(self.mode)
+                                .map(|r| (r, screen_rect(r, &self.viewport))),
+                        ));
                     }
                 }
             }
@@ -485,4 +532,59 @@ fn handles(r: egui::Rect) -> [egui::Pos2; 8] {
         r.left_bottom(),
         r.left_center(),
     ]
+}
+
+fn tool_name(mode: EditMode) -> &'static str {
+    match mode {
+        EditMode::World => "Search area",
+        EditMode::Color => "Metin color - click a pixel",
+        EditMode::Panel => "Target panel",
+        EditMode::Template => "Reference crop",
+        EditMode::BuffArea => "Buff detection area",
+        EditMode::BuffIcon { inactive: true, .. } => "Inactive icon",
+        EditMode::BuffIcon { .. } => "Active icon",
+        EditMode::Mask(None) => "Draw excluded area",
+        EditMode::Mask(Some(_)) => "Excluded area",
+    }
+}
+fn gesture_at(
+    start: [u32; 2],
+    position: egui::Pos2,
+    original: Option<(Region, egui::Rect)>,
+) -> Gesture {
+    if let Some((original, rect)) = original {
+        if let Some(index) = handles(rect)
+            .iter()
+            .position(|p| p.distance(position) <= 9.)
+        {
+            return Gesture::Resize {
+                start,
+                original,
+                handle: [
+                    [-1, -1],
+                    [0, -1],
+                    [1, -1],
+                    [1, 0],
+                    [1, 1],
+                    [0, 1],
+                    [-1, 1],
+                    [-1, 0],
+                ][index],
+            };
+        }
+        if rect.contains(position) {
+            return Gesture::Move { start, original };
+        }
+    }
+    Gesture::Create { start }
+}
+fn gesture_cursor(gesture: Gesture) -> egui::CursorIcon {
+    match gesture {
+        Gesture::Create { .. } => egui::CursorIcon::Crosshair,
+        Gesture::Move { .. } => egui::CursorIcon::Move,
+        Gesture::Resize { handle: [0, _], .. } => egui::CursorIcon::ResizeVertical,
+        Gesture::Resize { handle: [_, 0], .. } => egui::CursorIcon::ResizeHorizontal,
+        Gesture::Resize { handle, .. } if handle[0] == handle[1] => egui::CursorIcon::ResizeNwSe,
+        Gesture::Resize { .. } => egui::CursorIcon::ResizeNeSw,
+    }
 }

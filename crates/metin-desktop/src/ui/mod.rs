@@ -42,6 +42,7 @@ pub struct MetinApp {
     revision: u64,
     tab: Tab,
     mode: EditMode,
+    editing: bool,
     calibration_controls: bool,
     selected_skill: usize,
     return_to_buffs: bool,
@@ -110,6 +111,7 @@ impl MetinApp {
             revision: 0,
             tab: Tab::Run,
             mode: EditMode::World,
+            editing: false,
             calibration_controls: true,
             selected_skill: 0,
             return_to_buffs: false,
@@ -365,6 +367,9 @@ impl MetinApp {
                 )
             });
             if input.0 {
+                if self.gesture.is_none() {
+                    self.editing = false;
+                }
                 self.gesture = None;
             }
             if input.1 && self.tab == Tab::Calibration && !ui.ctx().egui_wants_keyboard_input() {

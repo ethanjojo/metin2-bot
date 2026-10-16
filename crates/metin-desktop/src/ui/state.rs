@@ -67,6 +67,7 @@ impl MetinApp {
         self.return_to_buffs = false;
         self.snapshot_requested = None;
         self.mode = EditMode::World;
+        self.editing = false;
         self.calibration_controls = true;
         self.viewport.reset();
         self.detection_cache = None;
@@ -149,6 +150,7 @@ impl MetinApp {
     pub(super) fn navigate(&mut self, tab: Tab) {
         if self.tab != tab {
             self.gesture = None;
+            self.editing = false;
             self.binding = None;
             self.hover_mode = None;
             self.tab = tab;
@@ -162,6 +164,7 @@ impl MetinApp {
         self.calibration_controls = true;
         self.return_to_buffs = matches!(mode, EditMode::BuffArea | EditMode::BuffIcon { .. });
         self.mode = mode;
+        self.editing = true;
         self.tab = Tab::Calibration;
     }
     pub(super) fn reorder_skill(&mut self, a: usize, b: usize) {
@@ -203,6 +206,7 @@ impl MetinApp {
         self.gesture = None;
         if matches!(self.mode, EditMode::BuffIcon { .. }) {
             self.mode = EditMode::World;
+            self.editing = false;
             self.return_to_buffs = false;
         }
     }

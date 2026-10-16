@@ -104,7 +104,7 @@ Každý úkol: nejprve přidat uvedené behavioral testy a vidět očekávané s
 
 - [ ] Red testy skutečných transport payloadů na fake Win32 API: správný WM_KEYDOWN/UP vs WM_SYSKEYDOWN/UP, scan/context/release bits, mouse client coords, key-before-modifier release, queued event není client acknowledgement.
 - [ ] Red `reused_handle_never_receives_release`, `focus_loss_releases_original_target`, `manual_mouse_movement_aborts`, `obstructed_point_aborts`, `dpi_epoch_change_aborts`, `permission_error_prevents_down`, `capture_timeout_exits_without_held_input`.
-- [ ] Implementovat Win32 enumeraci a identitu, per-monitor DPI, GDI capture stejné viditelné client oblasti, kontroly před/po capture a black frame odmítnutí. Zachovat dnešní transport, žádný automatický SendInput keyboard fallback.
+- [ ] Implementovat Win32 enumeraci a identitu, per-monitor DPI, HWND Windows Graphics Capture oříznutý na client oblast, kontroly před/po capture a black frame odmítnutí. Zachovat dnešní transport, žádný automatický SendInput keyboard fallback.
 - [ ] Zajistit event/message pump pro F7/F8, počáteční kontrolu fyzicky držených kláves, krátké cancellable waits, explicitní cleanup a chyby při release. Snímek nesmí blokovat zpracování stop tokenu neomezeně.
 - [ ] Spustit `cargo test -p metin-platform --test contract --test windows_input` a `cargo test -p metin-desktop --test input_executor` na Windows; lokální testovací okno zaznamená přijaté message pořadí. Žádné vstupy do skutečné hry v unit tests. Commit `feat: preserve guarded Windows capture and input`.
 

@@ -36,22 +36,22 @@ impl MetinApp {
                             (4,EditMode::Template,"Reference crop","Draw a small, distinctive fixed part inside the target panel. Avoid changing HP or text.")
                         ] {
                             let ready=self.calibration_ready(mode);
-                            let text=format!("{number}. {label}    {}",if ready{"Ready"}else{"Needed"});
-                            let response=ui.selectable_label(self.mode==mode,text).on_hover_text(hint);
+                            let response=ui.horizontal(|ui| {widgets::readiness_mark(ui,ready); ui.selectable_label(self.editing && self.mode==mode,format!("{number}. {label}"))}).inner.on_hover_text(hint);
                             if response.hovered(){self.hover_mode=Some(mode);}
                             if response.clicked(){self.edit_area(mode);}
                             if self.mode==mode {ui.small(hint);}
+                            if mode==EditMode::Color {self.color_control(ui);}
                         }
                         ui.separator();
                         ui.strong("Excluded areas");
                         if self.editor.profile.masks.is_empty(){ui.small("Optional: hide chat, minimap or other false detections.");}
                         for i in 0..self.editor.profile.masks.len() {
                             let mode=EditMode::Mask(Some(i));
-                            let response=ui.selectable_label(self.mode==mode,format!("Excluded area {}",i+1)).on_hover_text("Select this excluded rectangle to move, resize or delete it.");
+                            let response=ui.selectable_label(self.editing && self.mode==mode,format!("Excluded area {}",i+1)).on_hover_text("Select this excluded rectangle to move, resize or delete it.");
                             if response.hovered(){self.hover_mode=Some(mode);}
                             if response.clicked(){self.edit_area(mode);}
                         }
-                        if button(ui,Icon::Plus,"Excluded area",self.editor.profile.masks.len()<30,"Draw an area that target detection should ignore.").clicked(){self.edit_area(EditMode::Mask(None));}
+                        if button(ui,Icon::Plus,"Draw excluded area",self.editor.profile.masks.len()<30,"Draw an area that target detection should ignore.").clicked(){self.edit_area(EditMode::Mask(None));}
                     }
                     let can_delete=self.calibration_ready(self.mode);
                     if button(ui,Icon::Trash,"Delete selected",can_delete,if can_delete {"Delete the selected area, sampled color or icon. Undo restores the edit."} else {"Nothing is selected to delete. Select a captured area, sampled color or icon first."}).clicked(){self.delete_selected();}
@@ -63,6 +63,19 @@ impl MetinApp {
             });
             ui.separator();
             ui.allocate_ui_with_layout(egui::vec2(canvas_width,height),egui::Layout::top_down(egui::Align::Min),|ui| {ui.set_width(canvas_width); self.preview(ui);});
+        });
+    }
+    fn color_control(&mut self, ui: &mut egui::Ui) {
+        let old = self.editor.profile.color.as_ref().map(|c| c.hsv);
+        let hsv = old.unwrap_or([0, 200, 200]);
+        let mut picker = crate::ui_controls::sampled_hsv_to_srgb(hsv);
+        ui.horizontal_wrapped(|ui| {
+            let response=ui.color_edit_button_srgb(&mut picker).on_hover_text("View or adjust the Metin color. You can also select the color tool and sample a frozen pixel.");
+            if response.changed() {
+                let value=crate::ui_controls::sampled_srgb_to_hsv(picker);
+                if old!=Some(value) {self.runtime.stop();self.editor.profile.color.get_or_insert_with(Default::default).hsv=value;self.editor.record();}
+            }
+            ui.small(old.map_or("Color not set".into(),|v|format!("HSV {}, {}, {}",v[0],v[1],v[2])));
         });
     }
 }

@@ -1,5 +1,7 @@
 # Metin Bot
 
+The Rust/egui preview is under active verification: see [the latest UI/capture changes, tests and preview artifacts](docs/rust/ui-feedback-plan.md) and [platform support](docs/rust/platform-support.md). Its Windows capture requires Windows 10 2004 (build 19041) or newer. The Python installation guide below remains the released baseline until gameplay and installation acceptance is complete.
+
 A local Windows application that finds and destroys Metin stones one at a time in a selected game window. Detection uses color, size and stability across frames. The bot clicks one target, confirms its target panel, and selects the next target only after that panel has consistently disappeared. It includes server profiles, interactive calibration and automatic buffing.
 
 The UI and this guide are in English. Custom profile and skill names are preserved. Processing stays local: the bot does not read game memory or upload screenshots or profiles.

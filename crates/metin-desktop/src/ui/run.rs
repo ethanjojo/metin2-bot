@@ -13,15 +13,15 @@ impl MetinApp {
                 if ui.available_width() >= 1000. {
                     ui.columns(2, |cols| {
                         self.run_activity(&mut cols[0]);
-                        self.run_connection(&mut cols[0]);
-                        self.run_session(&mut cols[1]);
-                        self.run_schedule(&mut cols[1]);
+                        self.run_session(&mut cols[0]);
+                        self.run_schedule(&mut cols[0]);
+                        self.run_preview(&mut cols[1]);
                     });
                 } else {
                     self.run_activity(ui);
+                    self.run_preview(ui);
                     self.run_session(ui);
                     self.run_schedule(ui);
-                    self.run_connection(ui);
                 }
             });
     }
@@ -145,10 +145,103 @@ impl MetinApp {
             }
         });
     }
-    fn run_connection(&mut self, ui: &mut egui::Ui) {
-        section(ui, "Connected profile", |ui| {
-            ui.strong(&self.editor.profile.name);
-            self.window_picker(ui);
+    fn run_preview(&mut self, ui: &mut egui::Ui) {
+        section(ui, "Game preview", |ui| {
+            let live = self.snapshot.key == self.key()
+                && self.key().is_some()
+                && self.snapshot.frame.is_some();
+            let frame = if live {
+                self.snapshot.frame.clone()
+            } else {
+                self.editor.frozen.clone()
+            };
+            let Some(frame) = frame else {
+                ui.label("No game frame yet. Select a game window in Calibration to see its live view here.");
+                if button(
+                    ui,
+                    Icon::Camera,
+                    "Set up game view",
+                    true,
+                    "Open Calibration to select the game window and check capture.",
+                )
+                .clicked()
+                {
+                    self.navigate(Tab::Calibration);
+                }
+                return;
+            };
+            if live {
+                let stale = self.snapshot.captured_at.is_none_or(|t| {
+                    t.elapsed().as_secs_f64() > self.editor.profile.timing.sample_interval * 2. + 1.
+                });
+                widgets::badge(
+                    ui,
+                    if stale {
+                        "Waiting for a fresh game frame"
+                    } else {
+                        "Live selected-window view"
+                    },
+                    if stale {
+                        widgets::AMBER
+                    } else {
+                        widgets::GREEN
+                    },
+                );
+            } else {
+                ui.small("Calibration snapshot - not live");
+            }
+            ui.small("Read-only view. Amber: current target. Green: next eligible target. Blue: other detections.");
+            if self.editor.dirty() {
+                ui.small("The live overlay uses the applied profile. Save to apply your edits.");
+            }
+            self.update_frame_texture(ui.ctx(), &frame);
+            let width = ui.available_width();
+            let height = (width * frame.height as f32 / frame.width as f32).clamp(180., 420.);
+            let (canvas, _) =
+                ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+            let scale =
+                (canvas.width() / frame.width as f32).min(canvas.height() / frame.height as f32);
+            let size = egui::vec2(frame.width as f32 * scale, frame.height as f32 * scale);
+            let image = egui::Rect::from_center_size(canvas.center(), size);
+            let painter = ui.painter_at(canvas);
+            painter.rect_filled(canvas, 4., ui.visuals().extreme_bg_color);
+            if let Some(texture) = &self.texture {
+                painter.image(
+                    texture.id(),
+                    image,
+                    egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1., 1.)),
+                    egui::Color32::WHITE,
+                );
+            }
+            if live {
+                for candidate in &self.snapshot.candidates {
+                    let current = self.snapshot.selected_target == Some(candidate.point);
+                    let next = self.snapshot.next_target == Some(candidate.point);
+                    let color = if current {
+                        widgets::AMBER
+                    } else if next {
+                        widgets::GREEN
+                    } else {
+                        widgets::BLUE
+                    };
+                    let rect = egui::Rect::from_min_size(
+                        image.min + egui::vec2(candidate.x as f32, candidate.y as f32) * scale,
+                        egui::vec2(candidate.width as f32, candidate.height as f32) * scale,
+                    );
+                    painter.rect_stroke(
+                        rect,
+                        0.,
+                        egui::Stroke::new(if current || next { 3. } else { 1.5 }, color),
+                        egui::StrokeKind::Inside,
+                    );
+                }
+                // A selected target may no longer pass color detection during
+                // combat. Its actual acquisition point is still meaningful.
+                if let Some(point) = self.snapshot.selected_target {
+                    let p = image.min + egui::vec2(point[0] as f32, point[1] as f32) * scale;
+                    painter.circle_stroke(p, 7., egui::Stroke::new(2., widgets::AMBER));
+                }
+            }
         });
     }
 }

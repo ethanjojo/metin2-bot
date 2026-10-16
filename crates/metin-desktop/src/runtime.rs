@@ -54,6 +54,8 @@ pub struct RuntimeSnapshot {
     pub frame_id: u64,
     pub captured_at: Option<Instant>,
     pub candidates: Vec<Candidate>,
+    pub selected_target: Option<[u32; 2]>,
+    pub next_target: Option<[u32; 2]>,
     pub panel_score: f64,
     pub state: String,
     pub reason: String,
@@ -74,6 +76,8 @@ impl Default for RuntimeSnapshot {
             frame_id: 0,
             captured_at: None,
             candidates: vec![],
+            selected_target: None,
+            next_target: None,
             panel_score: 0.,
             state: "Stopped".into(),
             reason: "Select a profile and game window.".into(),
@@ -510,6 +514,8 @@ fn run(
                     tracing::info!(action_id=action.id, mounted=?a.controller.buffs.mounted, "Action completed");
                     a.tracker.reset();
                 }
+                snapshot.selected_target = a.controller.selected_target();
+                snapshot.next_target = a.controller.next_preview_target(&observation.candidates);
                 snapshot.frame = Some(captured.frame);
                 snapshot.frame_id = captured.id;
                 snapshot.captured_at = Some(captured.captured_at);
@@ -541,6 +547,13 @@ fn run(
             } else {
                 a.controller.reason.clone()
             };
+        }
+        if let Some(a) = &attached {
+            snapshot.selected_target = a.controller.selected_target();
+        }
+        if !snapshot.running {
+            snapshot.selected_target = None;
+            snapshot.next_target = None;
         }
         snapshot.arming = armed.is_some();
         snapshot.capabilities = backend.capabilities();

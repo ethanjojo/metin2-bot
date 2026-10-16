@@ -16,6 +16,7 @@ mod probe {
         UI::WindowsAndMessaging::*,
     };
     struct State {
+        cover: bool,
         events: Vec<serde_json::Value>,
     }
     fn wide(s: &str) -> Vec<u16> {
@@ -63,10 +64,18 @@ mod probe {
                         right: 140,
                         bottom: 140,
                     };
-                    let brush = CreateSolidBrush(220 | (170 << 8) | (30 << 16));
+                    let brush = CreateSolidBrush(if (*state).cover {
+                        220 | (20 << 8) | (60 << 16)
+                    } else {
+                        220 | (170 << 8) | (30 << 16)
+                    });
                     FillRect(dc, &square, brush);
                     DeleteObject(brush);
                     EndPaint(window, &paint);
+                    0
+                }
+                WM_TIMER if wparam == 2 => {
+                    InvalidateRect(window, std::ptr::null(), 0);
                     0
                 }
                 WM_TIMER | WM_CLOSE => {
@@ -83,7 +92,10 @@ mod probe {
     }
     fn fixture(title: &str, report: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
         enable_dpi();
-        let mut state = State { events: vec![] };
+        let mut state = State {
+            events: vec![],
+            cover: title.contains("OCCLUDER"),
+        };
         let class = wide("MetinBot.NativeVerification");
         let title = wide(title);
         unsafe {
@@ -117,6 +129,7 @@ mod probe {
             ShowWindow(window, SW_SHOW);
             SetForegroundWindow(window);
             SetTimer(window, 1, 60000, None);
+            SetTimer(window, 2, 100, None);
             println!("ready");
             let mut message: MSG = zeroed();
             while GetMessageW(&mut message, null_mut(), 0, 0) > 0 {
@@ -233,10 +246,131 @@ mod probe {
         )?;
         Ok(())
     }
+
+    fn capture_only(report: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
+        enable_dpi();
+        let exe = std::env::current_exe()?;
+        let title = format!("MetinBot capture fixture {}", std::process::id());
+        let mut child = Command::new(&exe)
+            .args(["--fixture", &title])
+            .arg(report.with_extension("fixture.json"))
+            .stdout(Stdio::piped())
+            .spawn()?;
+        let mut ready = String::new();
+        BufReader::new(child.stdout.take().ok_or("Missing child output")?).read_line(&mut ready)?;
+        let mut backend = backend();
+        let target = backend
+            .list_targets()?
+            .into_iter()
+            .find(|w| w.token.pid == child.id() && w.title == title)
+            .ok_or("Capture fixture not found")?;
+        backend.attach(target.token)?;
+        // A second, different-colored exact child window fully covers the first.
+        // No foreground activation, keyboard event or mouse input is required.
+        let cover_title = format!("MetinBot OCCLUDER {}", std::process::id());
+        let mut cover = Command::new(&exe)
+            .args(["--fixture", &cover_title])
+            .arg(report.with_extension("cover.json"))
+            .stdout(Stdio::piped())
+            .spawn()?;
+        ready.clear();
+        BufReader::new(cover.stdout.take().ok_or("Missing cover output")?).read_line(&mut ready)?;
+        let cover_target = backend
+            .list_targets()?
+            .into_iter()
+            .find(|w| w.token.pid == cover.id() && w.title == cover_title)
+            .ok_or("Occluder not found")?;
+        unsafe {
+            SetWindowPos(
+                cover_target.token.handle as HWND,
+                HWND_TOPMOST,
+                100,
+                100,
+                600,
+                420,
+                SWP_NOACTIVATE,
+            );
+        }
+        std::thread::sleep(Duration::from_millis(400));
+        let result = (|| -> std::result::Result<_, Box<dyn std::error::Error>> {
+            let state = backend.inspect()?;
+            // Establish the occlusion independently: client test point belongs
+            // to the cover window in screen space, not to the captured target.
+            let top = unsafe {
+                WindowFromPoint(POINT {
+                    x: state.left + 80,
+                    y: state.top + 80,
+                })
+            };
+            if top != cover_target.token.handle as HWND {
+                return Err("Fixture was not actually occluded".into());
+            }
+            let stop = StopToken::default();
+            let requested = Instant::now();
+            let frame = backend.capture(Instant::now() + Duration::from_secs(3), &stop, 0)?;
+            let offset = (80 * frame.frame.width + 80) as usize * 3;
+            let pixel = &frame.frame.bgr[offset..offset + 3];
+            if pixel != [30, 170, 220] {
+                return Err(format!(
+                    "Capture contains occluder or incorrect client offset: {pixel:?}"
+                )
+                .into());
+            }
+            if frame.captured_at < requested || frame.captured_at > Instant::now() {
+                return Err("Initial frame source timestamp is not fresh".into());
+            }
+            std::thread::sleep(Duration::from_millis(450));
+            let requested = Instant::now();
+            let second = backend.capture(Instant::now() + Duration::from_secs(3), &stop, 0)?;
+            if second.captured_at < requested {
+                return Err("Old queued frame was falsely stamped as fresh".into());
+            }
+            unsafe {
+                SetWindowPos(
+                    target.token.handle as HWND,
+                    std::ptr::null_mut(),
+                    100,
+                    100,
+                    700,
+                    460,
+                    SWP_NOACTIVATE | SWP_NOZORDER,
+                );
+            }
+            std::thread::sleep(Duration::from_millis(150));
+            let resized = backend.capture(Instant::now() + Duration::from_secs(3), &stop, 0)?;
+            let resized_offset = (80 * resized.frame.width + 80) as usize * 3;
+            if resized.frame.width == frame.frame.width
+                || resized.frame.bgr[resized_offset..resized_offset + 3] != [30, 170, 220]
+            {
+                return Err("Resized client capture differs from fixture".into());
+            }
+            let cancelled = StopToken::default();
+            cancelled.stop();
+            if backend
+                .capture(Instant::now() + Duration::from_secs(1), &cancelled, 0)
+                .is_ok()
+            {
+                return Err("Cancelled capture succeeded".into());
+            }
+            Ok(
+                serde_json::json!({"success":true,"occluded_window_pixels_match":true,"source_time_fresh_after_queue_delay":true,"resize_matches_client":true,"client_size":[frame.frame.width,frame.frame.height],"cancellation":true,"game_input":false}),
+            )
+        })();
+        unsafe {
+            PostMessageW(target.token.handle as HWND, WM_CLOSE, 0, 0);
+            PostMessageW(cover_target.token.handle as HWND, WM_CLOSE, 0, 0);
+        }
+        let _ = child.wait();
+        let _ = cover.wait();
+        std::fs::write(report, serde_json::to_vec_pretty(&result?)?)?;
+        Ok(())
+    }
     pub fn main() {
         let args: Vec<_> = std::env::args().collect();
         let result = if args.get(1).is_some_and(|a| a == "--fixture") {
             fixture(&args[2], Path::new(&args[3]))
+        } else if args.get(1).is_some_and(|a| a == "--capture-only") {
+            capture_only(Path::new(&args[2]))
         } else if let Some(path) = args.get(1) {
             run(Path::new(path))
         } else {
