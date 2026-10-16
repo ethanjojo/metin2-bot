@@ -44,3 +44,10 @@ Suggested normal-user review:
 ## Verification boundary
 
 No live target/attack/buff cycle was tested: the user reported the game server down. macOS, true OS multi-monitor/Retina/HiDPI interaction, assistive-technology acceptance and clean-machine installation/upgrade remain the migration gates in acceptance.md. Simulated scaling and hover input tests do not establish complete accessibility compliance. Release Windows elevation is not retried after the earlier user-canceled UAC launch; local packaging is not installed over the existing app.
+
+## Local review artifacts
+
+Source commit: `2d13424dc461e12a35b0d69b50d03e0224c2b91d`. Final optimized Windows release build and Inno Setup compilation passed. Both artifacts are in `build/rust-packages/eadeeca2-baab-416b-9b78-a103964125ee/`. The ZIP was extracted to an isolated directory and all 449 inventory files matched SHA-256. No installer was executed.
+
+- `MetinBot-0.1.0-rust-preview-windows-x64.zip` (33349425 bytes): SHA-256 `f7a919c6602ee378027f9356ba85b1a14362a86f7fb14abb7b1cde987724cf15`.
+- `MetinBotSetup-0.1.0-windows-x64.exe` (22487792 bytes): SHA-256 `b369b3dd39614b99033ac5ee2e6e072204e5f47c830ca0ba5ff31cf6a914c42a`.

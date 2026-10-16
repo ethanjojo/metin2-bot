@@ -23,4 +23,8 @@
 - [x] T1: Add failing readiness/navigation/reorder tests in ui/tests.rs; implement shared widgets/style/vector icons, derived readiness and tab transitions in ui/{widgets,state,shell}.rs and mod.rs. Run desktop library tests.
 - [x] T2: Replace fixed sidebar with task-specific Run/Calibration/Buffs/Settings layouts; preserve editor and runtime commands; remove obsolete forms and rendering paths. Tests cover crop readiness, skill selection/reorder/removal, typing/undo guards and all destinations. Run desktop tests.
 - [x] T3: Add meaningful pointer-driven navigation/tooltips/forms tests; render native screenshots of all destinations at 800x560 and 1280x820 in light/dark. Inspect and correct clipping, labels, contrast, missing icons and hierarchy; record scenarios and limits in docs/rust/ui-verification.md.
-- [ ] T4: Run full workspace tests, fmt and strict Clippy on Windows/Linux; build both. Review final patch and evidence, correct findings, leave concrete review scenarios for independent normal-user UI review. No push/release.
+- [x] T4: Run full workspace tests, fmt and strict Clippy on Windows/Linux; build both. Review final patch and evidence, correct findings, leave concrete review scenarios for independent normal-user UI review. No push/release.
+
+## Final evidence
+
+All four tasks completed. Windows and Linux each pass 78 tests (including 21 UI tests), formatting, strict Clippy and native desktop builds. Twenty Windows and four Linux screenshots were inspected. Three independent review findings were repaired and covered by regression tests; follow-up review found no remaining material issue. See docs/rust/ui-verification.md for limitations and review scenarios.
