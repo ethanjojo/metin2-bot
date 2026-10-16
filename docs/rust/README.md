@@ -27,7 +27,7 @@ Package with `tools/package-rust-windows.ps1 -CrtDirectory <VS redistributable C
 
 `tools/prepare-rust-native.sh` builds pinned OpenCV source locally. Install the native C++/Clang/CMake/pkg-config and GUI dependencies listed in `.github/workflows/rust-ci.yml`; export `PKG_CONFIG_PATH` to the resulting OpenCV `lib/pkgconfig`. On macOS also set `LIBCLANG_PATH` to LLVM's `lib` directory. Build and test with the same Cargo commands.
 
-CI has a native Windows/Linux/macOS matrix. Creating the workflow is not proof that it passed: no remote execution is claimed yet. Linux/macOS currently expose profile editing and fixture-based vision; their automation capability report explicitly disables Start because capture/input backends have not passed native-host acceptance. T10–T12 cover X11, macOS and conditional Wayland implementations.
+CI has a native Windows/Linux/macOS matrix. Creating the workflow is not proof that it passed: no remote execution is claimed yet. Linux release build, 61 tests, fmt, strict Clippy and an actual editor window have been verified locally under Ubuntu 24.04 WSL2/WSLg (software Vulkan llvmpipe); macOS remains unverified. Linux/macOS currently expose profile editing and fixture-based vision; their automation capability report explicitly disables Start because capture/input backends have not passed native-host acceptance. T10–T12 cover X11, macOS and conditional Wayland implementations.
 
 ## Regression evidence
 

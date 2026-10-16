@@ -1,6 +1,9 @@
 name: Rust migration verification
 on:
   workflow_dispatch:
+  push:
+    branches: ['codex/rust-egui-migration']
+    paths: ['crates/**', 'Cargo.*', 'rust-toolchain.toml', '.gitattributes', 'tools/*rust*', 'tests/parity/**', '.github/workflows/rust-ci.yml']
   pull_request:
     paths: ['crates/**', 'Cargo.*', 'rust-toolchain.toml', '.gitattributes', 'tools/*rust*', 'tests/parity/**', '.github/workflows/rust-ci.yml']
 permissions:
