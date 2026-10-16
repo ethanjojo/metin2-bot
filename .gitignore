@@ -8,9 +8,8 @@ __pycache__/
 /config.queue-backup.json
 # Atomic JSON writes may remain after an interrupted process.
 /*.json.tmp
-# Keep diagnostic source scripts; ignore local screenshots, logs and fixture data.
-diagnostics/*
-!diagnostics/*.py
+# Local diagnostic output; reusable checks belong under tools/ or tests/.
+/diagnostics/
 *.log
 
 # Build/package outputs and development tooling.
@@ -30,3 +29,7 @@ htmlcov/
 !.env.example
 Thumbs.db
 Desktop.ini
+.DS_Store
+._*
+*.dSYM/
+/tests/tooling/tmp*/

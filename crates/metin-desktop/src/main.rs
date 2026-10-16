@@ -71,6 +71,7 @@ fn startup(cli: Cli) -> Result<(), String> {
     tracing::info!(build=%metin_desktop::build_info(),"Starting MetinBot");
     let viewport = eframe::egui::ViewportBuilder::default()
         .with_title("MetinBot")
+        .with_app_id(metin_desktop::APP_ID)
         .with_inner_size([1280., 820.])
         .with_min_inner_size([800., 560.]);
     #[cfg(feature = "ui-smoke")]
@@ -95,6 +96,8 @@ fn startup(cli: Cli) -> Result<(), String> {
                     app.load_fixture(path).map_err(std::io::Error::other)?;
                 }
                 if let Some(path) = cli.ui_screenshot {
+                    app.prepare_capture_fixture(cli.ui_buff_capture, cli.ui_sizes)
+                        .map_err(std::io::Error::other)?;
                     if let Some(case) = cli.ui_window_picker {
                         app.set_window_picker_fixture(case);
                     }

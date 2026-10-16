@@ -1,34 +1,25 @@
-# Acceptance evidence and remaining gates
+# Current acceptance status
 
-Current window-picker behavior and preview evidence are in [window-selection.md](window-selection.md). The Settings process filter described by older UI reports has been removed.
+Rust is the only current application/build/release path following the approved prerelease cleanup. Sanitized parity fixtures and the legacy user-data importer remain; the historical Python product is recoverable from Git at 5af7ea98536f9884969f38b7eb9b1077c5910a49.
 
-Implementation exists for the common application and Windows backend. This is not a declaration that M1 or M2–M4 is complete. The production Python entrypoint remains until the approved cutover gate passes. Source reference: `54ac1242c754d4e6932cdfb6c37153268771faba`.
+The current checklist and verification results are maintained in [release readiness](../release-readiness.md). Do not use historical artifact hashes or test counts in earlier reports as acceptance for a new release.
 
-| Parity | Current evidence | Remaining acceptance |
-| --- | --- | --- |
-| P01, P26, P27 | Typed schema, 327 differential boundaries, Windows/Linux profile/store/import tests, strict assets/selection, legacy recovery, first-save atomicity, read-only validation before writes | Full source-test mapping; native macOS storage and first-run dialogs |
-| P02 | Exact HWND/PID/creation identity; own-child target enumerated and attached | Multi-client selection and real-client lifecycle |
-| P03, P12–P15 | Pure editor/history/viewport tests; actual egui drag plus Ctrl+Z/Y; inspected both-theme GPU screenshots | All native resize/delete/cancel/pan flows, small-window and HiDPI screenshots |
-| P04–P06, P20–P21 | Reference image calls, candidate tracker and 84 buff observations pass on Windows/Linux; panel tolerance 1e-5 | Repeat native macOS/OpenCV comparison |
-| P07, P19, P22, P24–P25 | 648 controller replay events; direct buff/controller/session and worker tests | Real-client complete target–buff–mount cycle; exhaustive worker timing acceptance |
-| P08–P11 | Guarded executor tests, atomic Stop/full-queue regression, payload tests and actual native child capture/keyboard/mouse order | Real-client F7/F8, focus/obstruction/manual input, DPI and held-input shutdown acceptance |
-| P16–P18, P23 | Shared numeric rules, keybind tests, both-theme/all-tab egui render tests, acknowledged mount persistence regression | Exhaustive native keyboard focus/Czech layout and buff form interactions |
-| P28, P31 | CLI combination tests, real Windows/Linux debug executable self-test, packaged Windows release self-test under UAC, local logs, isolated rendered fixtures | Permissions diagnostics on clean host; native macOS executable |
-| P29 | Release manifest, access checks, shared AppId/installer compilation; dependency inspection found and bundled CONCRT140 | UAC, install/upgrade/uninstall on isolated clean Windows, original data preserved |
-| P30 | Existing tag/ref/publish safeguards remain in the production Python pipeline; preview ZIP/installer hashes generated | Rust production pipeline conversion after gates; remote CI/tag/download/hash verification only on release instruction |
+## Verified implementation evidence
 
-Local Windows and Linux whole-workspace verification passed: 61 Rust tests each, `cargo fmt --all -- --check`, and strict Clippy with all targets/features. Release builds passed on both. The final Windows release build uses source commit `f7e0d3f31db8dd0258dc630a273532354fffe778`. Additional regressions cover F8 priority/pending Start cancellation, cleanup retry, template/PNG transaction failure, read-only import/startup validation, UUID selection, Unix symlinks, history and independent icon crops. Small 800×560 native buff/settings screenshots were inspected; 100–200% simulated scaling is covered headlessly. True OS HiDPI/multi-monitor acceptance remains separate. Complete logs are kept in `build/rust-migration` and `build/rust-linux`; golden replay counts do not mean every one of the 256 original tests has been ported. `tests/parity/manifest.json` retains those IDs and planned replacements without silently declaring them passed.
+- Windows/Linux typed profiles, validation, storage/import, UI interactions and worker/controller regression tests.
+- Immutable differential fixtures: 648 controller events, 327 schema boundary cases and 84 buff observations. These case counts are not separate Cargo test counts.
+- Windows child-process capture/input probes, foreground/identity/cancellation checks and both-theme native GPU UI screenshots.
+- Native Linux X11 icon pixel readback, actual app WM_CLASS, Wayland app_id protocol and rendered editor screenshots.
+- AppKit icon module compilation for Intel/Apple Silicon; full macOS execution remains unverified.
 
-The user-assisted native probe passed: 584×381 client capture matched rendered pixels, then received Ctrl down, G down, G up, Ctrl up, left-button down and up. It used its own exact child PID/title and closed it. This is transport evidence, not game reaction evidence.
+## Required before stable
 
-The user confirmed UAC and the packaged release self-test passed from an extracted ZIP with development directories removed from PATH: storage, vision and both headless themes passed, exit 0. All 449 extracted files matched the package inventory. The package includes the four native CRT DLLs, OpenCV and dependency notices including embedded font licenses. This does not prove a clean-machine installation.
+- Real-client target selection/attack, panel loss, buff/mount cycle, focus/manual-input/geometry cancellation and F7/F8 acceptance.
+- Hosted exact-commit installation, upgrade, dependency isolation, executable self-test, uninstall and retained-data checks.
+- Final clean-commit package identity, PE resources, every inventory hash and downloaded-release checksums.
 
-Verified preview staging directory: `build/rust-packages/84711dc3-cb3d-47b3-b382-33916c862e62`. ZIP SHA256: `435f2d5374a60397f75d31a9b600cfd5f436cf83ae796fcb8c2e5a44f6d2bbc0`; installer SHA256: `d9a0dc43f4c5294fcc2cd2532cb9a3d43c38279b3d53ff1cb6b66429e82bcffa`. Build identity explicitly records the baseline commit and dirty migration worktree; no clean release commit/tag is claimed for this preview.
+The stable-release policy is blocked in packaging/release-policy.json. The new hosted workflow implements the non-game checks; source/configuration is not a claim that a remote run passed. A local prerelease may be prepared while game acceptance is pending.
 
-The newer preview was built from `f7e0d3f31db8dd0258dc630a273532354fffe778` in `build/rust-packages/a4b820e0-80f3-4199-8847-178f7a0cd1a9`: ZIP 33,295,988 bytes, SHA256 `3d382eb93d9741ebcc87f9e46547823900cc700a2e5a2f70b0b33cb1a0f3c4c4`; installer 22,454,849 bytes, SHA256 `b7731c6da34ba5811f472af196bb5489bff0095ae2247160c261a3a164366384`. All 449 extracted inventory entries match. Its repeated UAC launch returned "The operation was canceled by the user" before the EXE started. No self-test report was produced; this is an unverified repeat, not an application test failure. Do not transfer the previous preview's self-test result to this artifact or retry elevation without renewed approval.
+## Separate platform work
 
-The Linux release executable also passed its real self-test: `build/rust-linux/self-test-release.json` reports storage, vision and both headless themes successful, with no game-input/GPU-window claim. The binary is 26,475,304 bytes, SHA256 `6317d1f3ec6ee397e4e8fec5aa940b904c345a7f938ba69fe00ed3c23b8d632e`. Build metadata identifies `32923264a1b40c1c8886820654487d4d32d43717` and explicitly records a dirty shared Windows checkout as seen by WSL Git; this is not a tagged clean release. `release-libraries.log` contains no unresolved libraries with the explicit isolated OpenCV/Clang runtime environment. This is a verified native build, not a self-contained Linux distribution package. The current debug GUI screenshot `gui-native-final.png` was inspected at 800×560.
-
-Live Windows client acceptance was opened with the user's consent, using a separate temporary copy of existing profiles. The user then reported that the Metin server was down and explicitly requested continuation without the live test. It remains unverified; no successful or failed gameplay run is invented. `build/rust-migration/game-run.log` contains startup/renderer evidence and no action events. Next actions: client cycle after service returns, isolated clean Windows upgrade/uninstall, native macOS CI/build/editor verification. Native Linux tests, fmt, strict Clippy, executable self-test and actual GUI rendering passed in Ubuntu 24.04 WSL2 with isolated Rust/Clang/OpenCV dependencies under `build/rust-linux`. The WSLg GUI used Vulkan llvmpipe software rendering; this is not hardware GPU performance evidence. No Linux/macOS gameplay backend can be called supported until its separate T10/T11 gate is met. Wayland remains conditional on provable required guards.
-
-The subsequent complete desktop UI redesign is tracked separately in [ui-verification.md](ui-verification.md). The eight user-feedback fixes are in [ui-feedback-plan.md](ui-feedback-plan.md), with [independent review](ui-feedback-review.md). The newest five calibration refinements and current test/package evidence are in [ui-calibration-refinement.md](ui-calibration-refinement.md). Earlier test counts and artifact hashes above identify earlier builds; do not transfer their acceptance to the current HWND capture implementation or UI.
+Linux/macOS automation backends and native macOS whole-application acceptance are not complete. They are not required to label the Windows build a prerelease, but must be completed before advertising working automation on those systems. See [platform support](platform-support.md).

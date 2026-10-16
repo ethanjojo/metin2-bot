@@ -22,13 +22,16 @@ class ReleaseTests(unittest.TestCase):
         data=release_metadata('1.2.3','refs/tags/v1.2.3',42,self.sha)
         self.assertEqual(data['version'],'1.2.3');self.assertEqual(data['prerelease'],'false')
         with self.assertRaises(ValueError):release_metadata('1.2.3','refs/tags/v1.2.4',42,self.sha)
-        with self.assertRaises(ValueError):release_metadata('1.2.3','refs/tags/v1.2.3-dev.4',42,self.sha)
+        prerelease=release_metadata('1.2.3','refs/tags/v1.2.3-rc.1',42,self.sha)
+        self.assertEqual(prerelease['version'],'1.2.3-rc.1')
+        self.assertEqual(prerelease['prerelease'],'true')
 
     def test_pr_build_has_separate_identity_and_invalid_values_rejected(self):
         self.assertIn('-test.',release_metadata('1.2.3','refs/pull/1/merge',42,self.sha)['version'])
         for base,run,sha in (('bad',1,self.sha),('1.2.3',65536,self.sha),('1.2.3',1,'bad\nvalue')):
             with self.assertRaises(ValueError):release_metadata(base,'refs/heads/main',run,sha)
 
+    @unittest.skipUnless(os.name == "nt", "Windows PowerShell publication harness")
     def test_publication_checks_remote_tags_and_resumes_only_safe_drafts(self):
         root=Path(__file__).resolve().parent.parent
         with tempfile.TemporaryDirectory(dir=root/'tests') as folder:
@@ -39,7 +42,10 @@ class ReleaseTests(unittest.TestCase):
             name='MetinBotSetup-0.1.0-dev.1-windows-x64.exe'
             (release/name).write_bytes(b'test installer')
             digest=hashlib.sha256(b'test installer').hexdigest()
-            (release/'SHA256SUMS.txt').write_text(f'{digest}  {name}\n')
+            zip_name = 'MetinBot-0.1.0-dev.1-windows-x64.zip'
+            (release/zip_name).write_bytes(b'test zip')
+            zip_digest = hashlib.sha256(b'test zip').hexdigest()
+            (release/'SHA256SUMS.txt').write_text(f'{digest}  {name}\n{zip_digest}  {zip_name}\n')
             for case in ('new','draft','published','mismatch'):
                 with self.subTest(case=case):
                     environment=dict(os.environ)

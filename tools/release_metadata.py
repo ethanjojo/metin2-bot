@@ -9,16 +9,19 @@ def release_metadata(base:str,ref:str,run_number:int,sha:str)->dict:
     if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)',base):
         raise ValueError('VERSION must be a stable X.Y.Z version.')
     if not 1<=run_number<=65535:raise ValueError('Run number exceeds the Windows build component range (1..65535).')
-    stable=ref.startswith('refs/tags/')
-    if stable:
+    tagged=ref.startswith('refs/tags/')
+    if tagged:
         tag=ref.removeprefix('refs/tags/')
-        if tag!='v'+base:raise ValueError('Stable release tag must match v<VERSION>.')
-        version=base
+        if not tag.startswith('v'):raise ValueError('Release tag must start with v.')
+        version=tag[1:]
+        parsed=BuildMetadata.parse(version,run_number,sha)
+        if '.'.join(map(str,parsed.windows_version[:3]))!=base:raise ValueError('Release tag must match VERSION core.')
     else:
         channel='dev' if ref=='refs/heads/main' else 'test'
         version=f'{base}-{channel}.{run_number}.{sha[:7]}'
         tag='v'+version
     build=BuildMetadata.parse(version,run_number,sha)
+    stable=tagged and not build.prerelease
     return {'version':build.version,'tag':tag,'prerelease':str(not stable).lower(),
             'artifact':build.artifact_name,'commit':build.commit_sha}
 

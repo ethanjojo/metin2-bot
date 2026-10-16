@@ -43,121 +43,144 @@ impl MetinApp {
             self.texture_source = Some(frame.clone());
         }
     }
-    pub(super) fn preview(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
-            if ui
-                .button(if self.calibration_controls {
-                    "Hide steps"
-                } else {
-                    "Show steps"
-                })
-                .on_hover_text("Expand the image canvas or restore the calibration checklist.")
-                .clicked()
-            {
-                self.calibration_controls = !self.calibration_controls;
-            }
-            ui.checkbox(&mut self.show_detections, "Detections").on_hover_text("Show detected Metin candidates on this image.");
-            if ui.checkbox(&mut self.live, "Live preview").on_hover_text("Show only the selected game window. Live frames cannot be edited; take a Snapshot first.").changed() && self.live {self.editing=false;self.gesture=None;}
-
-            if widgets::button(
-                ui,
-                widgets::Icon::Target,
-                "Fit",
-                true,
-                "Fit the complete frame in the available canvas and reset zoom.",
-            )
-            .clicked()
-            {
-                self.viewport.reset();
-            }
-            if widgets::button(
-                ui,
-                widgets::Icon::Minus,
-                "",
-                true,
-                "Zoom out. Mouse wheel also zooms around the pointer.",
-            )
-            .clicked()
-            {
-                self.viewport.zoom_at([0., 0.], 1. / 1.25);
-            }
-            if widgets::button(
-                ui,
-                widgets::Icon::Plus,
-                "",
-                true,
-                "Zoom in. Hold the middle mouse button to pan.",
-            )
-            .clicked()
-            {
-                self.viewport.zoom_at([0., 0.], 1.25);
-            }
-            ui.label(format!("{:.0}%", self.viewport.zoom * 100.));
-            if widgets::button(
-                ui,
-                widgets::Icon::Undo,
-                "",
-                self.editor.can_undo(),
-                "Undo the last profile or calibration edit. Ctrl+Z / Cmd+Z.",
-            )
-            .clicked()
-            {
-                self.undo_profile();
-            }
-            if widgets::button(
-                ui,
-                widgets::Icon::Redo,
-                "",
-                self.editor.can_redo(),
-                "Redo the last undone edit. Ctrl+Y or Ctrl+Shift+Z.",
-            )
-            .clicked()
-            {
-                self.redo_profile();
+    fn editing_status(&mut self, ui: &mut egui::Ui) {
+        ui.add_enabled_ui(self.editing, |ui| {
+            if ui.button("Done editing").on_hover_text("Turn off this tool. Completed edits remain in the profile. Escape also turns it off.").clicked() {
+                self.editing = false;
+                self.gesture = None;
             }
         });
-        let instruction = if !self.editing {
-            "Select a tool in the checklist to edit. Wheel zooms; middle drag pans."
-        } else {
-            match self.mode {
-                EditMode::Color => {
-                    "Pick color: click a Metin pixel. Wheel: zoom · Middle drag: pan."
-                }
-                EditMode::Mask(None) => {
-                    "Draw excluded area: drag a rectangle over chat, minimap or false detections. Escape cancels."
-                }
-                EditMode::BuffArea => {
-                    "Buff detection area: drag a rectangle around active buff icons. Escape cancels."
-                }
-                EditMode::BuffIcon { inactive: true, .. } => {
-                    "Inactive icon: drag around the icon in its inactive state. Escape cancels."
-                }
-                EditMode::BuffIcon {
-                    inactive: false, ..
-                } => "Active icon: drag around the icon in its active state. Escape cancels.",
-                _ => {
-                    "Drag to draw or move; use edge handles to resize. Escape cancels · Wheel zooms · Middle drag pans."
-                }
+        let instruction = match self.mode {
+            EditMode::Color => "Click a Metin pixel in the frozen image.",
+            EditMode::Mask(None) => "Drag a rectangle over chat, minimap or false detections.",
+            EditMode::BuffArea => "Drag around the area where active buff icons appear.",
+            EditMode::BuffIcon { inactive: true, .. } => {
+                "Show the inactive state in the game, take a fresh Snapshot, then drag around its icon."
             }
+            EditMode::BuffIcon {
+                inactive: false, ..
+            } => {
+                "Show the active state in the game, take a fresh Snapshot, then drag around its icon."
+            }
+            _ => "Drag to draw or move; use edge handles to resize.",
         };
-        // Reserve one unwrapped tool row in every state. Arming, changing or
-        // retiring a tool must not move the image under the user's pointer.
-        ui.allocate_ui_with_layout(
-            egui::vec2(ui.available_width(), 32.),
-            egui::Layout::left_to_right(egui::Align::Center),
-            |ui| {
-                ui.add_enabled_ui(self.editing, |ui| {
-                    if ui.button("Done editing").on_hover_text("Turn off this tool. Completed edits remain in the profile. Escape also turns it off.").clicked() {
-                        self.editing=false;
-                        self.gesture=None;
-                    }
-                });
-                crate::ui_controls::help(ui,instruction);
-                ui.add(egui::Label::new(egui::RichText::new(if self.editing {
-                    format!("Editing: {}",tool_name(self.mode))
-                } else {"Select an edit tool".into()}).color(if self.editing {widgets::BLUE} else {ui.visuals().weak_text_color()})).truncate());
-            },
+        crate::ui_controls::help(
+            ui,
+            &format!("{instruction} Escape cancels. Wheel zooms; middle drag pans."),
         );
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(if self.editing {
+                    format!("Editing: {}", tool_name(self.mode))
+                } else {
+                    "Select an edit tool".into()
+                })
+                .color(if self.editing {
+                    widgets::BLUE
+                } else {
+                    ui.visuals().weak_text_color()
+                }),
+            )
+            .truncate(),
+        );
+    }
+    fn preview_view_controls(&mut self, ui: &mut egui::Ui) {
+        // Emitted from right to left so the tool group stays flush to the edge.
+        if widgets::button(
+            ui,
+            widgets::Icon::Redo,
+            "",
+            self.editor.can_redo(),
+            "Redo the last undone edit. Ctrl+Y or Ctrl+Shift+Z.",
+        )
+        .clicked()
+        {
+            self.redo_profile();
+        }
+        if widgets::button(
+            ui,
+            widgets::Icon::Undo,
+            "",
+            self.editor.can_undo(),
+            "Undo the last profile or calibration edit. Ctrl+Z / Cmd+Z.",
+        )
+        .clicked()
+        {
+            self.undo_profile();
+        }
+        ui.label(format!("{:.0}%", self.viewport.zoom * 100.));
+        if widgets::button(
+            ui,
+            widgets::Icon::Plus,
+            "",
+            true,
+            "Zoom in. Hold the middle mouse button to pan.",
+        )
+        .clicked()
+        {
+            self.viewport.zoom_at([0., 0.], 1.25);
+        }
+        if widgets::button(
+            ui,
+            widgets::Icon::Minus,
+            "",
+            true,
+            "Zoom out. Mouse wheel also zooms around the pointer.",
+        )
+        .clicked()
+        {
+            self.viewport.zoom_at([0., 0.], 1. / 1.25);
+        }
+        if widgets::button(
+            ui,
+            widgets::Icon::Target,
+            "Fit",
+            true,
+            "Fit the complete frame in the available canvas and reset zoom.",
+        )
+        .clicked()
+        {
+            self.viewport.reset();
+        }
+    }
+    fn preview_overlays(&mut self, ui: &mut egui::Ui) {
+        if ui
+            .checkbox(&mut self.live, "Live preview")
+            .on_hover_text("Show only the selected game window. Take a Snapshot before editing.")
+            .changed()
+            && self.live
+        {
+            self.editing = false;
+            self.gesture = None;
+        }
+        ui.checkbox(&mut self.show_sizes, "Sizes (px)").on_hover_text("Show source-pixel dimensions above areas and visible detections. Independent of Detections.");
+        ui.checkbox(&mut self.show_detections, "Detections")
+            .on_hover_text("Show detected Metin candidates on this image.");
+    }
+    pub(super) fn preview(&mut self, ui: &mut egui::Ui) {
+        // Both layouts reserve stable space across idle, armed and live states.
+        let wide = ui.available_width() >= 850.;
+        ui.horizontal(|ui| {
+            let editing_width = (ui.available_width() - if wide { 620. } else { 280. }).max(180.);
+            ui.allocate_ui_with_layout(
+                egui::vec2(editing_width, 32.),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| self.editing_status(ui),
+            );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                self.preview_view_controls(ui);
+                if wide {
+                    self.preview_overlays(ui);
+                }
+            });
+        });
+        if !wide {
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), 32.),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| self.preview_overlays(ui),
+            );
+        }
         let current = if self.snapshot.key == self.key() {
             self.snapshot.frame.clone()
         } else {
@@ -411,7 +434,7 @@ impl MetinApp {
                     );
                 }
             }
-            if self.show_detections {
+            if self.show_sizes {
                 let [x1, y1, x2, y2] = r.pixels(frame.width, frame.height);
                 measurement_requests.push((
                     rect,
@@ -449,11 +472,13 @@ impl MetinApp {
                     egui::FontId::monospace(12.),
                     egui::Color32::GREEN,
                 );
-                measurement_requests.push((
-                    rect,
-                    format!("{} × {} px", c.width, c.height),
-                    egui::Color32::GREEN,
-                ));
+                if self.show_sizes {
+                    measurement_requests.push((
+                        rect,
+                        format!("{} × {} px", c.width, c.height),
+                        egui::Color32::GREEN,
+                    ));
+                }
             }
         }
         if response.dragged_by(egui::PointerButton::Middle) {
@@ -520,7 +545,7 @@ impl MetinApp {
                         egui::Stroke::new(2., egui::Color32::WHITE),
                         egui::StrokeKind::Inside,
                     );
-                    if self.show_detections {
+                    if self.show_sizes {
                         let [x1, y1, x2, y2] = region.pixels(frame.width, frame.height);
                         measurement_requests.push((
                             screen_rect(region, &self.viewport),

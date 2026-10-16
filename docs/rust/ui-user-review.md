@@ -1,3 +1,5 @@
+> Historical verification report. Use the repository README and docs/release-readiness.md for current installation/release status. Earlier commands, counts and package paths below describe their original snapshots.
+
 # Uživatelská kontrola Rust UI — 2026-10-16
 
 Kontrola našla sedm konkrétních problémů; všechny byly opraveny a při závěrečné kontrole nezůstal další potvrzený blokující nález. Opravy sjednocují klávesové a myší akce, zpřehledňují spuštění a zakázané ovládání a odstraňují dvě chyby kalibrace. Nešlo o ruční ovládání nativní aplikace: tento běh nemá dostupné nativní CUA. Interakční důkazy vznikly skutečnými událostmi egui `RawInput` nad aplikací; vizuální důkazy pocházejí z PNG skutečně vykreslené aplikace.

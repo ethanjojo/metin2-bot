@@ -1,3 +1,5 @@
+> Historical verification report. Use the repository README and docs/release-readiness.md for current installation/release status. Earlier commands, counts and package paths below describe their original snapshots.
+
 # Aktuální ověření — profily a interaktivní editor
 
 

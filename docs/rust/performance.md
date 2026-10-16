@@ -1,3 +1,5 @@
+> Historical verification report. Use the repository README and docs/release-readiness.md for current installation/release status. Earlier commands, counts and package paths below describe their original snapshots.
+
 # Fixture performance evidence
 
 Host: Microsoft Windows 10.0.26300, x64, AMD64 Family 25 Model 80 Stepping 0 (AuthenticAMD), 16 logical processors. CPU marketing name was not retrieved because CIM access is unavailable in the managed shell. Rust 1.99.0 release, OpenCV 4.13.0, bindings 0.101.1; Python 3.14.0, OpenCV 4.13.0, NumPy 2.3.5. Fixture images are 800×600.

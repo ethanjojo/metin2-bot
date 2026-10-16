@@ -25,6 +25,12 @@ function gh {
     $global:LASTEXITCODE=0
     if ($args[1] -eq 'create') { $script:created=$true;return }
     if ($args[1] -eq 'upload') { $script:uploaded=$true;return }
+    if ($args[1] -eq 'download') {
+        $destination = $args[($args.IndexOf('--dir') + 1)]
+        $source = Join-Path (Split-Path (Split-Path $ScriptPath -Parent) -Parent) 'dist/release'
+        Copy-Item (Join-Path $source '*') $destination
+        return
+    }
     if ($args[1] -eq 'edit') { $script:published=$true;return }
     throw 'Unexpected gh invocation'
 }

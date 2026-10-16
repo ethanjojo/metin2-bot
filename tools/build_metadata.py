@@ -1,4 +1,4 @@
-"""Validate release identifiers and generate the executable version resource."""
+"""Validate release identity shared by Rust packaging and publication."""
 
 import argparse
 from dataclasses import dataclass
@@ -44,6 +44,10 @@ class BuildMetadata:
     def artifact_name(self):
         return f"MetinBotSetup-{self.version}-windows-x64.exe"
 
+    @property
+    def prerelease(self):
+        return "-" in self.version.split("+", 1)[0]
+
     def write(self, output_dir: Path):
         output_dir.mkdir(parents=True, exist_ok=True)
         metadata = {
@@ -52,23 +56,11 @@ class BuildMetadata:
             "build_number": self.build_number,
             "commit_sha": self.commit_sha,
             "artifact_name": self.artifact_name,
+            "runtime": "rust",
+            "prerelease": self.prerelease,
+            "working_tree_dirty": False,
         }
         (output_dir / "build-info.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
-        resource = f'''VSVersionInfo(
-  ffi=FixedFileInfo(filevers={self.windows_version!r}, prodvers={self.windows_version!r},
-    mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
-  kids=[StringFileInfo([StringTable('040904B0', [
-    StringStruct('CompanyName', 'MetinBot'),
-    StringStruct('FileDescription', 'MetinBot'),
-    StringStruct('FileVersion', '{self.numeric_version}'),
-    StringStruct('ProductName', 'MetinBot'),
-    StringStruct('ProductVersion', '{self.version}'),
-    StringStruct('OriginalFilename', 'MetinBot.exe'),
-    StringStruct('Comments', 'Commit {self.commit_sha}')
-  ])]), VarFileInfo([VarStruct('Translation', [1033, 1200])])]
-)
-'''
-        (output_dir / "version-info.txt").write_text(resource, encoding="utf-8")
         return metadata
 
 

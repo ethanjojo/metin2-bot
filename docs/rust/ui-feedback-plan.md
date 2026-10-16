@@ -1,3 +1,5 @@
+> Historical verification report. Use the repository README and docs/release-readiness.md for current installation/release status. Earlier commands, counts and package paths below describe their original snapshots.
+
 # UI feedback implementation — 2026-10-16
 
 User-requested scope: preserve automation behavior while correcting eight observed UI/capture issues.

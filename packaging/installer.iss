@@ -11,13 +11,23 @@
 #ifndef ReleaseDir
   #error ReleaseDir is required
 #endif
+#ifndef AppPublisher
+  #error AppPublisher is required
+#endif
+#ifndef AppCopyright
+  #error AppCopyright is required
+#endif
 
 [Setup]
 AppId={{78F36AC5-1367-4498-B486-50E3326B9426}
 AppName=MetinBot
 AppVersion={#AppVersion}
-AppPublisher=MetinBot
+AppPublisher={#AppPublisher}
 VersionInfoVersion={#WindowsVersion}
+VersionInfoCompany={#AppPublisher}
+VersionInfoDescription=MetinBot Setup
+VersionInfoCopyright={#AppCopyright}
+SetupIconFile=icons\metinbot.ico
 DefaultDirName={autopf}\MetinBot
 DisableDirPage=yes
 DefaultGroupName=MetinBot

@@ -23,6 +23,7 @@ pub enum Icon {
     Buff,
     Settings,
     Sun,
+    Moon,
     Undo,
     Redo,
     Minus,
@@ -134,6 +135,19 @@ pub fn icon(p: &egui::Painter, center: Pos2, kind: Icon, color: Color32) {
                 p.circle_filled(pt(x, y), 2.5, color);
             }
         }
+        Icon::Moon => {
+            for points in [
+                [pt(4., -6.), pt(-10., -7.), pt(-10., 10.), pt(4., 6.)],
+                [pt(4., 6.), pt(-3., 3.), pt(-3., -3.), pt(4., -6.)],
+            ] {
+                p.add(egui::epaint::CubicBezierShape::from_points_stroke(
+                    points,
+                    false,
+                    Color32::TRANSPARENT,
+                    stroke,
+                ));
+            }
+        }
         Icon::Sun => {
             p.circle_stroke(center, 3.5, stroke);
             for (x, y) in [
@@ -206,6 +220,34 @@ pub fn small_icon_button(
         enabled,
         egui::Button::new("").min_size(egui::vec2(26., 28.)),
     );
+    icon_button_response(ui, kind, response, hint)
+}
+pub fn compact_icon_button(
+    ui: &mut egui::Ui,
+    kind: Icon,
+    enabled: bool,
+    hint: &str,
+) -> egui::Response {
+    ui.add_enabled(enabled, |ui: &mut egui::Ui| {
+        let (rect, response) = ui.allocate_exact_size(egui::vec2(26., 15.), egui::Sense::click());
+        let visuals = ui.style().interact(&response);
+        ui.painter().rect(
+            rect,
+            3.,
+            visuals.bg_fill,
+            visuals.bg_stroke,
+            egui::StrokeKind::Inside,
+        );
+        icon_button_response(ui, kind, response, hint)
+    })
+}
+fn icon_button_response(
+    ui: &egui::Ui,
+    kind: Icon,
+    response: egui::Response,
+    hint: &str,
+) -> egui::Response {
+    let enabled = response.enabled();
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, hint));
     let color = ui.style().interact(&response).fg_stroke.color;
     let color = if response.enabled() {

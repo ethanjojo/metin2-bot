@@ -2,3 +2,9 @@
 *.toml text eol=lf
 *.sh text eol=lf
 Cargo.lock text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+# Preserve the supplied logo vectors byte-for-byte, including source formatting.
+packaging/icons/logo*.svg -whitespace

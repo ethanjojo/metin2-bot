@@ -1,3 +1,5 @@
+> Historical verification report. Use the repository README and docs/release-readiness.md for current installation/release status. Earlier commands, counts and package paths below describe their original snapshots.
+
 # Searchable window selection per profile — 2026-10-16
 
 Approved scope: remove the process filter from Settings, list all visible application windows, provide temporary search and remember a window separately for each profile. Preserve capture/input guards and never start automation automatically.

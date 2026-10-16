@@ -1,3 +1,5 @@
+> Historical verification report. Use the repository README and docs/release-readiness.md for current installation/release status. Earlier commands, counts and package paths below describe their original snapshots.
+
 # Interaktivní editor
 
 Uživatelský požadavek: jasně vidět aktuální výběr, posouvat a měnit oblasti tažením, jednodušší kalibrace. Rozšíření existujícího nativního toku, bez změny pravidel automatického útoku.

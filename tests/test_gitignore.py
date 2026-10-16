@@ -15,9 +15,10 @@ class GitIgnoreTests(unittest.TestCase):
                  'profiles/selection.json','profiles/selection.json.tmp','ui-settings.json.tmp',
                  'config.json','config.json.tmp','config.queue-backup.json','config.queue-backup.json.tmp',
                  'diagnostics/run.log','diagnostics/screen.png','diagnostics/compact-ui-fixture-data/profile.json',
-                 'metin_bot/__pycache__/app.pyc','build/output','dist/output','.env'}
-        sources={'README.md','run.cmd','tools/launch.ps1','tests/data/hotbar-active.png',
-                 'diagnostics/verify_theme.py','profile.example.json'}
+                 'build/output','dist/output','.env','target/debug/metinbot.exe',
+                 '.DS_Store','packaging/._metinbot.icns','debug.dSYM/info'}
+        sources={'README.md','run.cmd','tools/launch-rust.ps1','Cargo.lock',
+                 'crates/metin-desktop/src/main.rs','packaging/icons/metinbot.icns','profile.example.json'}
         with tempfile.TemporaryDirectory(prefix='ignore-test-',dir=PROJECT/'tests') as folder:
             root=Path(folder).resolve()
             self.assertTrue(root.is_relative_to(PROJECT/'tests'))

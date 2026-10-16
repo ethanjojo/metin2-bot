@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
   push:
     branches: ['codex/rust-egui-migration']
-    paths: ['crates/**', 'Cargo.*', 'rust-toolchain.toml', '.gitattributes', 'tools/*rust*', 'tests/parity/**', '.github/workflows/rust-ci.yml']
+    paths: ['crates/**', 'packaging/**', 'Cargo.*', 'rust-toolchain.toml', '.gitattributes', 'tools/*rust*', 'tests/test_unix_packaging.py', 'tests/parity/**', '.github/workflows/rust-ci.yml']
   pull_request:
-    paths: ['crates/**', 'Cargo.*', 'rust-toolchain.toml', '.gitattributes', 'tools/*rust*', 'tests/parity/**', '.github/workflows/rust-ci.yml']
+    paths: ['crates/**', 'packaging/**', 'Cargo.*', 'rust-toolchain.toml', '.gitattributes', 'tools/*rust*', 'tests/test_unix_packaging.py', 'tests/parity/**', '.github/workflows/rust-ci.yml']
 permissions:
   contents: read
 jobs:
@@ -24,7 +24,7 @@ jobs:
         run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
       - name: Linux native prerequisites
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev cmake pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libegl1-mesa-dev libpng-dev xvfb mesa-vulkan-drivers libgl1-mesa-dri
+        run: sudo apt-get update && sudo apt-get install -y clang libclang-dev cmake pkg-config libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libegl1-mesa-dev libpng-dev xvfb mesa-vulkan-drivers libgl1-mesa-dri x11-utils desktop-file-utils weston
       - name: macOS native prerequisites
         if: runner.os == 'macOS'
         run: brew install llvm cmake pkg-config coreutils
@@ -80,6 +80,55 @@ jobs:
             gtimeout 60s target/debug/metinbot --data-dir build/ci-gui --ui-fixture tests/parity/frames/panel.png --ui-screenshot build/gui-native.png --ui-small
           fi
           test -s build/gui-native.png
+      - name: Native platform icon probes
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p test_unix_packaging.py
+          if [[ "$RUNNER_OS" == 'Linux' ]]; then
+            xvfb-run -a cargo run -p metin-desktop --example x11_icon_probe --locked
+          else
+            cargo run -p metin-desktop --features ui-smoke --example dock_icon_probe --locked
+          fi
+      - name: Package and verify native desktop integration
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          native_lib="$PWD/build/rust-native/opencv/lib"
+          if [[ "$RUNNER_OS" == 'Linux' ]]; then
+            python3 tools/package-rust-unix.py --binary target/release/metinbot --output build/unix-package --native-lib "$native_lib"
+            desktop-file-validate build/unix-package/share/applications/*.desktop
+            bash build/unix-package/install.sh "$PWD/build/installed app"
+            env -u LD_LIBRARY_PATH "build/installed app/bin/metinbot" --self-test --self-test-report build/packaged-selftest.json
+            tar -C build/unix-package -czf build/MetinBot-linux.tar.gz .
+          else
+            python3 tools/package-rust-unix.py --binary target/release/metinbot --output build/MetinBot.app --native-lib "$native_lib"
+            plutil -lint build/MetinBot.app/Contents/Info.plist
+            codesign --verify --deep --strict build/MetinBot.app
+            env -u DYLD_LIBRARY_PATH build/MetinBot.app/Contents/MacOS/metinbot --self-test --self-test-report build/packaged-selftest.json
+            ditto -c -k --sequesterRsrc --keepParent build/MetinBot.app build/MetinBot-macos.zip
+          fi
+      - name: Wayland application identity and rendered UI
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/metinbot-wayland"
+          mkdir -p "$XDG_RUNTIME_DIR"
+          chmod 700 "$XDG_RUNTIME_DIR"
+          weston --backend=headless-backend.so --socket=metinbot-test --idle-time=0 --log=build/weston.log &
+          compositor=$!
+          trap 'kill "$compositor"' EXIT
+          for i in {1..50}; do
+            test ! -S "$XDG_RUNTIME_DIR/metinbot-test" || break
+            sleep 0.1
+          done
+          test -S "$XDG_RUNTIME_DIR/metinbot-test"
+          env -u DISPLAY WAYLAND_DISPLAY=metinbot-test WAYLAND_DEBUG=client timeout 60s target/debug/metinbot --data-dir build/wayland-gui --ui-fixture tests/parity/frames/panel.png --ui-screenshot build/gui-wayland.png --ui-small 2>build/wayland-protocol.log
+          grep -F 'set_app_id("app.jojo.MetinBot")' build/wayland-protocol.log
+          test -s build/gui-wayland.png
       - name: Verification reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -89,3 +138,9 @@ jobs:
           path: |
             build/selftest-rust.json
             build/gui-native.png
+            build/gui-wayland.png
+            build/wayland-protocol.log
+            build/weston.log
+            build/packaged-selftest.json
+            build/MetinBot-linux.tar.gz
+            build/MetinBot-macos.zip

@@ -83,7 +83,6 @@ impl MetinApp {
         self.snapshot_requested = None;
         self.mode = EditMode::World;
         self.editing = false;
-        self.calibration_controls = true;
         self.viewport.reset();
         self.detection_cache = None;
         self.icon_textures.clear();
@@ -92,6 +91,20 @@ impl MetinApp {
         match mode {
             EditMode::Template => self.editor.template.is_some(),
             EditMode::Color => self.editor.profile.color.is_some(),
+            EditMode::BuffIcon { index, inactive } => self
+                .editor
+                .profile
+                .buffs
+                .skills
+                .get(index)
+                .and_then(|skill| {
+                    if inactive {
+                        skill.inactive_icon.as_ref()
+                    } else {
+                        skill.icon.as_ref()
+                    }
+                })
+                .is_some(),
             _ => self.editor.region(mode).is_some(),
         }
     }
@@ -176,7 +189,6 @@ impl MetinApp {
         self.gesture = None;
         self.binding = None;
         self.live = false;
-        self.calibration_controls = true;
         self.return_to_buffs = matches!(mode, EditMode::BuffArea | EditMode::BuffIcon { .. });
         self.mode = mode;
         self.editing = true;

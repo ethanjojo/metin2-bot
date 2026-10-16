@@ -1,5 +1,4 @@
-name: Windows build and release
-
+name: Rust Windows build and release
 on:
   push:
     branches: [main]
@@ -7,99 +6,116 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: windows-${{ github.ref }}
   cancel-in-progress: false
-
 jobs:
   build:
     runs-on: windows-2025
-    timeout-minutes: 35
+    timeout-minutes: 75
     outputs:
       version: ${{ steps.identity.outputs.version }}
       tag: ${{ steps.identity.outputs.tag }}
       prerelease: ${{ steps.identity.outputs.prerelease }}
       artifact: ${{ steps.identity.outputs.artifact }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: '3.14.0'
           architecture: x64
-      - name: Install pinned dependencies
+      - name: Build tools
         shell: pwsh
         run: |
-          python -m venv .venv
-          .\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-build.txt
-          if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
-      - name: Release identity
+          python -m pip install -r requirements-build.txt
+          if ($LASTEXITCODE -ne 0) { throw 'PE tooling installation failed.' }
+          rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain failed.' }
+          ./tools/prepare-rust-native.ps1
+      - name: Release identity and stable acceptance
         id: identity
         shell: pwsh
         run: |
-          .\.venv\Scripts\python.exe -m tools.release_metadata --ref $env:GITHUB_REF --sha $env:GITHUB_SHA --run-number $env:GITHUB_RUN_NUMBER --output $env:GITHUB_OUTPUT
+          python -m tools.release_metadata --ref $env:GITHUB_REF --sha $env:GITHUB_SHA --run-number $env:GITHUB_RUN_NUMBER --output $env:GITHUB_OUTPUT
           if ($LASTEXITCODE -ne 0) { throw 'Invalid release identity.' }
           if ($env:GITHUB_REF.StartsWith('refs/tags/')) {
             git merge-base --is-ancestor HEAD origin/main
-            if ($LASTEXITCODE -ne 0) { throw 'Stable releases must tag a commit on main.' }
+            if ($LASTEXITCODE -ne 0) { throw 'Stable release must tag a commit on main.' }
           }
-      - name: Verify source
+      - name: Stable release gate
+        shell: pwsh
+        env:
+          RELEASE_PRERELEASE: ${{ steps.identity.outputs.prerelease }}
+        run: |
+          $policy = Get-Content packaging/release-policy.json -Raw | ConvertFrom-Json
+          if ($env:RELEASE_PRERELEASE -ne 'true' -and !$policy.stable_ready) { throw 'Stable acceptance is incomplete.' }
+      - name: Verify Rust and release tooling
         shell: pwsh
         run: |
-          .\.venv\Scripts\python.exe -m pip check
-          if ($LASTEXITCODE -ne 0) { throw 'Dependency check failed.' }
-          .\.venv\Scripts\python.exe -m compileall -q metin_bot tools tests packaging_entry.py
-          if ($LASTEXITCODE -ne 0) { throw 'Compilation check failed.' }
-          .\.venv\Scripts\python.exe -m unittest discover -s tests -v
-          if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
-          .\.venv\Scripts\python.exe -m metin_bot --self-test --self-test-report build/selftest-source.json
-          if ($LASTEXITCODE -ne 0) { throw 'Source self-test failed.' }
-      - name: Build installer
+          . ./tools/rust-env.ps1
+          python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { throw 'Tooling tests failed.' }
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { throw 'Formatting failed.' }
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Clippy failed.' }
+          cargo clean -p metin-desktop
+          cargo test --workspace --all-targets --all-features --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Rust tests failed.' }
+      - name: Package Rust installer and ZIP
         shell: pwsh
         env:
           BUILD_VERSION: ${{ steps.identity.outputs.version }}
         run: |
-          $compiler = & .\tools\prepare_compiler.ps1
-          .\tools\build.ps1 -Version $env:BUILD_VERSION -BuildNumber $env:GITHUB_RUN_NUMBER -CommitSha $env:GITHUB_SHA -CompilerPath $compiler
-      - name: Verify installed bundle
+          $compiler = ./tools/prepare_compiler.ps1
+          $crt = ./tools/find-msvc-crt.ps1
+          ./tools/package-rust-windows.ps1 -Version $env:BUILD_VERSION -BuildNumber $env:GITHUB_RUN_NUMBER -CompilerPath $compiler -CrtDirectory $crt -OutputDirectory dist/release
+      - name: Hosted install, upgrade, self-test and uninstall
         shell: pwsh
         env:
           INSTALLER_NAME: ${{ steps.identity.outputs.artifact }}
           BUILD_VERSION: ${{ steps.identity.outputs.version }}
         run: |
-          .\tools\verify_installer.ps1 -InstallerPath (Join-Path 'dist/release' $env:INSTALLER_NAME) -Version $env:BUILD_VERSION -CommitSha $env:GITHUB_SHA
+          ./tools/verify_installer.ps1 -InstallerPath (Join-Path dist/release $env:INSTALLER_NAME) -BundleDirectory dist/release/MetinBot -Version $env:BUILD_VERSION -CommitSha $env:GITHUB_SHA
       - name: Upload verified release artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: windows-installer
+          name: windows-rust-release
           path: |
-            dist/release/${{ steps.identity.outputs.artifact }}
+            dist/release/*.exe
+            dist/release/*.zip
             dist/release/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
-
+      - name: Acceptance reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: windows-rust-reports
+          path: |
+            build/selftest-installed.json
+            build/installer.log
   release:
     needs: build
     if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: windows-2025
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
-          name: windows-installer
+          name: windows-rust-release
           path: dist/release
-      - name: Publish release
+      - name: Publish verified release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -110,4 +126,4 @@ jobs:
           INSTALLER_NAME: ${{ needs.build.outputs.artifact }}
           BUILD_SHA: ${{ github.sha }}
         run: |
-          .\tools\publish_release.ps1 -Tag $env:RELEASE_TAG -Version $env:RELEASE_VERSION -CommitSha $env:BUILD_SHA -InstallerName $env:INSTALLER_NAME -Prerelease ($env:RELEASE_PRERELEASE -eq 'true')
+          ./tools/publish_release.ps1 -Tag $env:RELEASE_TAG -Version $env:RELEASE_VERSION -CommitSha $env:BUILD_SHA -InstallerName $env:INSTALLER_NAME -Prerelease ($env:RELEASE_PRERELEASE -eq 'true')

@@ -19,6 +19,13 @@ use metin_platform::TargetToken;
 use std::{path::PathBuf, sync::Arc};
 #[cfg(feature = "ui-smoke")]
 pub use window_selection::WindowPickerFixture;
+#[cfg(feature = "ui-smoke")]
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+pub enum BuffCaptureFixture {
+    Area,
+    Active,
+    Inactive,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "ui-smoke", derive(clap::ValueEnum))]
@@ -34,9 +41,13 @@ enum Binding {
     Skill(usize),
 }
 pub struct MetinApp {
+    #[cfg(target_os = "macos")]
+    native_dock: bool,
     root: PathBuf,
     store: ProfileStore,
     settings: UISettings,
+    #[cfg(windows)]
+    native_window: Option<Arc<winit::window::Window>>,
     profiles: Vec<Profile>,
     editor: Editor,
     runtime: RuntimeHandle,
@@ -50,10 +61,10 @@ pub struct MetinApp {
     tab: Tab,
     mode: EditMode,
     editing: bool,
-    calibration_controls: bool,
     selected_skill: usize,
     return_to_buffs: bool,
     show_detections: bool,
+    show_sizes: bool,
     live: bool,
     snapshot_requested: Option<std::time::Instant>,
     viewport: Viewport,
@@ -77,7 +88,22 @@ pub struct MetinApp {
 }
 impl MetinApp {
     pub fn new(cc: &eframe::CreationContext<'_>, root: PathBuf) -> Result<Self, String> {
-        Self::from_context(&cc.egui_ctx, root)
+        let app = Self::from_context(&cc.egui_ctx, root)?;
+        #[cfg(target_os = "macos")]
+        let app = {
+            let mut app = app;
+            app.native_dock = true;
+            app.apply_theme(&cc.egui_ctx, app.settings.theme == "dark")?;
+            app
+        };
+        #[cfg(windows)]
+        let app = {
+            let mut app = app;
+            app.native_window = cc.winit_window().cloned();
+            app.sync_taskbar_icon(&crate::app_icon(app.settings.theme == "dark")?)?;
+            app
+        };
+        Ok(app)
     }
     pub fn from_context(context: &egui::Context, root: PathBuf) -> Result<Self, String> {
         crate::storage::validate_data_directory(&root).map_err(|e| e.to_string())?;
@@ -96,22 +122,18 @@ impl MetinApp {
             (Profile::create("New profile"), None)
         };
         let settings = UISettings::load(&root).map_err(|e| e.to_string())?;
-        widgets::theme(context, settings.theme == "dark");
-        context.send_viewport_cmd(egui::ViewportCommand::SetTheme(
-            if settings.theme == "dark" {
-                egui::SystemTheme::Dark
-            } else {
-                egui::SystemTheme::Light
-            },
-        ));
         let notify = context.clone();
         let runtime = RuntimeHandle::spawn_with_notify(move || notify.request_repaint());
         let snapshot = runtime.latest()?;
         runtime.send(Command::RefreshTargets)?;
-        Ok(Self {
+        let app = Self {
+            #[cfg(target_os = "macos")]
+            native_dock: false,
             root,
             store,
             settings,
+            #[cfg(windows)]
+            native_window: None,
             profiles,
             editor: Editor::new(profile, template),
             runtime,
@@ -125,10 +147,10 @@ impl MetinApp {
             tab: Tab::Run,
             mode: EditMode::World,
             editing: false,
-            calibration_controls: true,
             selected_skill: 0,
             return_to_buffs: false,
             show_detections: true,
+            show_sizes: false,
             live: false,
             snapshot_requested: None,
             viewport: Viewport::default(),
@@ -149,13 +171,79 @@ impl MetinApp {
             smoke_frames: 0,
             #[cfg(test)]
             canvas_rect: None,
-        })
+        };
+        app.apply_theme(context, app.settings.theme == "dark")?;
+        Ok(app)
+    }
+    fn apply_theme(&self, context: &egui::Context, dark: bool) -> Result<(), String> {
+        let icon = crate::app_icon(dark)?;
+        #[cfg(windows)]
+        self.sync_taskbar_icon(&icon)?;
+        #[cfg(target_os = "macos")]
+        if self.native_dock {
+            crate::dock_icon::set(dark)?;
+        }
+        widgets::theme(context, dark);
+        context.send_viewport_cmd(egui::ViewportCommand::SetTheme(if dark {
+            egui::SystemTheme::Dark
+        } else {
+            egui::SystemTheme::Light
+        }));
+        context.send_viewport_cmd(egui::ViewportCommand::Icon(Some(Arc::new(icon))));
+        Ok(())
+    }
+    #[cfg(windows)]
+    fn sync_taskbar_icon(&self, icon: &egui::IconData) -> Result<(), String> {
+        use winit::platform::windows::WindowExtWindows;
+        if let Some(window) = &self.native_window {
+            let icon = winit::window::Icon::from_rgba(icon.rgba.clone(), icon.width, icon.height)
+                .map_err(|e| e.to_string())?;
+            window.set_taskbar_icon(Some(icon));
+        }
+        Ok(())
+    }
+    fn toggle_theme(&mut self, context: &egui::Context) {
+        let dark = self.settings.theme != "dark";
+        if let Err(error) = self.apply_theme(context, dark) {
+            self.error = Some(error);
+            return;
+        }
+        self.settings.theme = if dark { "dark" } else { "light" }.into();
+        if let Err(error) = self.settings.save(&self.root) {
+            self.error = Some(error.to_string());
+        }
     }
     pub fn load_fixture(&mut self, path: &std::path::Path) -> Result<(), String> {
         let image = metin_vision::load_image(path).map_err(|e| e.to_string())?;
         self.editor.freeze(image)?;
         self.live = false;
         self.editor.mark_saved(self.editor.profile.clone());
+        Ok(())
+    }
+    #[cfg(feature = "ui-smoke")]
+    pub fn prepare_capture_fixture(
+        &mut self,
+        capture: Option<BuffCaptureFixture>,
+        sizes: bool,
+    ) -> Result<(), String> {
+        self.show_sizes = sizes;
+        if let Some(capture) = capture {
+            let index = self.selected_skill;
+            if self.editor.profile.buffs.skills.get(index).is_none() {
+                return Err("Buff capture fixture needs a skill.".into());
+            }
+            self.edit_area(match capture {
+                BuffCaptureFixture::Area => EditMode::BuffArea,
+                BuffCaptureFixture::Active => EditMode::BuffIcon {
+                    index,
+                    inactive: false,
+                },
+                BuffCaptureFixture::Inactive => EditMode::BuffIcon {
+                    index,
+                    inactive: true,
+                },
+            });
+        }
         Ok(())
     }
     #[cfg(feature = "ui-smoke")]

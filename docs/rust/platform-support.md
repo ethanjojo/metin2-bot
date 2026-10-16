@@ -1,12 +1,14 @@
-# Platform status
+# Platform support
 
-| Platform | GUI/core/vision | Capture and input | Acceptance remaining |
-| --- | --- | --- | --- |
-| Windows x64, Windows 10 2004 / build 19041 or newer | 112 tests, fmt, strict Clippy and debug executable self-test passed; native GPU screenshots in both themes | HWND Windows Graphics Capture; own-child probe verifies capture through occlusion, source freshness, resize and cancellation. Earlier input fixture verified Ctrl+G and mouse down/up | Real-client cycle and clean-machine installation/upgrade/uninstall; latest packaged UAC launch |
-| Linux X11 | Native Ubuntu WSL2 build, 111 tests, fmt, strict Clippy and executable self-test passed; real WSLg GUI rendered with Vulkan llvmpipe | Unavailable; Start blocked by capabilities | X11 backend, Xvfb input fixture and Wine client acceptance (T10); hardware GPU/HiDPI verification |
-| macOS | Portable source and native CI configuration prepared | Unavailable; Start blocked by capabilities | Native build/editor, permissions/Retina/backend and compatible-client acceptance (T11) |
-| Linux Wayland | Same portable GUI | Unavailable; no implicit XWayland/root fallback | Establish all required identity/focus/obstruction/manual-input/stop guards before implementation (T12) |
+| Platform | Current status | Remaining acceptance |
+| --- | --- | --- |
+| Windows x64, Windows 10 2004/build 19041 or newer | Rust prerelease; native HWND capture/input and guards implemented, 122 regression tests; GPU UI and isolated child-process transport verified | Real-client cycle, exact-release packaged self-test and hosted clean install/upgrade/uninstall |
+| Linux X11 | Editor/vision preview; 120 regression tests, native build/self-test, X11 icon pixel property probe and WSLg UI verified | Capture/input backend, compatible-client acceptance and hardware/HiDPI testing |
+| Linux Wayland | Editor/vision preview; WSLg GUI and app_id protocol verified; installed desktop/hicolor icon integration | Capture/input capability design/backend and native shell appearance acceptance |
+| macOS | Portable editor source, .app/ICNS packaging and AppKit Dock icon implementation; icon module cross-checks for Intel/Apple Silicon | Whole native build/runtime, Dock/Finder/Retina/permissions and capture/input backend |
 
-An unavailable backend is intentional and visible; it is not a supported gameplay backend. The common controller, immutable BGR frames, UUID profiles and runtime worker do not depend on egui or native window handles. Native key transport currently uses Win32 virtual key codes inside the platform crate; introduce backend-specific translation when implementing T10/T11 rather than exporting those codes into core configuration.
+Linux/macOS Start remains blocked by capabilities. Building an editor or installing a logo does not establish gameplay support. Linux WSLg rendering uses llvmpipe software Vulkan and is not hardware performance evidence.
 
-Windows capture requires Windows Graphics Capture support and a D3D11 device. The installer enforces build 19041, matching the cursor-exclusion API used by this path. Capture never falls back to desktop pixels: overlapping applications must not enter recognition. Failure is reported visibly. Foreground/visibility guards still apply to automated game input. See Microsoft's [HWND capture API](https://learn.microsoft.com/windows/win32/api/windows.graphics.capture.interop/nf-windows-graphics-capture-interop-igraphicscaptureiteminterop-createforwindow) and [cursor capture property](https://learn.microsoft.com/uwp/api/windows.graphics.capture.graphicscapturesession.iscursorcaptureenabled).
+Windows capture requires Windows Graphics Capture and D3D11. It captures the selected HWND and never falls back to desktop pixels. PID/creation identity, foreground/geometry, privileges, obstruction/manual movement and emergency-stop guards protect automated input. Invalid or unavailable capture is reported visibly.
+
+Current release gates: [release readiness](../release-readiness.md). Native icon/package implementation and evidence: [desktop integration](unix-desktop-integration.md). Earlier reports contain historical counts/artifact identities.

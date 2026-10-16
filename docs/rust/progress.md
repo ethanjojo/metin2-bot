@@ -1,8 +1,16 @@
+# Current release status
+
+See [release readiness](../release-readiness.md), [release procedure](../releasing.md) and [platform support](platform-support.md) for the current Rust-only prerelease path. Python product/build removal is part of the authorized cleanup; historical migration rulings and counts below are retained as evidence, not current instructions.
+
+---
+
 # Rust migration ledger — plan: docs/superpowers/plans/2026-10-16-rust-egui-migration.md
 
 User authorized complete implementation on 2026-10-16. Branch: codex/rust-egui-migration.
 
-Latest work: [searchable per-profile window selection](window-selection.md), including current verification and preview artifacts. The Rust Settings process filter is removed; historical migration test counts and packages below identify earlier builds.
+Latest cross-platform icon work: [Linux/macOS desktop integration](unix-desktop-integration.md) adds Wayland app_id and matching X11 launcher identity, installed Linux icons, a macOS app bundle and theme-aware AppKit Dock updates. Windows passes 122 tests and Linux 120, plus strict Clippy. Linux native X11 pixels, packaged self-test and WSLg screenshots/protocol checks passed. The AppKit module cross-checks on Apple Silicon and Intel; native macOS execution/shell visual acceptance remains open. CI adds native probes and package self-tests. Existing Windows preview packages below predate this change.
+
+Latest work: [application icon and publisher identity](app-branding.md), with shared jojo metadata, embedded icons, 121 Windows Rust tests, native taskbar icon verification, a right-aligned sun/moon toggle and native PE verification and Windows ZIP/installer. [Calibration and skill-list refinements](ui-calibration-toolbar.md) remain included; earlier package identities below are historical.
 
 Newest calibration follow-up: [ui-calibration-refinement.md](ui-calibration-refinement.md) records the five requested fixes, current verification and preview artifacts. Earlier ledger counts and package identities remain historical.
 

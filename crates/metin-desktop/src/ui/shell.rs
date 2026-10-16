@@ -3,7 +3,11 @@ use widgets::{Icon, button};
 impl MetinApp {
     pub(super) fn toolbar(&mut self, ui: &mut egui::Ui) {
         ui.add_space(5.);
-        ui.horizontal_wrapped(|ui| {
+        ui.horizontal_top(|ui| {
+            let controls_width = (ui.available_width() - 40.).max(100.);
+            ui.allocate_ui_with_layout(egui::vec2(controls_width,32.),egui::Layout::top_down(egui::Align::Min),|ui| {
+                ui.set_width(controls_width);
+                ui.horizontal_wrapped(|ui| {
             ui.label(egui::RichText::new("MetinBot").size(20.).strong());
             ui.separator();
             ui.label("Profile");
@@ -34,12 +38,14 @@ impl MetinApp {
                 match self.save() { Ok(()) => if let Some(key)=self.key() { self.send(Command::Arm { key }); },Err(e)=>self.error=Some(e) }
             }
             if button(ui,Icon::Pause,"Pause · F8",true,"Pause immediately and release held inputs. F8 remains the emergency pause shortcut.").clicked() { self.runtime.stop(); }
-            if button(ui,Icon::Sun,"",true,"Switch between light and dark appearance.").clicked() {
-                self.settings.theme=if self.settings.theme=="dark" {"light"} else {"dark"}.into();
-                widgets::theme(ui.ctx(),self.settings.theme=="dark");
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::SetTheme(if self.settings.theme=="dark" {egui::SystemTheme::Dark} else {egui::SystemTheme::Light}));
-                if let Err(e)=self.settings.save(&self.root) { self.error=Some(e.to_string()); }
-            }
+                });
+            });
+            ui.allocate_ui_with_layout(egui::vec2(32.,32.),egui::Layout::right_to_left(egui::Align::Center),|ui| {
+                let dark = self.settings.theme=="dark";
+                if button(ui,if dark {Icon::Sun} else {Icon::Moon},"",true,if dark {"Switch to light mode"} else {"Switch to dark mode"}).clicked() {
+                    self.toggle_theme(ui.ctx());
+                }
+            });
         });
         ui.add_space(5.);
     }

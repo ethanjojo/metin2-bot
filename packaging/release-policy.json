@@ -1,0 +1,7 @@
+{
+  "stable_ready": false,
+  "blockers": [
+    "Real-client target/attack/buff/mount and emergency-stop acceptance",
+    "Exact-commit hosted Windows install/upgrade/uninstall acceptance"
+  ]
+}

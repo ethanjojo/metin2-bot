@@ -23,18 +23,25 @@ impl MetinApp {
                     ui.strong(format!("Skill order  {}/8",self.editor.profile.buffs.skills.len()));
                     ui.small("Select a skill to edit its details.");
                     let mut reorder=None;
+                    let mut remove=None;
                     for (i,skill) in self.editor.profile.buffs.skills.iter().enumerate() {
                         let name=if skill.name.is_empty(){format!("Skill {}",i+1)}else{skill.name.clone()};
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x=4.;
                             if ui.add_sized([list_width-70.,32.],egui::Button::new(format!("{}. {}",i+1,name)).truncate().selected(self.selected_skill==i)).on_hover_text(format!("{} - {}",name,skill.shortcut)).clicked() { self.selected_skill=i; self.binding=None; }
-                            if widgets::small_icon_button(ui,Icon::Up,i>0,"Move this skill up in the sequence").clicked() { reorder=Some((i,i-1)); }
-                            if widgets::small_icon_button(ui,Icon::Down,i+1<self.editor.profile.buffs.skills.len(),"Move this skill down in the sequence").clicked() { reorder=Some((i,i+1)); }
+                            ui.allocate_ui_with_layout(egui::vec2(26.,32.),egui::Layout::top_down(egui::Align::Min),|ui| {
+                                ui.set_width(26.);
+                                ui.spacing_mut().item_spacing.y=2.;
+                                if widgets::compact_icon_button(ui,Icon::Up,i>0,&format!("Move {name} up in the sequence")).clicked() { reorder=Some((i,i-1)); }
+                                if widgets::compact_icon_button(ui,Icon::Down,i+1<self.editor.profile.buffs.skills.len(),&format!("Move {name} down in the sequence")).clicked() { reorder=Some((i,i+1)); }
+                            });
+                            if button(ui,Icon::Trash,"",true,&format!("Delete {name}. Undo restores the skill.")).clicked() { remove=Some(i); }
                         });
                         ui.small(format!("{} - {}",skill.shortcut,if skill.mode==metin_core::BuffMode::Refresh{"Periodic"}else{"When inactive"}));
                         ui.add_space(5.);
                     }
                     if let Some((a,b))=reorder {self.reorder_skill(a,b);}
+                    if let Some(index)=remove {self.remove_skill(index);}
                     if button(ui,Icon::Plus,"Add skill",self.editor.profile.buffs.skills.len()<8,"Add a skill with the next available shortcut. Up to eight skills are supported.").clicked(){self.add_skill();}
                     ui.separator();
                     ui.small("F7 and F8 are reserved for Start and Pause.");
@@ -109,23 +116,6 @@ impl MetinApp {
     }
     fn skill_detail(&mut self, ui: &mut egui::Ui, index: usize) {
         section(ui, &format!("Skill {} details", index + 1), |ui| {
-            ui.horizontal_wrapped(|ui| {
-                if button(
-                    ui,
-                    Icon::Trash,
-                    "Remove",
-                    true,
-                    "Remove this skill from the profile. Undo can restore it.",
-                )
-                .clicked()
-                {
-                    self.remove_skill(index);
-                }
-            });
-            // A structural edit changes the selected index; render its fields next frame.
-            if self.selected_skill != index || index >= self.editor.profile.buffs.skills.len() {
-                return;
-            }
             let mut changed = false;
             ui.label("Skill name");
             changed|=ui.add(egui::TextEdit::singleline(&mut self.editor.profile.buffs.skills[index].name).hint_text("e.g. Aura of the Sword").desired_width(f32::INFINITY)).on_hover_text("Optional display name. The shortcut determines which skill is sent to the game.").changed();
@@ -227,19 +217,15 @@ impl MetinApp {
                     {
                         self.edit_area(mode);
                     }
-                    if button(
+                    if widgets::small_icon_button(
                         ui,
                         Icon::Trash,
-                        "Clear",
                         icon.is_some(),
                         "Clear this icon crop. Undo restores it.",
                     )
                     .clicked()
                     {
-                        self.runtime.stop();
-                        if let Err(e) = self.editor.delete(mode) {
-                            self.error = Some(e);
-                        }
+                        self.delete_area(mode);
                     }
                 });
                 let other = EditMode::BuffIcon {

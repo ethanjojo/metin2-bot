@@ -308,7 +308,7 @@ fn refinement_tool_changes_do_not_move_canvas_or_expand_inline_help() {
 }
 
 #[test]
-fn refinement_detection_overlay_reports_source_pixel_dimensions_only_when_enabled() {
+fn refinement_sizes_checkbox_is_independent_of_detections() {
     let (mut app, ctx, _dir) = setup();
     let region = metin_core::Region {
         left: 0.1,
@@ -320,8 +320,9 @@ fn refinement_detection_overlay_reports_source_pixel_dimensions_only_when_enable
     let f = app.editor.frozen.as_ref().unwrap();
     let [x1, y1, x2, y2] = region.pixels(f.width, f.height);
     let expected = format!("{} × {} px", x2 - x1 + 1, y2 - y1 + 1);
-    for show in [false, true] {
-        app.show_detections = show;
+    for (detections, show) in [(false, false), (false, true), (true, false), (true, true)] {
+        app.show_detections = detections;
+        app.show_sizes = show;
         let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
         assert_eq!(
             text_regions(&output)
@@ -701,32 +702,36 @@ fn skill_buttons_move_the_selected_skill_and_keep_detail_identity() {
     }
     app.navigate(Tab::Buffs);
     let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
-    let y = text_regions(&output)
+    let label = text_regions(&output)
         .into_iter()
         .find(|(s, _)| s == "1. Skill 1")
         .unwrap()
-        .1
-        .center()
-        .y;
-    let pos = egui::pos2(245., y);
-    for pressed in [true, false] {
-        draw(
-            &mut app,
-            &ctx,
-            vec![
-                egui::Event::PointerMoved(pos),
-                egui::Event::PointerButton {
-                    pos,
-                    button: egui::PointerButton::Primary,
-                    pressed,
-                    modifiers: Default::default(),
-                },
-            ],
-        );
-    }
+        .1;
+    let [up, down, trash] = skill_row_actions(&output, label);
+    assert_eq!(up.center().x, down.center().x);
+    assert!(up.bottom() <= down.top());
+    assert!(trash.left() > down.right());
+    assert!(
+        (down.bottom() - up.top() - 32.).abs() < 0.1,
+        "up={up:?}, down={down:?}, trash={trash:?}"
+    );
+    assert!((trash.top() - up.top()).abs() < 0.1);
+    assert!((trash.bottom() - down.bottom()).abs() < 0.1);
+    click_position(&mut app, &ctx, down.center());
     assert_eq!(app.selected_skill, 1);
     assert_eq!(app.editor.profile.buffs.skills[1].shortcut, "F1");
-    click_label(&mut app, &ctx, "Remove");
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(!text_regions(&output).iter().any(|(s, _)| s == "Remove"));
+    let label = text_regions(&output)
+        .into_iter()
+        .find(|(s, _)| s == "2. Skill 2")
+        .unwrap()
+        .1;
+    click_position(
+        &mut app,
+        &ctx,
+        skill_row_actions(&output, label)[2].center(),
+    );
     assert_eq!(app.editor.profile.buffs.skills.len(), 1);
     assert_eq!(app.editor.profile.buffs.skills[0].shortcut, "F2");
     app.runtime.shutdown().unwrap();
@@ -1052,7 +1057,7 @@ fn scrolling_buff_detail_reaches_icon_capture_and_returns_to_the_same_skill() {
     assert!(app.tab == Tab::Calibration);
     assert!(app.return_to_buffs);
     assert!(matches!(app.mode, EditMode::BuffIcon { index: 0, .. }));
-    click_label(&mut app, &ctx, "Back to buffs");
+    click_label(&mut app, &ctx, "Done & back to buffs");
     assert!(app.tab == Tab::Buffs);
     assert_eq!(app.selected_skill, 0);
     app.runtime.shutdown().unwrap();
@@ -1151,7 +1156,7 @@ fn user_review_disabled_save_and_start_explain_their_state_on_actual_hover() {
 }
 
 #[test]
-fn user_review_four_calibration_steps_hover_select_and_hide_show_preserve_edits() {
+fn user_review_four_calibration_steps_hover_select_and_preserve_edits() {
     let (mut app, ctx, _dir) = setup();
     let before = app.editor.profile.clone();
     for (label, mode, hint) in [
@@ -1190,13 +1195,12 @@ fn user_review_four_calibration_steps_hover_select_and_hide_show_preserve_edits(
     for _ in 0..3 {
         draw(&mut app, &ctx, vec![]);
     }
-    let with_steps = app.canvas_rect.unwrap();
-    click_label(&mut app, &ctx, "Hide steps");
-    draw(&mut app, &ctx, vec![]);
-    assert!(!app.calibration_controls);
-    assert!(app.canvas_rect.unwrap().width() > with_steps.width());
-    click_label(&mut app, &ctx, "Show steps");
-    assert!(app.calibration_controls);
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(
+        !text_regions(&output)
+            .iter()
+            .any(|(text, _)| text == "Hide steps" || text == "Show steps")
+    );
     assert!(app.mode == EditMode::Template);
     assert_eq!(app.editor.profile, before);
     app.runtime.shutdown().unwrap();
@@ -1519,7 +1523,7 @@ fn user_review_sampled_color_can_be_cleared_with_the_same_visible_delete_control
     let sampled = app.editor.profile.color.clone();
     click_label(&mut app, &ctx, "2. Metin color");
     assert!(app.mode == EditMode::Color);
-    click_after_label(&mut app, &ctx, "2. Metin color", 58.);
+    click_row_trash(&mut app, &ctx, "2. Metin color");
     assert!(
         app.editor.profile.color.is_none(),
         "The visible delete action must also clear the sampled color"
@@ -1786,7 +1790,7 @@ fn feedback_color_value_is_visible_and_excluded_area_announces_drawing() {
     app.runtime.shutdown().unwrap();
 }
 
-fn click_after_label(app: &mut MetinApp, ctx: &egui::Context, label: &str, offset: f32) {
+fn click_row_trash(app: &mut MetinApp, ctx: &egui::Context, label: &str) {
     let mut output = draw_at_size(app, ctx, &mut vec![], egui::vec2(1280., 820.));
     for _ in 0..3 {
         output = draw_at_size(app, ctx, &mut vec![], egui::vec2(1280., 820.));
@@ -1796,7 +1800,8 @@ fn click_after_label(app: &mut MetinApp, ctx: &egui::Context, label: &str, offse
         .find(|(text, _)| text == label)
         .unwrap()
         .1;
-    let pos = rect.right_center() + egui::vec2(offset, 0.);
+    let trash = row_trash_rect(&output, rect);
+    let pos = trash.center();
     for pressed in [true, false] {
         draw(
             app,
@@ -1841,14 +1846,14 @@ fn refinement_row_trash_removes_that_mask_and_preserves_other_selection_and_undo
         app.editor.set_region(EditMode::Mask(None), mask).unwrap();
     }
     app.edit_area(EditMode::Mask(Some(2)));
-    click_after_label(&mut app, &ctx, "Excluded area 1", 28.);
+    click_row_trash(&mut app, &ctx, "Excluded area 1");
     assert_eq!(app.editor.profile.masks, vec![masks[1], masks[2]]);
     assert!(app.mode == EditMode::Mask(Some(1)));
     assert_eq!(app.editor.region(app.mode), Some(masks[2]));
     app.undo_profile();
     assert_eq!(app.editor.profile.masks, masks);
     app.edit_area(EditMode::Mask(Some(1)));
-    click_after_label(&mut app, &ctx, "Excluded area 2", 28.);
+    click_row_trash(&mut app, &ctx, "Excluded area 2");
     assert!(!app.editing);
     assert!(app.mode == EditMode::Mask(None));
     assert_eq!(app.editor.profile.masks, vec![masks[0], masks[2]]);
@@ -1989,5 +1994,472 @@ fn feedback_run_preview_draws_distinct_current_next_and_other_markers_without_ed
     assert_eq!(app.editor.profile, before);
     assert!(app.canvas_rect.is_none());
     assert!(!app.editing);
+    app.runtime.shutdown().unwrap();
+}
+
+fn row_trash_rect(output: &egui::FullOutput, label: egui::Rect) -> egui::Rect {
+    fn visit(shape: &egui::Shape, row: egui::Rect, found: &mut Vec<egui::Rect>) {
+        match shape {
+            egui::Shape::Rect(s)
+                if (s.rect.width() - 26.).abs() < 5.
+                    && (s.rect.height() - 28.).abs() < 5.
+                    && (s.rect.center().y - row.center().y).abs() < 4.
+                    && s.rect.left() > row.right() =>
+            {
+                found.push(s.rect)
+            }
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    visit(shape, row, found);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    for shape in &output.shapes {
+        visit(&shape.shape, label, &mut found);
+    }
+    *found
+        .iter()
+        .max_by(|a, b| a.right().total_cmp(&b.right()))
+        .expect("row trash button")
+}
+
+#[test]
+fn toolbar_sizes_toggle_and_right_alignment_keep_canvas_stable() {
+    let (mut app, ctx, _dir) = setup();
+    assert!(!app.show_sizes);
+    for _ in 0..4 {
+        draw(&mut app, &ctx, vec![]);
+    }
+    let before = app.canvas_rect.unwrap();
+    click_label(&mut app, &ctx, "Sizes (px)");
+    assert!(app.show_sizes);
+    draw(&mut app, &ctx, vec![]);
+    assert_eq!(app.canvas_rect.unwrap(), before);
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    let texts = text_regions(&output);
+    let rect = |label: &str| texts.iter().find(|(s, _)| s == label).unwrap().1;
+    assert!((rect("Done editing").center().y - rect("Fit").center().y).abs() < 4.);
+    assert!(rect("Done editing").right() < rect("Detections").left());
+    let trash = [
+        "1. Search area",
+        "2. Metin color",
+        "3. Target panel",
+        "4. Reference crop",
+    ]
+    .map(|label| row_trash_rect(&output, rect(label)));
+    assert!(
+        trash
+            .iter()
+            .all(|r| (r.right() - trash[0].right()).abs() < 1.)
+    );
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn buff_capture_shows_context_switches_states_and_returns_to_same_skill() {
+    let (mut app, ctx, _dir) = setup();
+    app.editor.profile.buffs.skills.push(metin_core::BuffSkill {
+        name: "Aura".into(),
+        mode: metin_core::BuffMode::Inactive,
+        interval_seconds: None,
+        ..Default::default()
+    });
+    app.edit_area(EditMode::BuffIcon {
+        index: 0,
+        inactive: false,
+    });
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(text_regions(&output).iter().any(|(s, _)| s == "Aura"));
+    click_label(&mut app, &ctx, "Inactive icon (optional)");
+    assert_eq!(
+        app.mode,
+        EditMode::BuffIcon {
+            index: 0,
+            inactive: true
+        }
+    );
+    let region = metin_core::Region {
+        left: 0.1,
+        top: 0.1,
+        right: 0.2,
+        bottom: 0.2,
+    };
+    app.editor
+        .freeze(
+            metin_platform::Frame::new(
+                128,
+                128,
+                (0..128 * 128)
+                    .flat_map(|i| {
+                        if (i / 128 + i % 128) % 2 == 0 {
+                            [0, 0, 0]
+                        } else {
+                            [255, 255, 255]
+                        }
+                    })
+                    .collect(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    app.editor.profile.buffs.icon_region = Some(metin_core::Region {
+        left: 0.,
+        top: 0.,
+        right: 1.,
+        bottom: 1.,
+    });
+    app.editor.set_region(app.mode, region).unwrap();
+    draw(&mut app, &ctx, vec![]);
+    assert_eq!(app.tab, Tab::Calibration);
+    let mut small = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(800., 560.));
+    for _ in 0..3 {
+        small = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(800., 560.));
+    }
+    let labels = text_regions(&small);
+    assert!(
+        labels
+            .iter()
+            .any(|(text, rect)| text == "Done & back to buffs" && rect.bottom() < 520.)
+    );
+    assert!(!labels.iter().any(|(text, _)| text == "Profile name"));
+    click_label(&mut app, &ctx, "Done & back to buffs");
+    assert_eq!(app.tab, Tab::Buffs);
+    assert!(!app.editing && !app.return_to_buffs);
+    assert_eq!(app.selected_skill, 0);
+    assert!(app.editor.profile.buffs.skills[0].inactive_icon.is_some());
+    app.editor.profile.buffs.skills[0]
+        .inactive_icon
+        .as_mut()
+        .unwrap()
+        .region = None;
+    assert!(app.calibration_ready(EditMode::BuffIcon {
+        index: 0,
+        inactive: true
+    }));
+    assert!(app.editor.dirty());
+    app.runtime.shutdown().unwrap();
+}
+
+fn click_position(app: &mut MetinApp, ctx: &egui::Context, pos: egui::Pos2) {
+    for pressed in [true, false] {
+        draw(
+            app,
+            ctx,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Default::default(),
+                },
+            ],
+        );
+    }
+}
+fn skill_row_actions(output: &egui::FullOutput, label: egui::Rect) -> [egui::Rect; 3] {
+    fn visit(shape: &egui::Shape, label: egui::Rect, found: &mut Vec<egui::Rect>) {
+        match shape {
+            egui::Shape::Rect(s)
+                if (25. ..=33.).contains(&s.rect.width())
+                    && (14. ..=33.).contains(&s.rect.height())
+                    && s.rect.left() > label.right()
+                    && s.rect.right() < 270.
+                    && s.rect.center().y > label.center().y - 17.
+                    && s.rect.center().y < label.center().y + 17. =>
+            {
+                found.push(s.rect)
+            }
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    visit(shape, label, found);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut found = vec![];
+    for shape in &output.shapes {
+        visit(&shape.shape, label, &mut found);
+    }
+    found.sort_by(|a, b| {
+        a.left()
+            .total_cmp(&b.left())
+            .then(a.top().total_cmp(&b.top()))
+    });
+    found.dedup();
+    found.try_into().expect("up/down/trash in the skill row")
+}
+#[test]
+fn skill_row_trash_deletes_its_own_skill_and_last_skill_can_be_restored() {
+    let (mut app, ctx, _dir) = setup();
+    for shortcut in ["F1", "F2"] {
+        app.editor.profile.buffs.skills.push(metin_core::BuffSkill {
+            shortcut: shortcut.into(),
+            ..Default::default()
+        });
+    }
+    app.editor.record();
+    app.selected_skill = 1;
+    app.navigate(Tab::Buffs);
+    for _ in 0..3 {
+        draw(&mut app, &ctx, vec![]);
+    }
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    let label = text_regions(&output)
+        .into_iter()
+        .find(|(s, _)| s == "1. Skill 1")
+        .unwrap()
+        .1;
+    click_position(
+        &mut app,
+        &ctx,
+        skill_row_actions(&output, label)[2].center(),
+    );
+    assert_eq!(app.selected_skill, 0);
+    assert_eq!(app.editor.profile.buffs.skills[0].shortcut, "F2");
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    let label = text_regions(&output)
+        .into_iter()
+        .find(|(s, _)| s == "1. Skill 1")
+        .unwrap()
+        .1;
+    click_position(
+        &mut app,
+        &ctx,
+        skill_row_actions(&output, label)[2].center(),
+    );
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(app.editor.profile.buffs.skills.is_empty());
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(s, _)| s == "No skills yet")
+    );
+    app.undo_profile();
+    assert_eq!(app.editor.profile.buffs.skills[0].shortcut, "F2");
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn saved_theme_and_live_theme_changes_send_matching_native_window_icons() {
+    let (mut app, ctx, dir) = setup();
+    let before = app.editor.profile.clone();
+    for turn in 0..3 {
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ui.label("Theme test");
+            if turn > 0 {
+                app.toggle_theme(&ctx);
+            }
+        });
+        output.textures_delta.clear();
+        let expected = if turn == 1 { "dark" } else { "light" };
+        assert_eq!(app.settings.theme, expected);
+        let icon = output
+            .viewport_output
+            .values()
+            .flat_map(|v| &v.commands)
+            .filter_map(|command| match command {
+                egui::ViewportCommand::Icon(Some(icon)) => Some(icon),
+                _ => None,
+            })
+            .next_back()
+            .expect("native window icon command");
+        let rgb = if expected == "dark" { 255 } else { 0 };
+        assert!(
+            icon.rgba
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .filter(|p| p[3] > 0)
+                .all(|p| p[..3] == [rgb, rgb, rgb])
+        );
+        if turn > 0 {
+            assert_eq!(UISettings::load(dir.path()).unwrap().theme, expected);
+        }
+        assert_eq!(app.editor.profile, before);
+    }
+    app.runtime.shutdown().unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn native_windows_taskbar_icon_updates_black_white_black() {
+    use winit::{
+        application::ApplicationHandler,
+        event_loop::{ActiveEventLoop, EventLoop},
+        platform::windows::EventLoopBuilderExtWindows,
+        raw_window_handle::{HasWindowHandle, RawWindowHandle},
+    };
+    struct Probe {
+        app: MetinApp,
+        ctx: egui::Context,
+    }
+    impl ApplicationHandler for Probe {
+        fn resumed(&mut self, events: &ActiveEventLoop) {
+            let window = Arc::new(
+                events
+                    .create_window(winit::window::Window::default_attributes().with_visible(false))
+                    .unwrap(),
+            );
+            let RawWindowHandle::Win32(handle) = window.window_handle().unwrap().as_raw() else {
+                panic!("Win32 window required")
+            };
+            self.app.native_window = Some(window);
+            for dark in [false, true, false] {
+                self.app.apply_theme(&self.ctx, dark).unwrap();
+                let pixels = unsafe { taskbar_pixels(handle.hwnd.get() as _) };
+                let opaque = pixels
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .filter(|p| p[3] > 200)
+                    .collect::<Vec<_>>();
+                assert!(!opaque.is_empty());
+                let rgb = if dark { 255 } else { 0 };
+                assert!(opaque.iter().all(|p| p[..3] == [rgb, rgb, rgb]));
+            }
+            self.app.native_window = None;
+            events.exit();
+        }
+        fn window_event(
+            &mut self,
+            _: &ActiveEventLoop,
+            _: winit::window::WindowId,
+            _: winit::event::WindowEvent,
+        ) {
+        }
+    }
+    // Read the actual ICON_BIG bitmap. The window and its icon are owned by
+    // this test; GetIconInfo creates bitmap copies that must be released.
+    unsafe fn taskbar_pixels(hwnd: windows_sys::Win32::Foundation::HWND) -> Vec<u8> {
+        use windows_sys::Win32::{Graphics::Gdi::*, UI::WindowsAndMessaging::*};
+        unsafe {
+            let icon = SendMessageW(hwnd, WM_GETICON, ICON_BIG as usize, 0) as HICON;
+            assert!(!icon.is_null(), "native taskbar icon is missing");
+            let mut icon_info: ICONINFO = std::mem::zeroed();
+            assert_ne!(GetIconInfo(icon, &mut icon_info), 0);
+            let mut bitmap: BITMAP = std::mem::zeroed();
+            assert_ne!(
+                GetObjectW(
+                    icon_info.hbmColor,
+                    std::mem::size_of::<BITMAP>() as i32,
+                    (&mut bitmap as *mut BITMAP).cast()
+                ),
+                0
+            );
+            let mut info: BITMAPINFO = std::mem::zeroed();
+            info.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
+            info.bmiHeader.biWidth = bitmap.bmWidth;
+            info.bmiHeader.biHeight = -bitmap.bmHeight;
+            info.bmiHeader.biPlanes = 1;
+            info.bmiHeader.biBitCount = 32;
+            let mut pixels = vec![0u8; (bitmap.bmWidth * bitmap.bmHeight * 4) as usize];
+            let dc = GetDC(std::ptr::null_mut());
+            let lines = GetDIBits(
+                dc,
+                icon_info.hbmColor,
+                0,
+                bitmap.bmHeight as u32,
+                pixels.as_mut_ptr().cast(),
+                &mut info,
+                DIB_RGB_COLORS,
+            );
+            ReleaseDC(std::ptr::null_mut(), dc);
+            DeleteObject(icon_info.hbmColor);
+            DeleteObject(icon_info.hbmMask);
+            assert_eq!(lines, bitmap.bmHeight);
+            pixels
+        }
+    }
+    let (app, ctx, _dir) = setup();
+    let events = EventLoop::builder().with_any_thread(true).build().unwrap();
+    let mut probe = Probe { app, ctx };
+    events.run_app(&mut probe).unwrap();
+    probe.app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn theme_toggle_stays_at_right_edge_and_switches_with_target_tooltip() {
+    let (mut app, ctx, _dir) = setup();
+    for width in [800., 1280.] {
+        let size = egui::vec2(width, 820.);
+        let mut output = draw_at_size(&mut app, &ctx, &mut vec![], size);
+        for _ in 0..3 {
+            output = draw_at_size(&mut app, &ctx, &mut vec![], size);
+        }
+        let mut buttons = vec![];
+        fn visit(shape: &egui::Shape, buttons: &mut Vec<egui::Rect>) {
+            match shape {
+                egui::Shape::Rect(r)
+                    if (r.rect.width() - 32.).abs() < 1.
+                        && (r.rect.height() - 32.).abs() < 1.
+                        && r.rect.center().y < 50. =>
+                {
+                    buttons.push(r.rect)
+                }
+                egui::Shape::Vec(shapes) => {
+                    for shape in shapes {
+                        visit(shape, buttons);
+                    }
+                }
+                _ => {}
+            }
+        }
+        for shape in &output.shapes {
+            visit(&shape.shape, &mut buttons);
+        }
+        let button = buttons
+            .into_iter()
+            .max_by(|a, b| a.right().total_cmp(&b.right()))
+            .unwrap();
+        assert!((button.right() - (width - 8.)).abs() < 2., "{button:?}");
+        let before = app.settings.theme.clone();
+        let hint = if before == "dark" {
+            "Switch to light mode"
+        } else {
+            "Switch to dark mode"
+        };
+        let start = ctx.input(|i| i.time);
+        let mut tooltip = false;
+        for frame in 0..4 {
+            let mut output = ctx.run_ui(
+                egui::RawInput {
+                    time: Some(start + f64::from(frame) + 1.),
+                    screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                    events: if frame == 0 {
+                        vec![egui::Event::PointerMoved(button.center())]
+                    } else {
+                        vec![]
+                    },
+                    ..Default::default()
+                },
+                |ui| app.render(ui),
+            );
+            tooltip |= text_regions(&output).iter().any(|(text, _)| text == hint);
+            output.textures_delta.clear();
+        }
+        assert!(tooltip, "missing target-mode tooltip: {hint}");
+        for pressed in [true, false] {
+            draw_at_size(
+                &mut app,
+                &ctx,
+                &mut vec![
+                    egui::Event::PointerMoved(button.center()),
+                    egui::Event::PointerButton {
+                        pos: button.center(),
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: Default::default(),
+                    },
+                ],
+                size,
+            );
+        }
+        assert_ne!(app.settings.theme, before);
+    }
     app.runtime.shutdown().unwrap();
 }

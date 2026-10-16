@@ -1,3 +1,5 @@
+> Historical verification report. Use the repository README and docs/release-readiness.md for current installation/release status. Earlier commands, counts and package paths below describe their original snapshots.
+
 # Independent review of the eight UI feedback fixes
 
 Reviewed 2026-10-16 against `docs/rust/ui-feedback-plan.md` and the working tree based on `7e820f3`. This review made no product changes and ran no Cargo commands. It inspected the final source, the native probe report, and all 16 freshly supplied screenshots at 1280 × 820 and 800 × 560 in dark and light themes.

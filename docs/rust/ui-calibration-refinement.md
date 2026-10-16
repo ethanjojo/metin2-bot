@@ -1,3 +1,5 @@
+> Historical verification report. Use the repository README and docs/release-readiness.md for current installation/release status. Earlier commands, counts and package paths below describe their original snapshots.
+
 # Calibration usability follow-up — 2026-10-16
 
 Scope: the five observations from hands-on review of the HWND-capture preview. Preserve recognition thresholds, profiles, undo/history and automation behavior; leave the currently running app and user data untouched.
