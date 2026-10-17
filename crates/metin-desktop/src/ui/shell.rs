@@ -63,9 +63,14 @@ impl MetinApp {
                     "Connect a game window and edit recognition areas on a frozen snapshot.",
                 ),
                 (
-                    Tab::Buffs,
-                    "Buffs",
-                    "Configure skill order, timing, icons and the declared mount state.",
+                    Tab::Actions,
+                    "Actions",
+                    "Configure buffs, loot and mount behavior.",
+                ),
+                (
+                    Tab::Safety,
+                    "Safety",
+                    "Automatic stopping and scheduled breaks for this profile.",
                 ),
                 (
                     Tab::Settings,
@@ -114,7 +119,16 @@ impl MetinApp {
         ui.horizontal_wrapped(|ui| {
             if button(ui,Icon::Refresh,"Refresh",true,"Refresh all visible application windows. This does not start the bot.").clicked() {self.send(Command::RefreshTargets);}
             let snapshot_hint=if self.snapshot_requested.is_some() { "Waiting for a fresh frame from the selected game window. Capture times out after 3 seconds." } else if self.target.is_none() { "Select a game window above before taking a Snapshot." } else { "Pause and capture a fresh frame. Show the target panel in the game before capturing." };
-            if button(ui,Icon::Camera,if self.snapshot_requested.is_some(){"Capturing..."}else{"Snapshot"},self.target.is_some() && self.snapshot_requested.is_none(),snapshot_hint).clicked() {self.runtime.stop();self.snapshot_requested=Some(std::time::Instant::now());}
+            if button(ui,Icon::Camera,if self.snapshot_requested.is_some(){"Capturing..."}else{"Snapshot"},self.target.is_some() && self.snapshot_requested.is_none(),snapshot_hint).clicked() {
+                self.runtime.stop();
+                if let Some(key) = self.key() {
+                    let requested = std::time::Instant::now();
+                    match self.runtime.send(Command::Snapshot { key }) {
+                        Ok(()) => self.snapshot_requested = Some(requested),
+                        Err(error) => self.error = Some(error),
+                    }
+                }
+            }
         });
     }
 }

@@ -14,6 +14,9 @@
 #ifndef AppPublisher
   #error AppPublisher is required
 #endif
+#ifndef AppModelId
+  #error AppModelId is required
+#endif
 #ifndef AppCopyright
   #error AppCopyright is required
 #endif
@@ -62,7 +65,7 @@ Type: filesandordirs; Name: "{app}\_internal"
 Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\MetinBot"; Filename: "{app}\MetinBot.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\MetinBot"; Filename: "{app}\MetinBot.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\MetinBot"; Filename: "{app}\MetinBot.exe"; WorkingDir: "{app}"; AppUserModelID: "{#AppModelId}"
+Name: "{autodesktop}\MetinBot"; Filename: "{app}\MetinBot.exe"; WorkingDir: "{app}"; AppUserModelID: "{#AppModelId}"; Tasks: desktopicon
 
 ; User profiles and settings live outside {app}; uninstall deliberately retains them.

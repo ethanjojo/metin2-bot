@@ -50,3 +50,4 @@ mod icon_tests {
         assert_eq!(premultiplied_rgba([255, 255, 255, 255], true), [255; 4]);
     }
 }
+pub mod notifications;

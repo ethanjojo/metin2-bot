@@ -1,8 +1,12 @@
+mod actions;
 mod buffs;
 mod calibration;
 mod forms;
+mod mount;
+mod periodic;
 mod preview;
 mod run;
+mod safety;
 mod settings;
 mod shell;
 mod state;
@@ -13,9 +17,13 @@ use crate::{
     runtime::{Command, RuntimeHandle, RuntimeSnapshot, SessionKey},
     storage::{ProfileStore, UISettings},
 };
+pub use actions::ActionsPage;
 use eframe::egui;
 use metin_core::Profile;
 use metin_platform::TargetToken;
+pub use safety::SafetyPage;
+pub use settings::SettingsPage;
+use state::SetupAction;
 use std::{path::PathBuf, sync::Arc};
 #[cfg(feature = "ui-smoke")]
 pub use window_selection::WindowPickerFixture;
@@ -26,19 +34,36 @@ pub enum BuffCaptureFixture {
     Active,
     Inactive,
 }
+#[cfg(feature = "ui-smoke")]
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+pub enum RunFixture {
+    Attack,
+    Looting,
+    Break,
+    Stopped,
+    History,
+    Uncalibrated,
+    PreviewOff,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "ui-smoke", derive(clap::ValueEnum))]
 pub enum Tab {
     Run,
     Calibration,
-    Buffs,
+    Actions,
+    Safety,
     Settings,
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Binding {
     Mount,
+    Loot,
     Skill(usize),
+    Periodic(uuid::Uuid),
+    Visual(uuid::Uuid),
+    Puller,
+    OutOfTarget,
 }
 pub struct MetinApp {
     #[cfg(target_os = "macos")]
@@ -58,10 +83,25 @@ pub struct MetinApp {
     #[cfg(any(test, feature = "ui-smoke"))]
     window_fixture: Option<window_selection::WindowFixture>,
     revision: u64,
+    preview_demand: Option<(SessionKey, bool, u64)>,
     tab: Tab,
     mode: EditMode,
     editing: bool,
     selected_skill: usize,
+    actions_page: ActionsPage,
+    settings_page: settings::SettingsPage,
+    selected_periodic: Option<uuid::Uuid>,
+    selected_safety: usize,
+    safety_page: SafetyPage,
+    return_to_safety: bool,
+    preview_snapshot: Option<Arc<RuntimeSnapshot>>,
+    preview_updated: std::time::Instant,
+    snapshot_score: Option<(uuid::Uuid, f64)>,
+    recent_log: Option<String>,
+    warnings_only: bool,
+    history_open: bool,
+    run_live: bool,
+    run_mount_editing: bool,
     return_to_buffs: bool,
     show_detections: bool,
     show_sizes: bool,
@@ -77,6 +117,11 @@ pub struct MetinApp {
     hover_mode: Option<EditMode>,
     icon_textures: std::collections::HashMap<String, egui::TextureHandle>,
     detection_cache: Option<preview::DetectionCache>,
+    click_preview: Option<(
+        metin_platform::Frame,
+        metin_core::Region,
+        egui::TextureHandle,
+    )>,
     #[cfg(feature = "ui-smoke")]
     smoke: Option<(PathBuf, Option<std::time::Instant>)>,
     #[cfg(feature = "ui-smoke")]
@@ -144,10 +189,25 @@ impl MetinApp {
             #[cfg(any(test, feature = "ui-smoke"))]
             window_fixture: None,
             revision: 0,
+            preview_demand: None,
             tab: Tab::Run,
             mode: EditMode::World,
             editing: false,
             selected_skill: 0,
+            actions_page: ActionsPage::Buffs,
+            settings_page: settings::SettingsPage::Detection,
+            selected_periodic: None,
+            selected_safety: 0,
+            safety_page: SafetyPage::Schedule,
+            return_to_safety: false,
+            preview_snapshot: None,
+            preview_updated: std::time::Instant::now(),
+            snapshot_score: None,
+            recent_log: None,
+            warnings_only: false,
+            history_open: false,
+            run_live: true,
+            run_mount_editing: false,
             return_to_buffs: false,
             show_detections: true,
             show_sizes: false,
@@ -163,6 +223,7 @@ impl MetinApp {
             hover_mode: None,
             icon_textures: Default::default(),
             detection_cache: None,
+            click_preview: None,
             #[cfg(feature = "ui-smoke")]
             smoke: None,
             #[cfg(feature = "ui-smoke")]
@@ -173,6 +234,7 @@ impl MetinApp {
             canvas_rect: None,
         };
         app.apply_theme(context, app.settings.theme == "dark")?;
+        context.set_zoom_factor(app.settings.ui_scale);
         Ok(app)
     }
     fn apply_theme(&self, context: &egui::Context, dark: bool) -> Result<(), String> {
@@ -254,6 +316,124 @@ impl MetinApp {
         self.smoke = Some((path, None));
         self.smoke_frames = 0;
     }
+    #[cfg(feature = "ui-smoke")]
+    pub fn prepare_actions_fixture(&mut self, page: Option<ActionsPage>, run: Option<RunFixture>) {
+        if let Some(page) = page {
+            self.actions_page = page;
+        }
+        let Some(run) = run else {
+            return;
+        };
+        self.set_window_picker_fixture(WindowPickerFixture::Selected);
+        if matches!(run, RunFixture::Uncalibrated) {
+            self.editor = Editor::new(Profile::create("Uncalibrated profile"), None);
+            self.editor.mark_saved(self.editor.profile.clone());
+            let key = self.key();
+            let fixture = self.window_fixture.as_mut().expect("fixture catalog");
+            let mut snapshot = (*fixture.snapshot).clone();
+            snapshot.key = key;
+            snapshot.revision = self.revision;
+            snapshot.reason = "Complete calibration before starting.".into();
+            fixture.snapshot = Arc::new(snapshot);
+            return;
+        }
+        self.run_live = !matches!(run, RunFixture::PreviewOff);
+        let mut profile = self.editor.profile.clone();
+        profile.buffs.enabled = false;
+        profile.periodic_actions.clear();
+        profile.puller.enabled = false;
+        profile.out_of_target.after_combat = matches!(run, RunFixture::Attack);
+        profile.out_of_target.during_search = false;
+        profile.panel.stable_frames = 2;
+        profile.loot.enabled = true;
+        profile.safety.stop_enabled = true;
+        profile.safety.breaks_enabled = true;
+        let mut c = metin_core::Controller::new(profile);
+        c.buffs.mounted = Some(false);
+        c.start(0.).expect("valid demonstration profile");
+        let observation = |panel| metin_core::Observation {
+            ready: true,
+            panel_present: panel,
+            ..Default::default()
+        };
+        let now = match run {
+            RunFixture::Attack => {
+                c.step(0., &observation(true));
+                c.step(0.25, &observation(true));
+                c.step(0.5, &observation(false));
+                let action = c.step(0.75, &observation(false)).expect("attack due");
+                c.ack(0.75, action.id, true)
+                    .expect("attack held in fixture");
+                0.75
+            }
+            RunFixture::Looting | RunFixture::History | RunFixture::PreviewOff => {
+                c.step(0., &observation(true));
+                c.step(0.25, &observation(true));
+                c.step(0.5, &observation(false));
+                c.step(0.75, &observation(false));
+                if matches!(run, RunFixture::History) {
+                    let action = c.step(1.25, &observation(false)).expect("pickup due");
+                    c.ack(1.4, action.id, true).expect("pickup acknowledged");
+                    c.pause(2., "Paused (F8).");
+                    self.history_open = true;
+                    2.
+                } else {
+                    0.75
+                }
+            }
+            RunFixture::Break => {
+                c.step(2700., &observation(false));
+                c.step(2700.25, &observation(false));
+                2700.25
+            }
+            RunFixture::Stopped => {
+                c.tick(14400.);
+                14400.
+            }
+            RunFixture::Uncalibrated => unreachable!("handled before controller construction"),
+        };
+        self.editor.mark_saved(c.profile.clone());
+        let fixture = self.window_fixture.as_mut().expect("fixture catalog");
+        let mut snapshot = (*fixture.snapshot).clone();
+        snapshot.key = self.target.map(|target| SessionKey {
+            profile_id: self.editor.profile.id,
+            target,
+        });
+        snapshot.revision = self.revision;
+        snapshot.mounted = c.buffs.mounted;
+        snapshot.frame = self.editor.frozen.clone();
+        snapshot.captured_at = Some(std::time::Instant::now());
+        snapshot.state = c.state.clone();
+        snapshot.reason = c.reason.clone();
+        snapshot.running = c.running;
+        snapshot.schedule = c.schedule(now);
+        snapshot.action_timers = c.action_timers();
+        snapshot.attack_remaining = if c.phase == metin_core::Phase::OutOfTarget {
+            c.remaining(now)
+        } else {
+            None
+        };
+        snapshot.statistics = c.session.snapshot();
+        snapshot.events = c.events.into_iter().collect();
+        fixture.snapshot = Arc::new(snapshot);
+    }
+    #[cfg(feature = "ui-smoke")]
+    pub fn prepare_safety_fixture(&mut self, page: SafetyPage) {
+        self.safety_page = page;
+    }
+    #[cfg(feature = "ui-smoke")]
+    pub fn prepare_safety_capture_fixture(&mut self) -> Result<(), String> {
+        if self.editor.profile.safety.rules.is_empty() {
+            return Err("Safety capture fixture requires a rule.".into());
+        }
+        self.selected_safety = 0;
+        self.edit_area(EditMode::SafetyReference(0));
+        Ok(())
+    }
+    #[cfg(feature = "ui-smoke")]
+    pub fn prepare_settings_fixture(&mut self, page: SettingsPage) {
+        self.settings_page = page;
+    }
     fn key(&self) -> Option<SessionKey> {
         self.target.map(|target| SessionKey {
             profile_id: self.editor.profile.id,
@@ -270,12 +450,22 @@ impl MetinApp {
             return Ok(());
         };
         self.runtime.stop();
+        self.preview_demand = None;
         self.revision += 1;
+        self.runtime.send(Command::Connect {
+            key: SessionKey {
+                profile_id: self.editor.profile.id,
+                target,
+            },
+            revision: self.revision,
+        })?;
+        if self.editor.profile.validate().is_err() {
+            return Ok(());
+        }
         self.runtime.send(Command::Configure {
             profile: Box::new(self.editor.profile.clone()),
             template: self.editor.template.clone(),
             target,
-            mounted: self.settings.last_mounted,
             revision: self.revision,
         })
     }
@@ -285,6 +475,11 @@ impl MetinApp {
             .store
             .save(&profile, self.editor.template.as_ref())
             .map_err(|e| e.to_string())?;
+        if let Some(warning) = saved.cleanup_warning {
+            tracing::warn!(profile_id = %saved.profile.id, %warning, "Saved profile asset cleanup failed");
+            self.error = Some(warning);
+        }
+        let saved = saved.profile;
         self.store.select(saved.id).map_err(|e| e.to_string())?;
         let kept = self.retained_skill_indices();
         let retained_units = kept.iter().map(|i| self.units[*i]).collect::<Vec<_>>();
@@ -304,7 +499,7 @@ impl MetinApp {
             } else {
                 self.mode = EditMode::World;
                 if self.return_to_buffs {
-                    self.navigate(Tab::Buffs);
+                    self.navigate(Tab::Actions);
                 }
                 self.return_to_buffs = false;
             }
@@ -369,7 +564,6 @@ impl MetinApp {
             self.snapshot = snapshot;
         }
         self.reconcile_windows();
-        self.remember_mount();
         if self.snapshot_requested.is_some_and(|requested| {
             self.snapshot
                 .captured_at
@@ -394,18 +588,55 @@ impl MetinApp {
             }
         }
     }
-    fn remember_mount(&mut self) {
-        if self.snapshot.key.is_some()
+    fn declared_mount(&self) -> Option<bool> {
+        if self.key().is_some()
             && self.snapshot.key == self.key()
             && self.snapshot.revision == self.revision
-            && let Some(mounted) = self.snapshot.mounted
-            && mounted != self.settings.last_mounted
         {
-            self.settings.last_mounted = mounted;
-            if let Err(error) = self.settings.save(&self.root) {
-                self.error = Some(error.to_string());
+            self.snapshot.mounted
+        } else {
+            None
+        }
+    }
+    fn sync_preview_demand(&mut self) {
+        let Some(key) = self.key() else {
+            self.preview_demand = None;
+            return;
+        };
+        let enabled =
+            (self.tab == Tab::Run && self.run_live) || (self.tab == Tab::Calibration && self.live);
+        // A stop retires queued commands. Reassert presentation demand in the
+        // new generation even when the visible tab itself did not change.
+        let demand = (key, enabled, self.runtime.stop_generation());
+        if self.preview_demand != Some(demand) {
+            match self.runtime.send(Command::SetPreview { key, enabled }) {
+                Ok(()) => self.preview_demand = Some(demand),
+                Err(error) => self.error = Some(error),
             }
         }
+    }
+    fn presentation_snapshot(&mut self) -> Arc<RuntimeSnapshot> {
+        let interval = std::time::Duration::from_millis(
+            if self.settings.lite_mode {
+                self.settings.preview_refresh_ms.max(1000)
+            } else {
+                self.settings.preview_refresh_ms
+            }
+            .into(),
+        );
+        if self
+            .preview_snapshot
+            .as_ref()
+            .is_none_or(|old| old.key != self.snapshot.key)
+            || self.preview_updated.elapsed() >= interval
+        {
+            self.preview_snapshot = Some(self.snapshot.clone());
+            self.preview_updated = std::time::Instant::now();
+        }
+        self.preview_snapshot
+            .as_ref()
+            .expect("preview initialized")
+            .clone()
     }
 }
 
@@ -473,10 +704,15 @@ impl MetinApp {
         egui::CentralPanel::default().show(ui, |ui| match self.tab {
             Tab::Run => self.run_view(ui),
             Tab::Calibration => self.calibration_view(ui),
-            Tab::Buffs => self.buffs_view(ui),
+            Tab::Actions => self.actions_view(ui),
+            Tab::Safety => self.safety_view(ui),
             Tab::Settings => self.settings_view(ui),
         });
-        if !binding_was_active && self.binding.is_none() {
+        let history_was_open = self.history_open;
+        self.run_history_dialog(ui.ctx());
+        self.sync_preview_demand();
+        if !history_was_open && !self.history_open && !binding_was_active && self.binding.is_none()
+        {
             let input = ui.input(|i| {
                 (
                     i.key_pressed(egui::Key::Escape),

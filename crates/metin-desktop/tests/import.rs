@@ -105,8 +105,10 @@ fn import_preserves_selection_settings_and_originals() {
         store.select(p.id).unwrap();
     }
     UISettings {
+        ui_scale: 1.,
+        preview_refresh_ms: 200,
+        lite_mode: false,
         theme: "dark".into(),
-        last_mounted: true,
         profile_windows: [(
             p.id,
             metin_desktop::storage::WindowPreference {
@@ -122,7 +124,7 @@ fn import_preserves_selection_settings_and_originals() {
     let imported = ProfileStore::open(&destination.join("profiles")).unwrap();
     assert_eq!(imported.selected().unwrap(), Some(p.id));
     assert_eq!(imported.load(p.id).unwrap().0, p);
-    assert!(UISettings::load(&destination).unwrap().last_mounted);
+    assert_eq!(UISettings::load(&destination).unwrap().theme, "dark");
     assert_eq!(
         UISettings::load(&destination).unwrap().profile_windows,
         UISettings::load(&source).unwrap().profile_windows

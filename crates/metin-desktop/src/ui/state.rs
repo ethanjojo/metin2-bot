@@ -2,7 +2,22 @@ use super::*;
 
 pub(super) struct Blocker {
     pub message: String,
-    pub tab: Tab,
+    pub action: SetupAction,
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum SetupAction {
+    Window,
+    Calibration,
+    Mount,
+    Actions(ActionsPage),
+    Safety,
+    VisualRules,
+    Settings,
+}
+pub(super) struct RunSetupStep {
+    pub title: &'static str,
+    pub detail: String,
+    pub action: SetupAction,
 }
 impl MetinApp {
     pub(super) fn undo_profile(&mut self) {
@@ -70,6 +85,8 @@ impl MetinApp {
         self.send(Command::Detach);
         self.editor = Editor::new(profile, template);
         self.target = None;
+        self.history_open = false;
+        self.run_mount_editing = false;
         self.window_search.clear();
         self.target_list_revision = 0;
         self.send(Command::RefreshTargets);
@@ -80,15 +97,28 @@ impl MetinApp {
         self.units.fill(false);
         self.selected_skill = 0;
         self.return_to_buffs = false;
+        self.return_to_safety = false;
+        self.selected_safety = 0;
+        self.selected_periodic = None;
+        self.snapshot_score = None;
+        self.preview_snapshot = None;
         self.snapshot_requested = None;
         self.mode = EditMode::World;
         self.editing = false;
         self.viewport.reset();
         self.detection_cache = None;
+        self.click_preview = None;
         self.icon_textures.clear();
     }
     pub(super) fn calibration_ready(&self, mode: EditMode) -> bool {
         match mode {
+            EditMode::SafetyReference(index) => self
+                .editor
+                .profile
+                .safety
+                .rules
+                .get(index)
+                .is_some_and(|r| r.ready()),
             EditMode::Template => self.editor.template.is_some(),
             EditMode::Color => self.editor.profile.color.is_some(),
             EditMode::BuffIcon { index, inactive } => self
@@ -109,30 +139,39 @@ impl MetinApp {
         }
     }
     pub(super) fn start_blocker(&self) -> Option<Blocker> {
-        let block = |message: &str, tab| {
-            Some(Blocker {
+        self.readiness_blockers().into_iter().next()
+    }
+    // The toolbar and Run checklist consume the same validation results. Run
+    // groups related calibration errors into one actionable setup step.
+    fn readiness_blockers(&self) -> Vec<Blocker> {
+        let mut blockers = Vec::new();
+        let mut block = |message: &str, action| {
+            blockers.push(Blocker {
                 message: message.into(),
-                tab,
-            })
+                action,
+            });
         };
         if !self.snapshot.capabilities.automation_ready() {
-            return block(
+            block(
                 if self.snapshot.capabilities.reason.is_empty() {
                     "Checking platform capture and input support."
                 } else {
                     &self.snapshot.capabilities.reason
                 },
-                Tab::Settings,
+                SetupAction::Settings,
             );
         }
         if self.target.is_none() {
-            return block(
+            block(
                 "Select a game window to connect this profile.",
-                Tab::Calibration,
+                SetupAction::Window,
             );
         }
         if self.editor.profile.name.trim().is_empty() {
-            return block("Enter a profile name in Calibration.", Tab::Calibration);
+            block(
+                "Enter a profile name in Calibration.",
+                SetupAction::Calibration,
+            );
         }
         for (mode, label) in [
             (EditMode::World, "Set the search area."),
@@ -144,39 +183,136 @@ impl MetinApp {
             ),
         ] {
             if !self.calibration_ready(mode) {
-                return block(label, Tab::Calibration);
+                block(label, SetupAction::Calibration);
             }
         }
         let profile = self.profile_for_save();
+        if let Err(error) = profile.loot.validate(&profile) {
+            block(&error.to_string(), SetupAction::Actions(ActionsPage::Loot));
+        }
+        if let Err(issue) = metin_core::validate_scheduled_setup(&profile) {
+            block(
+                &issue.error.to_string(),
+                SetupAction::Actions(scheduled_page(issue.group)),
+            );
+        }
+        if let Err(error) = profile.safety.validate_schedule() {
+            block(&error.to_string(), SetupAction::Safety);
+        }
         if let Err(error) = profile.buffs.validate() {
-            return block(&error.to_string(), Tab::Buffs);
+            block(&error.to_string(), SetupAction::Actions(ActionsPage::Buffs));
         }
         if !profile.buffs.ready() {
-            return block(
+            block(
                 "Finish buff recognition: set its area and the active icon for each toggle skill.",
-                Tab::Buffs,
+                SetupAction::Actions(ActionsPage::Buffs),
             );
         }
-        if let Err(error) = profile.validate() {
-            return block(
-                &error.to_string(),
-                if error.to_string().to_lowercase().contains("skill") {
-                    Tab::Buffs
-                } else {
-                    Tab::Settings
-                },
+        if profile.buffs.enabled && self.declared_mount().is_none() {
+            block(
+                "Confirm On foot or Mounted for this game window in Actions > Mount.",
+                SetupAction::Mount,
             );
+        }
+        if let Err(error) = profile.validate_calibration() {
+            block(&error.to_string(), SetupAction::Calibration);
+        }
+        if let Err(error) = profile.validate_settings() {
+            block(&error.to_string(), SetupAction::Settings);
+        }
+        if let Err(error) = metin_core::validate_rules(&profile.safety.rules)
+            .and_then(|()| profile.validate_visual_actions())
+        {
+            block(&error.to_string(), SetupAction::VisualRules);
         }
         if !profile.ready() {
-            return block(
+            block(
                 "Take a calibrated snapshot and save the profile.",
-                Tab::Calibration,
+                SetupAction::Calibration,
             );
         }
-        None
+        blockers
+    }
+    pub(super) fn run_setup_steps(&self) -> Vec<RunSetupStep> {
+        let mut steps = Vec::new();
+        for blocker in self.readiness_blockers() {
+            let action = blocker.action;
+            if !steps
+                .iter()
+                .any(|step: &RunSetupStep| step.action == action)
+            {
+                steps.push(RunSetupStep {
+                    action,
+                    detail: blocker.message,
+                    title: match action {
+                        SetupAction::Window => "Game window",
+                        SetupAction::Calibration => "Calibration",
+                        SetupAction::Mount => "Mount state",
+                        SetupAction::Actions(page) => match page {
+                            ActionsPage::Buffs => "Buffs",
+                            ActionsPage::Loot => "Loot",
+                            ActionsPage::Periodic => "Periodic actions",
+                            ActionsPage::Puller => "Auto-puller",
+                            ActionsPage::OutOfTarget => "Out-of-target attack",
+                            ActionsPage::Mount => "Mount state",
+                            ActionsPage::VisualRules => "Visual rules",
+                        },
+                        SetupAction::Safety => "Safety setup",
+                        SetupAction::VisualRules => "Visual rules",
+                        SetupAction::Settings => "Platform & settings",
+                    },
+                });
+            }
+        }
+        steps
+    }
+    pub(super) fn open_setup(&mut self, action: SetupAction) {
+        match action {
+            SetupAction::Window | SetupAction::Calibration => self.navigate(Tab::Calibration),
+            SetupAction::Mount => {
+                self.navigate(Tab::Actions);
+                self.actions_page = ActionsPage::Mount;
+            }
+            SetupAction::Actions(page) => {
+                self.navigate(Tab::Actions);
+                self.actions_page = page;
+            }
+            SetupAction::Safety => self.navigate(Tab::Safety),
+            SetupAction::VisualRules => {
+                self.navigate(Tab::Actions);
+                self.actions_page = ActionsPage::VisualRules;
+            }
+            SetupAction::Settings => self.navigate(Tab::Settings),
+        }
     }
     pub(super) fn navigate(&mut self, tab: Tab) {
         if self.tab != tab {
+            if tab == Tab::Actions {
+                self.actions_page = if self
+                    .editor
+                    .profile
+                    .loot
+                    .validate(&self.editor.profile)
+                    .is_err()
+                {
+                    ActionsPage::Loot
+                } else if self.editor.profile.buffs.enabled && self.declared_mount().is_none() {
+                    ActionsPage::Mount
+                } else if self.editor.profile.buffs.validate().is_err()
+                    || !self.editor.profile.buffs.ready()
+                {
+                    ActionsPage::Buffs
+                } else if let Err(issue) =
+                    metin_core::validate_scheduled_setup(&self.editor.profile)
+                {
+                    scheduled_page(issue.group)
+                } else {
+                    self.actions_page
+                };
+            }
+            if tab == Tab::Settings && !self.snapshot.capabilities.automation_ready() {
+                self.settings_page = SettingsPage::Diagnostics;
+            }
             self.gesture = None;
             self.editing = false;
             self.binding = None;
@@ -190,6 +326,10 @@ impl MetinApp {
         self.binding = None;
         self.live = false;
         self.return_to_buffs = matches!(mode, EditMode::BuffArea | EditMode::BuffIcon { .. });
+        self.return_to_safety = matches!(
+            mode,
+            EditMode::SafetyReference(_) | EditMode::VisualClick(_) | EditMode::PeriodicClick(_)
+        );
         self.mode = mode;
         self.editing = true;
         self.tab = Tab::Calibration;
@@ -261,5 +401,16 @@ impl MetinApp {
         self.selected_skill = self.editor.profile.buffs.skills.len();
         self.editor.profile.buffs.skills.push(skill);
         self.editor.record();
+    }
+}
+
+fn scheduled_page(group: metin_core::ScheduledGroup) -> ActionsPage {
+    use metin_core::ScheduledGroup as G;
+    match group {
+        G::Buffs => ActionsPage::Buffs,
+        G::Loot => ActionsPage::Loot,
+        G::Periodic => ActionsPage::Periodic,
+        G::Puller => ActionsPage::Puller,
+        G::OutOfTarget => ActionsPage::OutOfTarget,
     }
 }

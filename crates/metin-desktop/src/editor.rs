@@ -1,5 +1,5 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
-use metin_core::{BuffIcon, ColorConfig, PanelConfig, Profile, Region};
+use metin_core::{ActionInput, BuffIcon, ColorConfig, PanelConfig, Profile, Region};
 use metin_platform::Frame;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -11,6 +11,9 @@ pub enum EditMode {
     Template,
     BuffArea,
     BuffIcon { index: usize, inactive: bool },
+    SafetyReference(usize),
+    VisualClick(usize),
+    PeriodicClick(uuid::Uuid),
 }
 #[derive(Clone, PartialEq)]
 struct Snapshot {
@@ -48,7 +51,7 @@ impl Editor {
         }
     }
     pub fn dirty(&self) -> bool {
-        self.snapshot() != self.saved
+        self.profile != self.saved.profile || self.template != self.saved.template
     }
     pub fn mark_saved(&mut self, profile: Profile) {
         self.profile = profile;
@@ -106,6 +109,19 @@ impl Editor {
                 s.inactive_icon = None;
             }
             self.template = None;
+            for action in &mut self.profile.periodic_actions {
+                if let ActionInput::Click { region } = &mut action.input {
+                    *region = None;
+                    action.enabled = false;
+                }
+            }
+            for rule in &mut self.profile.safety.rules {
+                if let ActionInput::Click { region } = &mut rule.execution.input {
+                    *region = None;
+                }
+                rule.reference = None;
+                rule.enabled = false;
+            }
         }
         self.profile.frame_size = Some(size);
         self.frozen = Some(frame);
@@ -119,6 +135,32 @@ impl Editor {
     }
     pub fn region(&self, mode: EditMode) -> Option<Region> {
         match mode {
+            EditMode::VisualClick(index) => {
+                self.profile
+                    .safety
+                    .rules
+                    .get(index)
+                    .and_then(|r| match r.execution.input {
+                        ActionInput::Click { region } => region,
+                        _ => None,
+                    })
+            }
+            EditMode::PeriodicClick(id) => self
+                .profile
+                .periodic_actions
+                .iter()
+                .find(|a| a.id == id)
+                .and_then(|a| match a.input {
+                    ActionInput::Click { region } => region,
+                    _ => None,
+                }),
+            EditMode::SafetyReference(index) => self
+                .profile
+                .safety
+                .rules
+                .get(index)
+                .and_then(|r| r.reference.as_ref())
+                .and_then(|r| r.region),
             EditMode::World => self.profile.region,
             EditMode::Mask(Some(i)) => self.profile.masks.get(i).copied(),
             EditMode::Panel => self.profile.panel.region,
@@ -162,6 +204,43 @@ impl Editor {
         let mut profile = self.profile.clone();
         let mut template = self.template.clone();
         match mode {
+            EditMode::VisualClick(index) => {
+                profile
+                    .safety
+                    .rules
+                    .get_mut(index)
+                    .ok_or("Visual rule no longer exists.")?
+                    .execution
+                    .input = ActionInput::Click {
+                    region: Some(region),
+                };
+            }
+            EditMode::PeriodicClick(id) => {
+                profile
+                    .periodic_actions
+                    .iter_mut()
+                    .find(|a| a.id == id)
+                    .ok_or("Periodic action no longer exists.")?
+                    .input = ActionInput::Click {
+                    region: Some(region),
+                };
+            }
+            EditMode::SafetyReference(index) => {
+                let image = metin_vision::crop(frame, region).map_err(|e| e.to_string())?;
+                metin_vision::validate_template(&image).map_err(|e| e.to_string())?;
+                let icon = BuffIcon {
+                    png: STANDARD
+                        .encode(metin_vision::encode_png(&image).map_err(|e| e.to_string())?),
+                    region: Some(region),
+                };
+                icon.png_bytes().map_err(|e| e.to_string())?;
+                profile
+                    .safety
+                    .rules
+                    .get_mut(index)
+                    .ok_or("Visual rule no longer exists.")?
+                    .reference = Some(icon);
+            }
             EditMode::World => profile.region = Some(region),
             EditMode::Mask(index) => {
                 if let Some(i) = index {
@@ -245,6 +324,29 @@ impl Editor {
     }
     pub fn delete(&mut self, mode: EditMode) -> Result<()> {
         match mode {
+            EditMode::VisualClick(index) => {
+                if let Some(rule) = self.profile.safety.rules.get_mut(index) {
+                    rule.execution.input = ActionInput::Click { region: None };
+                    rule.enabled = false;
+                }
+            }
+            EditMode::PeriodicClick(id) => {
+                if let Some(action) = self
+                    .profile
+                    .periodic_actions
+                    .iter_mut()
+                    .find(|a| a.id == id)
+                {
+                    action.input = ActionInput::Click { region: None };
+                    action.enabled = false;
+                }
+            }
+            EditMode::SafetyReference(index) => {
+                if let Some(rule) = self.profile.safety.rules.get_mut(index) {
+                    rule.reference = None;
+                    rule.enabled = false;
+                }
+            }
             EditMode::World => self.profile.region = None,
             EditMode::Mask(Some(i)) => {
                 if i < self.profile.masks.len() {

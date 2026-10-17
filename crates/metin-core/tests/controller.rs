@@ -30,6 +30,7 @@ fn target_cycle_trace_matches_reference() {
                 panel_present: row["panel"].as_bool().unwrap(),
                 reason: String::new(),
                 buffs: vec![],
+                safety_scores: vec![],
             },
         );
         assert_eq!(c.phase.as_str(), row["phase"].as_str().unwrap());
@@ -62,6 +63,7 @@ fn stale_ack_cannot_advance_pending_action() {
     c.buffs.mounted = Some(false);
     c.start(0.).unwrap();
     let o = Observation {
+        safety_scores: vec![],
         ready: true,
         candidates: vec![],
         panel_present: false,
@@ -105,6 +107,7 @@ fn preview_next_target_excludes_current_and_failed_candidates_without_changing_a
         },
     ];
     let o = Observation {
+        safety_scores: vec![],
         ready: true,
         candidates: candidates.clone(),
         ..Default::default()

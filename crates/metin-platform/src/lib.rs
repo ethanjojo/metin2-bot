@@ -133,7 +133,7 @@ pub trait PlatformBackend: Send {
     }
 }
 mod guarded_input;
-pub use guarded_input::InputExecutor;
+pub use guarded_input::{InputExecutor, InputVerification};
 
 #[derive(Debug, Clone, Copy)]
 pub struct KeyboardPacket {

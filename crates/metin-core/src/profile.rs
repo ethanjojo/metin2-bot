@@ -299,6 +299,16 @@ pub struct Profile {
     #[serde(default)]
     pub buffs: BuffConfig,
     #[serde(default)]
+    pub loot: crate::LootConfig,
+    #[serde(default)]
+    pub periodic_actions: Vec<crate::PeriodicAction>,
+    #[serde(default)]
+    pub puller: crate::PullerConfig,
+    #[serde(default)]
+    pub out_of_target: crate::OutOfTargetConfig,
+    #[serde(default)]
+    pub safety: crate::SafetyConfig,
+    #[serde(default)]
     pub frame_size: Option<[u32; 2]>,
     #[serde(default)]
     pub template_file: Option<String>,
@@ -307,6 +317,52 @@ pub struct Profile {
 }
 fn default_process() -> String {
     "game-client.exe".into()
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TimingPreset {
+    Careful,
+    Normal,
+    Responsive,
+}
+impl TimingPreset {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Careful => "Careful",
+            Self::Normal => "Normal",
+            Self::Responsive => "Responsive",
+        }
+    }
+    pub fn timing(self) -> TimingConfig {
+        match self {
+            Self::Normal => TimingConfig::default(),
+            Self::Careful => TimingConfig {
+                sample_interval: 0.5,
+                click_hover_seconds: 0.25,
+                click_hold_seconds: 0.25,
+                settle_seconds: 1.5,
+                search_timeout: 7.,
+                acquire_timeout: 25.,
+                attack_timeout: 150.,
+                rotate_seconds: 0.4,
+                ..Default::default()
+            },
+            Self::Responsive => TimingConfig {
+                sample_interval: 0.15,
+                click_hover_seconds: 0.1,
+                click_hold_seconds: 0.1,
+                settle_seconds: 0.5,
+                search_timeout: 4.,
+                acquire_timeout: 15.,
+                rotate_seconds: 0.25,
+                ..Default::default()
+            },
+        }
+    }
+    pub fn infer(t: &TimingConfig) -> Option<Self> {
+        [Self::Careful, Self::Normal, Self::Responsive]
+            .into_iter()
+            .find(|p| p.timing() == *t)
+    }
 }
 impl Profile {
     pub fn create(name: impl Into<String>) -> Self {
@@ -320,6 +376,11 @@ impl Profile {
             panel: PanelConfig::default(),
             timing: TimingConfig::default(),
             buffs: BuffConfig::default(),
+            loot: crate::LootConfig::default(),
+            periodic_actions: vec![],
+            puller: Default::default(),
+            out_of_target: Default::default(),
+            safety: crate::SafetyConfig::default(),
             frame_size: None,
             template_file: None,
             template_region: None,
@@ -334,6 +395,16 @@ impl Profile {
             && self.buffs.ready()
     }
     pub fn validate(&self) -> Result<()> {
+        self.validate_calibration()?;
+        self.validate_settings()?;
+        self.buffs.validate()?;
+        self.loot.validate(self)?;
+        crate::validate_scheduled(self)?;
+        self.safety.validate()?;
+        self.validate_visual_actions()
+    }
+    /// Profile identity and captured geometry, shared by storage and setup UI.
+    pub fn validate_calibration(&self) -> Result<()> {
         require(
             !self.name.trim().is_empty() && self.name.chars().count() <= 80,
             "Profile name must contain 1–80 characters.",
@@ -350,13 +421,6 @@ impl Profile {
         ) {
             r.validate()?;
         }
-        if let Some(c) = &self.color {
-            c.validate()?;
-        }
-        number("threshold", self.panel.threshold)?;
-        number("stable_frames", self.panel.stable_frames.into())?;
-        self.timing.validate()?;
-        self.buffs.validate()?;
         if let Some(size) = self.frame_size {
             require(
                 size.iter().all(|n| (100..=16384).contains(n)),
@@ -369,11 +433,47 @@ impl Profile {
                 "Invalid template path.",
             )?;
         }
+        Ok(())
+    }
+    /// Detection and timing settings, independent from configured actions.
+    pub fn validate_settings(&self) -> Result<()> {
+        if let Some(c) = &self.color {
+            c.validate()?;
+        }
+        number("threshold", self.panel.threshold)?;
+        number("stable_frames", self.panel.stable_frames.into())?;
+        self.timing.validate()?;
         require(
             self.timing.acquire_timeout
                 > f64::from(self.panel.stable_frames + 1) * self.timing.sample_interval * 1.5,
             "Confirmation timeout is too short for the required frames.",
         )
+    }
+    pub fn validate_visual_actions(&self) -> Result<()> {
+        for rule in &self.safety.rules {
+            if rule.reaction.execute {
+                rule.execution
+                    .input
+                    .validate(rule.enabled, self.frame_size)?;
+                if rule.enabled {
+                    let frames =
+                        if rule.execution.verification == crate::Verification::ReferenceGone {
+                            self.panel.stable_frames.max(2) + 1
+                        } else {
+                            1
+                        };
+                    let minimum = self.timing.sample_interval * f64::from(frames) * 1.5;
+                    require(
+                        rule.execution.timeout_seconds >= minimum,
+                        &format!(
+                            "{}: verification timeout must be at least {minimum:.2} seconds for the capture interval and confirmation frames.",
+                            rule.name
+                        ),
+                    )?;
+                }
+            }
+        }
+        Ok(())
     }
     pub fn from_json(text: &str) -> Result<Self> {
         let mut v: serde_json::Value =

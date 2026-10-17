@@ -34,7 +34,7 @@ fn per_profile_window_preferences_roundtrip_and_old_settings_still_load() {
     let dir = tempfile::tempdir().unwrap();
     let a = uuid::Uuid::new_v4().to_string();
     let b = uuid::Uuid::new_v4().to_string();
-    let expected = serde_json::json!({"theme":"dark","last_mounted":true,"profile_windows":{
+    let expected = serde_json::json!({"theme":"dark","ui_scale":1.0,"lite_mode":false,"preview_refresh_ms":200,"profile_windows":{
         (a):{"process_name":"client-a.exe","title":"Server A"},
         (b):{"process_name":"client-b.exe","title":"Server B"}
     }});
@@ -58,7 +58,9 @@ fn incomplete_profiles_selection_and_independent_templates_roundtrip() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = ProfileStore::open(dir.path()).unwrap();
     let p = Profile::create("Žluťoučký kůň");
-    store.save(&p, None).unwrap();
+    let saved = store.save(&p, None).unwrap();
+    assert_eq!(saved.profile, p);
+    assert!(saved.cleanup_warning.is_none());
     store.select(p.id).unwrap();
     assert_eq!(store.load(p.id).unwrap().0, p);
     assert_eq!(store.selected().unwrap(), Some(p.id));
@@ -108,6 +110,50 @@ fn profile_sort_uses_full_unicode_casefold() {
 
 #[cfg(windows)]
 #[test]
+fn committed_profile_save_succeeds_when_obsolete_template_is_locked() {
+    use metin_platform::Frame;
+    use std::os::windows::fs::OpenOptionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = ProfileStore::open(dir.path()).unwrap();
+    let frame = Frame::new(10, 10, (0..300).map(|n| (n % 251) as u8).collect()).unwrap();
+    let original = store
+        .save(&Profile::create("Original"), Some(&frame))
+        .unwrap()
+        .profile;
+    let old_asset = dir
+        .path()
+        .join(original.id.to_string())
+        .join(original.template_file.as_ref().unwrap());
+    let locked = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(3)
+        .open(&old_asset)
+        .unwrap();
+    let mut changed = original.clone();
+    changed.name = "Committed".into();
+
+    let result = store.save(&changed, Some(&frame));
+    assert!(
+        result.is_ok(),
+        "Committed JSON must be reported as a successful save: {result:?}"
+    );
+    let outcome = result.unwrap();
+    assert!(
+        outcome
+            .cleanup_warning
+            .as_ref()
+            .is_some_and(|warning| warning.contains(&old_asset.display().to_string()))
+    );
+    let committed = store.load(original.id).unwrap().0;
+    assert_eq!(outcome.profile, committed);
+    assert_eq!(committed.name, "Committed");
+    assert_ne!(committed.template_file, original.template_file);
+    assert!(old_asset.is_file());
+    drop(locked);
+}
+
+#[cfg(windows)]
+#[test]
 fn failed_json_replacement_preserves_previous_template_and_cleans_new_asset() {
     use metin_platform::Frame;
     use std::os::windows::fs::OpenOptionsExt;
@@ -116,7 +162,8 @@ fn failed_json_replacement_preserves_previous_template_and_cleans_new_asset() {
     let frame = Frame::new(10, 10, (0..300).map(|n| (n % 251) as u8).collect()).unwrap();
     let p = store
         .save(&Profile::create("Atomic"), Some(&frame))
-        .unwrap();
+        .unwrap()
+        .profile;
     let folder = dir.path().join(p.id.to_string());
     let json = folder.join("profile.json");
     let before = std::fs::read(&json).unwrap();
@@ -186,4 +233,41 @@ fn selection_uuid_requires_canonical_format_before_loading_existing_profile() {
     }
     store.select(p.id).unwrap();
     assert_eq!(store.selected().unwrap(), Some(p.id));
+}
+
+#[test]
+fn presentation_settings_roundtrip_and_invalid_values_fail_before_write() {
+    use metin_desktop::storage::UISettings;
+    let dir = tempfile::tempdir().unwrap();
+    let mut settings = UISettings {
+        ui_scale: 1.25,
+        lite_mode: true,
+        preview_refresh_ms: 1500,
+        ..Default::default()
+    };
+    settings.save(dir.path()).unwrap();
+    let read = UISettings::load(dir.path()).unwrap();
+    assert_eq!(read.ui_scale, 1.25);
+    assert!(read.lite_mode);
+    assert_eq!(read.preview_refresh_ms, 1500);
+    let original = std::fs::read(dir.path().join("ui-settings.json")).unwrap();
+    settings.preview_refresh_ms = 0;
+    assert!(settings.save(dir.path()).is_err());
+    assert_eq!(
+        std::fs::read(dir.path().join("ui-settings.json")).unwrap(),
+        original
+    );
+}
+
+#[test]
+fn obsolete_global_mount_hint_is_read_but_never_saved_or_reused() {
+    use metin_desktop::storage::UISettings;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ui-settings.json");
+    std::fs::write(&path, r#"{"theme":"dark","last_mounted":true}"#).unwrap();
+    let settings = UISettings::load(dir.path()).unwrap();
+    assert_eq!(settings.theme, "dark");
+    settings.save(dir.path()).unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert!(value.get("last_mounted").is_none());
 }

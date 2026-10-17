@@ -46,6 +46,49 @@ impl Drop for Apartment {
         }
     }
 }
+#[derive(Default)]
+struct ReadbackTexture(Option<([u32; 2], ID3D11Texture2D)>);
+impl ReadbackTexture {
+    fn get(&mut self, device: &ID3D11Device, width: u32, height: u32) -> Result<&ID3D11Texture2D> {
+        let size = [width, height];
+        if self
+            .0
+            .as_ref()
+            .is_none_or(|(cached_size, _)| *cached_size != size)
+        {
+            // Drop the previous allocation before replacing it. The owning capture
+            // also clears this cache when the frame pool changes shape.
+            self.0 = None;
+            let desc = D3D11_TEXTURE2D_DESC {
+                Width: width,
+                Height: height,
+                MipLevels: 1,
+                ArraySize: 1,
+                Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                SampleDesc: windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC {
+                    Count: 1,
+                    Quality: 0,
+                },
+                Usage: D3D11_USAGE_STAGING,
+                CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
+                ..Default::default()
+            };
+            let mut texture = None;
+            unsafe {
+                device
+                    .CreateTexture2D(&desc, None, Some(&mut texture))
+                    .map_err(error)?;
+            }
+            let texture = texture
+                .ok_or_else(|| PlatformError("Capture readback texture was not created.".into()))?;
+            self.0 = Some((size, texture));
+        }
+        Ok(&self.0.as_ref().expect("readback texture initialized").1)
+    }
+    fn clear(&mut self) {
+        self.0 = None;
+    }
+}
 pub(super) struct WindowCapture {
     target: TargetToken,
     session: GraphicsCaptureSession,
@@ -54,6 +97,9 @@ pub(super) struct WindowCapture {
     device: ID3D11Device,
     context: ID3D11DeviceContext,
     size: windows::Graphics::SizeInt32,
+    // Device and context are fixed for this capture's lifetime, so dropping or
+    // recreating the capture also drops its device-specific readback texture.
+    readback: ReadbackTexture,
     // Declared last so interfaces are released before COM is uninitialized.
     _apartment: Apartment,
 }
@@ -123,6 +169,7 @@ impl WindowCapture {
             device,
             context,
             size,
+            readback: ReadbackTexture::default(),
             _apartment: apartment,
         })
     }
@@ -200,6 +247,7 @@ impl WindowCapture {
         }
     }
     fn resize(&mut self, size: windows::Graphics::SizeInt32) -> Result<()> {
+        self.readback.clear();
         let dxgi: IDXGIDevice = self.device.cast().map_err(error)?;
         let device: IDirect3DDevice = unsafe {
             CreateDirect3D11DeviceFromDXGIDevice(&dxgi)
@@ -214,7 +262,7 @@ impl WindowCapture {
         Ok(())
     }
     fn read_client(
-        &self,
+        &mut self,
         surface: &windows::Graphics::DirectX::Direct3D11::IDirect3DSurface,
         geometry: TargetState,
         deadline: Instant,
@@ -248,28 +296,9 @@ impl WindowCapture {
                 "Window frame and client geometry do not match. Retry the capture.".into(),
             ));
         }
-        let staging_desc = D3D11_TEXTURE2D_DESC {
-            Width: geometry.width,
-            Height: geometry.height,
-            MipLevels: 1,
-            ArraySize: 1,
-            Format: DXGI_FORMAT_B8G8R8A8_UNORM,
-            SampleDesc: windows::Win32::Graphics::Dxgi::Common::DXGI_SAMPLE_DESC {
-                Count: 1,
-                Quality: 0,
-            },
-            Usage: D3D11_USAGE_STAGING,
-            CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
-            ..Default::default()
-        };
-        let mut staging = None;
-        unsafe {
-            self.device
-                .CreateTexture2D(&staging_desc, None, Some(&mut staging))
-                .map_err(error)?;
-        }
-        let staging = staging
-            .ok_or_else(|| PlatformError("Capture readback texture was not created.".into()))?;
+        let staging = self
+            .readback
+            .get(&self.device, geometry.width, geometry.height)?;
         let crop = D3D11_BOX {
             left: x as u32,
             top: y as u32,
@@ -280,7 +309,7 @@ impl WindowCapture {
         };
         unsafe {
             self.context
-                .CopySubresourceRegion(&staging, 0, 0, 0, 0, &texture, 0, Some(&crop));
+                .CopySubresourceRegion(staging, 0, 0, 0, 0, &texture, 0, Some(&crop));
         }
         let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
         loop {
@@ -291,7 +320,7 @@ impl WindowCapture {
             }
             match unsafe {
                 self.context.Map(
-                    &staging,
+                    staging,
                     0,
                     D3D11_MAP_READ,
                     D3D11_MAP_FLAG_DO_NOT_WAIT.0 as u32,
@@ -322,7 +351,7 @@ impl WindowCapture {
                         .flat_map(|p| [p[0], p[1], p[2]]),
                 );
             }
-            self.context.Unmap(&staging, 0);
+            self.context.Unmap(staging, 0);
         }
         Ok(pixels)
     }
@@ -385,5 +414,77 @@ mod tests {
         let old = source_instant(5_000_000, (now, 10_000_000)).unwrap();
         assert_eq!(now.duration_since(old), Duration::from_millis(500));
         assert!(source_instant(10_000_001, (now, 10_000_000)).is_err());
+    }
+    #[test]
+    fn readback_reuses_texture_and_recreates_on_size_or_lifecycle_change() {
+        // WARP exercises real D3D resources without a window, capture session,
+        // game, hardware-adapter requirement, or elevated privileges.
+        let (mut device, mut context) = (None, None);
+        unsafe {
+            D3D11CreateDevice(
+                None,
+                windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_WARP,
+                HMODULE::default(),
+                D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+                None,
+                D3D11_SDK_VERSION,
+                Some(&mut device),
+                None,
+                Some(&mut context),
+            )
+            .unwrap();
+        }
+        let device = device.unwrap();
+        let context = context.unwrap();
+        let mut cache = ReadbackTexture::default();
+        let first = cache.get(&device, 4, 3).unwrap().clone();
+        assert_eq!(first.as_raw(), cache.get(&device, 4, 3).unwrap().as_raw());
+        let changed = cache.get(&device, 3, 4).unwrap().clone();
+        assert_ne!(first.as_raw(), changed.as_raw());
+        cache.clear();
+        let recreated = cache.get(&device, 3, 4).unwrap().clone();
+        assert_ne!(changed.as_raw(), recreated.as_raw());
+
+        let mut desc = D3D11_TEXTURE2D_DESC::default();
+        unsafe {
+            recreated.GetDesc(&mut desc);
+        }
+        assert_eq!((desc.Width, desc.Height), (3, 4));
+        assert_eq!(desc.Usage, D3D11_USAGE_STAGING);
+        assert_eq!(desc.CPUAccessFlags, D3D11_CPU_ACCESS_READ.0 as u32);
+        desc.Usage = D3D11_USAGE_DEFAULT;
+        desc.CPUAccessFlags = 0;
+        let mut source = None;
+        let pixels: Vec<u8> = (0..48).collect();
+        let initial = D3D11_SUBRESOURCE_DATA {
+            pSysMem: pixels.as_ptr().cast(),
+            SysMemPitch: 12,
+            SysMemSlicePitch: 48,
+        };
+        unsafe {
+            device
+                .CreateTexture2D(&desc, Some(&initial), Some(&mut source))
+                .unwrap();
+            for _ in 0..2 {
+                let staging = cache.get(&device, 3, 4).unwrap();
+                context.CopyResource(staging, source.as_ref().unwrap());
+                let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
+                context
+                    .Map(staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
+                    .unwrap();
+                let rows: Vec<u8> = (0..4)
+                    .flat_map(|row| {
+                        std::slice::from_raw_parts(
+                            (mapped.pData as *const u8).add(row * mapped.RowPitch as usize),
+                            12,
+                        )
+                        .iter()
+                        .copied()
+                    })
+                    .collect();
+                context.Unmap(staging, 0);
+                assert_eq!(rows, pixels);
+            }
+        }
     }
 }

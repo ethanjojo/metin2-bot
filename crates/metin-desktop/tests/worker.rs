@@ -12,6 +12,11 @@ struct Controls {
     toggle: bool,
     stop: bool,
     fail_key: bool,
+    lose_focus: bool,
+    fail_capture: bool,
+    fail_attach: bool,
+    captures: usize,
+    capture_limits: Vec<Duration>,
     calls: Vec<(u16, bool)>,
 }
 struct Fake {
@@ -43,6 +48,9 @@ impl PlatformBackend for Fake {
         Ok(vec![])
     }
     fn attach(&mut self, target: TargetToken) -> Result<()> {
+        if self.controls.lock().unwrap().fail_attach {
+            return Err(PlatformError("Injected attachment failure".into()));
+        }
         self.target = target;
         Ok(())
     }
@@ -54,13 +62,22 @@ impl PlatformBackend for Fake {
             width: 200,
             height: 200,
             visible: true,
-            foreground: true,
+            foreground: !self.controls.lock().unwrap().lose_focus,
         })
     }
     fn request_activation(&mut self) -> Result<bool> {
         Ok(true)
     }
-    fn capture(&mut self, _: Instant, _: &StopToken, _: u64) -> Result<CapturedFrame> {
+    fn capture(&mut self, deadline: Instant, _: &StopToken, _: u64) -> Result<CapturedFrame> {
+        {
+            let mut c = self.controls.lock().unwrap();
+            c.captures += 1;
+            c.capture_limits
+                .push(deadline.saturating_duration_since(Instant::now()));
+            if c.fail_capture {
+                return Err(PlatformError("Injected capture failure".into()));
+            }
+        }
         self.id += 1;
         Ok(CapturedFrame {
             frame: Frame::new(
@@ -151,15 +168,31 @@ fn profile() -> Profile {
     p
 }
 fn configure(r: &RuntimeHandle, p: Profile, target: TargetToken, mounted: bool, revision: u64) {
+    let key = SessionKey {
+        profile_id: p.id,
+        target,
+    };
+    let new_session = r.latest().unwrap().key != Some(key);
     let template = Frame::new(10, 10, (0..300).map(|n| (n % 251) as u8).collect()).unwrap();
     r.send(Command::Configure {
         profile: Box::new(p),
         template: Some(template),
         target,
-        mounted,
         revision,
     })
     .unwrap();
+    wait(r, |s| s.key == Some(key) && s.revision == revision);
+    if new_session {
+        // Fixtures declare their own current state explicitly; Configure no
+        // longer supplies a persisted state belonging to another character.
+        r.send(Command::DeclareMount {
+            key,
+            mounted,
+            revision,
+        })
+        .unwrap();
+        wait(r, |s| s.mounted == Some(mounted));
+    }
 }
 fn wait(r: &RuntimeHandle, predicate: impl Fn(&metin_desktop::runtime::RuntimeSnapshot) -> bool) {
     let deadline = Instant::now() + Duration::from_secs(4);
@@ -276,6 +309,33 @@ fn same_target_save_preserves_declared_mount_and_stale_declaration_is_rejected()
 }
 
 #[test]
+fn a_new_profile_or_window_requires_its_own_mount_declaration() {
+    let (r, controls) = runtime();
+    let mut p = profile();
+    p.buffs.enabled = true;
+    p.buffs.skills.push(Default::default());
+    configure(&r, p.clone(), token(1), true, 1);
+    wait(&r, |s| s.revision == 1);
+    p.id = Profile::create("Another character").id;
+    r.send(Command::Configure {
+        profile: Box::new(p),
+        template: None,
+        target: token(2),
+        revision: 2,
+    })
+    .unwrap();
+    wait(&r, |s| s.revision == 2);
+    assert!(
+        r.latest().unwrap().mounted.is_none(),
+        "Never inherit a declaration from another session"
+    );
+    controls.lock().unwrap().toggle = true;
+    wait(&r, |s| s.reason.contains("Mount state is unknown"));
+    assert!(controls.lock().unwrap().calls.iter().all(|(_, down)| !down));
+    r.shutdown().unwrap();
+}
+
+#[test]
 fn failed_mount_remains_unknown_across_refresh_until_explicit_declaration() {
     let (r, controls) = runtime();
     let mut p = profile();
@@ -312,5 +372,237 @@ fn failed_mount_remains_unknown_across_refresh_until_explicit_declaration() {
             .iter()
             .any(|(_, down)| !*down)
     );
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn history_clear_and_statistics_reset_keep_safety_budget_and_reject_stale_keys() {
+    let (r, controls) = runtime();
+    let mut p = profile();
+    p.safety.stop_enabled = true;
+    let key = SessionKey {
+        profile_id: p.id,
+        target: token(1),
+    };
+    configure(&r, p.clone(), token(1), false, 1);
+    wait(&r, |s| s.revision == 1);
+    controls.lock().unwrap().toggle = true;
+    wait(&r, |s| s.running && s.schedule.active_seconds > 0.2);
+    r.stop();
+    wait(&r, |s| !s.running && !s.events.is_empty());
+    let active = r.latest().unwrap().schedule.active_seconds;
+    r.send(Command::ResetStatistics { key }).unwrap();
+    r.send(Command::ClearHistory {
+        key: SessionKey {
+            profile_id: key.profile_id,
+            target: token(2),
+        },
+    })
+    .unwrap();
+    std::thread::sleep(Duration::from_millis(250));
+    assert!(!r.latest().unwrap().events.is_empty());
+    r.send(Command::ClearHistory { key }).unwrap();
+    wait(&r, |s| s.events.is_empty());
+    assert_eq!(r.latest().unwrap().schedule.active_seconds, active);
+    assert_eq!(r.latest().unwrap().statistics.active_seconds, 0.);
+    configure(&r, p.clone(), token(1), false, 2);
+    wait(&r, |s| s.revision == 2);
+    assert_eq!(r.latest().unwrap().schedule.active_seconds, active);
+    p.safety.stop_after_seconds = 3600.;
+    configure(&r, p, token(1), false, 3);
+    wait(&r, |s| s.revision == 3);
+    assert_eq!(r.latest().unwrap().schedule.active_seconds, 0.);
+    assert_eq!(r.latest().unwrap().schedule.stop_remaining, Some(3600.));
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn held_attack_keeps_capturing_and_releases_on_stop_focus_loss_or_capture_error() {
+    for fault in [0, 1, 2] {
+        let (r, controls) = runtime();
+        let mut p = profile();
+        p.timing.search_timeout = 120.;
+        p.out_of_target.during_search = true;
+        p.out_of_target.search_after_seconds = 1.;
+        p.out_of_target.search_attack_seconds = 3.;
+        configure(&r, p, token(1), false, 1);
+        wait(&r, |s| s.revision == 1);
+        controls.lock().unwrap().toggle = true;
+        wait(&r, |s| s.state == "Out-of-target attack");
+        let before = controls.lock().unwrap().captures;
+        std::thread::sleep(Duration::from_millis(250));
+        {
+            let c = controls.lock().unwrap();
+            assert!(c.captures > before);
+            assert!(c.calls.contains(&(0x20, true)));
+            assert!(!c.calls.contains(&(0x20, false)));
+            assert!(
+                c.capture_limits
+                    .iter()
+                    .any(|d| *d <= Duration::from_millis(100))
+            );
+        }
+        match fault {
+            0 => r.stop(),
+            1 => controls.lock().unwrap().lose_focus = true,
+            _ => controls.lock().unwrap().fail_capture = true,
+        }
+        wait(&r, |s| !s.running);
+        assert!(controls.lock().unwrap().calls.contains(&(0x20, false)));
+        r.shutdown().unwrap();
+    }
+}
+
+#[test]
+fn a_paused_session_without_preview_demand_does_not_capture() {
+    let (r, controls) = runtime();
+    configure(&r, profile(), token(1), false, 1);
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(controls.lock().unwrap().captures, 0);
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn mount_declaration_does_not_need_a_frame_template_or_calibration() {
+    let (r, controls) = runtime();
+    let mut p = Profile::create("Uncalibrated character");
+    p.buffs.enabled = true;
+    assert!(
+        p.validate().is_err(),
+        "An unfinished buff draft must not prevent connecting"
+    );
+    let key = SessionKey {
+        profile_id: p.id,
+        target: token(1),
+    };
+    r.send(Command::Connect { key, revision: 1 }).unwrap();
+    wait(&r, |s| s.key == Some(key) && s.revision == 1);
+    // Even an explicit rejected configuration cannot invalidate the independent connection.
+    r.send(Command::Configure {
+        profile: Box::new(p),
+        template: None,
+        target: token(1),
+        revision: 1,
+    })
+    .unwrap();
+    wait(&r, |s| s.reason.contains("one to eight skills"));
+    assert!(r.latest().unwrap().frame.is_none());
+    for (revision, mounted) in [(2, false), (3, true)] {
+        r.send(Command::DeclareMount {
+            key,
+            mounted,
+            revision,
+        })
+        .unwrap();
+        wait(&r, |s| s.revision == revision && s.mounted == Some(mounted));
+    }
+    controls.lock().unwrap().toggle = true;
+    wait(&r, |s| s.reason.contains("Complete calibration"));
+    let c = controls.lock().unwrap();
+    assert_eq!(c.captures, 0);
+    assert!(c.calls.iter().all(|(_, down)| !down));
+    drop(c);
+    r.send(Command::Detach).unwrap();
+    wait(&r, |s| s.key.is_none());
+    let detached = r.latest().unwrap();
+    assert_eq!(detached.mounted, None);
+    assert!(detached.timers.is_empty());
+    assert!(detached.action_timers.is_empty());
+    assert_eq!(detached.statistics, Default::default());
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn reconnecting_same_session_preserves_acknowledged_mount_and_applied_profile() {
+    let (r, controls) = runtime();
+    let p = profile();
+    let key = SessionKey {
+        profile_id: p.id,
+        target: token(1),
+    };
+    configure(&r, p, token(1), true, 1);
+    r.send(Command::Connect { key, revision: 2 }).unwrap();
+    wait(&r, |s| s.revision == 2);
+    assert_eq!(r.latest().unwrap().mounted, Some(true));
+    controls.lock().unwrap().toggle = true;
+    wait(&r, |s| s.running);
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn failed_connection_to_different_session_retires_old_controller_and_mount() {
+    let (r, controls) = runtime();
+    let p = profile();
+    let key = SessionKey {
+        profile_id: p.id,
+        target: token(1),
+    };
+    configure(&r, p, token(1), true, 1);
+    controls.lock().unwrap().fail_attach = true;
+    r.send(Command::Connect {
+        key: SessionKey {
+            target: token(2),
+            ..key
+        },
+        revision: 2,
+    })
+    .unwrap();
+    wait(&r, |s| {
+        s.key.is_none() && s.reason.contains("Injected attachment failure")
+    });
+    assert_eq!(r.latest().unwrap().mounted, None);
+    controls.lock().unwrap().toggle = true;
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(!r.latest().unwrap().running);
+    assert_eq!(r.latest().unwrap().key, None);
+    assert!(controls.lock().unwrap().calls.iter().all(|(_, down)| !down));
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn preview_and_snapshot_are_explicit_and_old_session_requests_are_ignored() {
+    let (r, controls) = runtime();
+    let p = profile();
+    let key = SessionKey {
+        profile_id: p.id,
+        target: token(1),
+    };
+    configure(&r, p, token(1), false, 1);
+    r.send(Command::Snapshot {
+        key: SessionKey {
+            target: token(2),
+            ..key
+        },
+    })
+    .unwrap();
+    std::thread::sleep(Duration::from_millis(150));
+    assert_eq!(controls.lock().unwrap().captures, 0);
+    r.send(Command::Snapshot { key }).unwrap();
+    wait(&r, |s| s.frame_id > 0);
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(
+        controls.lock().unwrap().captures,
+        1,
+        "Snapshot is a single request"
+    );
+    r.send(Command::SetPreview { key, enabled: true }).unwrap();
+    wait(&r, |s| s.frame_id > 2);
+    r.send(Command::SetPreview {
+        key,
+        enabled: false,
+    })
+    .unwrap();
+    std::thread::sleep(Duration::from_millis(150));
+    let before = controls.lock().unwrap().captures;
+    std::thread::sleep(Duration::from_millis(250));
+    assert_eq!(controls.lock().unwrap().captures, before);
+    controls.lock().unwrap().toggle = true;
+    wait(&r, |s| s.running && s.frame_id > before as u64);
+    r.stop();
+    wait(&r, |s| !s.running);
+    std::thread::sleep(Duration::from_millis(150));
+    let stopped = controls.lock().unwrap().captures;
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(controls.lock().unwrap().captures, stopped);
     r.shutdown().unwrap();
 }

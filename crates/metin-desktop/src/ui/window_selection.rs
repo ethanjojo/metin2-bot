@@ -127,6 +127,10 @@ impl MetinApp {
                 .map_err(|error| error.to_string())?;
             self.settings = settings;
         }
+        if self.target != Some(target) {
+            self.history_open = false;
+            self.run_mount_editing = false;
+        }
         self.target = Some(target);
         self.snapshot_requested = None;
         self.configure()

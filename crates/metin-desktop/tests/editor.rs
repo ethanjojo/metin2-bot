@@ -195,3 +195,29 @@ fn new_frame_dimensions_retire_history_from_previous_geometry() {
     assert_eq!(e.profile.frame_size, Some([300, 200]));
     assert!(e.profile.region.is_none());
 }
+
+#[test]
+fn safety_capture_supports_undo_and_disables_after_geometry_changes() {
+    let mut e = Editor::new(Profile::create("Safety"), None);
+    e.profile
+        .safety
+        .rules
+        .push(metin_core::SafetyRule::new("Disconnected"));
+    e.record();
+    e.freeze(distinctive_frame(0)).unwrap();
+    e.set_region(EditMode::SafetyReference(0), area(0.1, 0.1, 0.2, 0.2))
+        .unwrap();
+    assert!(e.profile.safety.rules[0].ready());
+    e.profile.safety.rules[0].enabled = true;
+    e.record();
+    e.delete(EditMode::SafetyReference(0)).unwrap();
+    assert!(!e.profile.safety.rules[0].enabled);
+    assert!(!e.profile.safety.rules[0].ready());
+    e.undo();
+    assert!(e.profile.safety.rules[0].enabled);
+    assert!(e.profile.safety.rules[0].ready());
+    e.freeze(Frame::new(300, 300, vec![0; 300 * 300 * 3]).unwrap())
+        .unwrap();
+    assert!(!e.profile.safety.rules[0].enabled);
+    assert!(!e.profile.safety.rules[0].ready());
+}

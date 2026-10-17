@@ -33,5 +33,85 @@
     "key_hold_seconds": 0.15,
     "skills": [],
     "icon_region": null
+  },
+  "loot": {
+    "enabled": false,
+    "shortcut": "Z",
+    "presses": 3,
+    "delay_seconds": 0.5,
+    "interval_seconds": 0.3,
+    "hold_seconds": 0.1
+  },
+  "safety": {
+    "stop_enabled": false,
+    "stop_after_seconds": 14400.0,
+    "clock_enabled": false,
+    "stop_at_minute": 1380,
+    "breaks_enabled": false,
+    "break_every_seconds": 2700.0,
+    "break_seconds": 300.0,
+    "rules": [
+      {
+        "id": "5d9da9f8-bb0f-41e3-acd1-c80d7c00c815",
+        "name": "Custom visual event",
+        "enabled": false,
+        "reference": null,
+        "threshold": 0.92,
+        "duration_seconds": 3.0,
+        "reaction": { "notify": true, "pause": true, "execute": false },
+        "execution": {
+          "input": {
+            "kind": "click",
+            "region": null
+          },
+          "verification": "reference_gone",
+          "wait_seconds": 1.0,
+          "timeout_seconds": 10.0,
+          "attempts": 2,
+          "after_success": "pause"
+        }
+      }
+    ],
+    "recovery_enabled": false,
+    "recovery_attempts": 2,
+    "recovery_wait_seconds": 2.0,
+    "sound": false,
+    "system_notification": false
+  },
+  "periodic_actions": [
+    {
+      "id": "9113f1df-092e-4b4a-8c69-e541609c1caa",
+      "name": "Example periodic key",
+      "enabled": false,
+      "input": {
+        "kind": "key",
+        "shortcut": "F4",
+        "hold_seconds": 0.15
+      },
+      "interval_seconds": 120.0,
+      "wait_seconds": 1.0,
+      "first_run": "after_interval"
+    }
+  ],
+  "puller": {
+    "enabled": false,
+    "mode": "combat_start",
+    "timing": {
+      "shortcut": "F4",
+      "interval_seconds": 120.0,
+      "wait_seconds": 1.0,
+      "hold_seconds": 0.15
+    },
+    "presses": 1,
+    "press_interval_seconds": 0.3
+  },
+  "out_of_target": {
+    "shortcut": "Space",
+    "after_combat": false,
+    "after_combat_seconds": 3.0,
+    "during_search": false,
+    "search_after_seconds": 10.0,
+    "search_attack_seconds": 3.0,
+    "max_search_attacks": 2
   }
 }

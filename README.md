@@ -5,7 +5,7 @@
 
 # MetinBot
 
-A Rust desktop app for visual target recognition, calibration and buff scheduling, built with **egui** and **OpenCV**. Processing and profiles stay on your computer.
+A Rust desktop app for visual target recognition, calibration and action scheduling, built with **egui** and **OpenCV**. Processing and profiles stay on your computer.
 
 [Download prereleases](https://github.com/ethanjojo/metin2-bot/releases) · [User guide](docs/user-guide.md) · [Development](docs/development.md)
 
@@ -20,10 +20,11 @@ A Rust desktop app for visual target recognition, calibration and buff schedulin
 
 ## What it does
 
-- **Run** — readiness checks, current activity and a preview of detected targets.
+- **Run** — current activity, mount confirmation, target preview, countdowns, action links and a five-event summary with full history in a separate dialog.
 - **Calibration** — window selection, snapshots, color picking, editable regions, zoom and undo/redo.
-- **Buffs** — ordered skills, shortcuts, timed refresh and active/inactive icon recognition.
-- **Settings** — recognition, timing and input safeguards, with light and dark themes.
+- **Actions** — ordered buffs, icon recognition, mount behavior, pickup, periodic keys/clicks, calibrated visual rules, combat-triggered auto-puller and bounded out-of-target attacks.
+- **Safety** — automatic stops, scheduled breaks, limited recovery and local alerts.
+- **Settings** — separate detection, combat timing, appearance/performance and diagnostics pages.
 - **Profiles** — separate calibration, skills and remembered game-window selection for each setup.
 
 ## Get started on Windows
@@ -33,7 +34,7 @@ Requires **Windows x64, Windows 10 version 2004 / build 19041 or newer**, and a 
 1. Download the installer or portable ZIP and `SHA256SUMS.txt` from [Releases](https://github.com/ethanjojo/metin2-bot/releases). Compare the file's SHA-256 checksum before installing.
 2. Install and launch MetinBot, or extract the **entire** ZIP and run `MetinBot.exe`. Packages include the required runtime libraries.
 3. Create a profile. In **Calibration**, select the game window and take a **Snapshot**.
-4. Set the search area, exclusions, Metin color, target panel and reference crop. Configure **Buffs**, then save.
+4. Set the search area, exclusions, Metin color, target panel and reference crop. Configure **Actions** and optional **Safety** limits, then save.
 5. Review readiness in **Run**. **F7** starts and **F8** pauses. Keep the selected game in the foreground.
 
 The app starts stopped. Live preview is for observation; take a snapshot before editing. The [user guide](docs/user-guide.md) explains every setup step and common validation messages.
@@ -42,20 +43,29 @@ The app starts stopped. Live preview is for observation; take a snapshot before 
 
 ## A closer look
 
-### Buffs
+### Actions
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/buffs-dark.png">
-  <img src="docs/assets/buffs-light.png" alt="Buff editor with three ordered skills, shortcut and refresh settings" width="1280" loading="lazy">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/actions-dark.png">
+  <img src="docs/assets/actions-light.png" alt="Buff editor with three ordered skills, shortcut and refresh settings" width="1280" loading="lazy">
 </picture>
 
 ### Run
 
-![Run view with readiness information and a calibration snapshot](docs/assets/run-dark.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/run-dark.png">
+  <img src="docs/assets/run-light.png" alt="Run with current activity, mount confirmation, game preview, session statistics and action links" width="1280" loading="lazy">
+</picture>
+
+Full event history opens in its own dialog; closing it keeps your place in Run. See the [user guide](docs/user-guide.md#event-history).
+
+### Safety
+
+![Safety with automatic-stop limits and scheduled breaks](docs/assets/safety-dark.png)
 
 ### Settings
 
-![Settings with recognition, timing and safety controls](docs/assets/settings-dark.png)
+![Settings with recognition controls and grouped configuration pages](docs/assets/settings-dark.png)
 
 ## Platform support
 

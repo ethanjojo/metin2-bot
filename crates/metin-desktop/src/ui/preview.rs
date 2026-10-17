@@ -51,6 +51,12 @@ impl MetinApp {
             }
         });
         let instruction = match self.mode {
+            EditMode::SafetyReference(_) => {
+                "Show the event in the game, take a Snapshot, then capture a distinctive 5–128 px icon or fixed part of its dialog."
+            }
+            EditMode::VisualClick(_) | EditMode::PeriodicClick(_) => {
+                "Draw a small region inside the intended button. A click uses its center in source pixels; keep it clear of adjacent controls."
+            }
             EditMode::Color => "Click a Metin pixel in the frozen image.",
             EditMode::Mask(None) => "Drag a rectangle over chat, minimap or false detections.",
             EditMode::BuffArea => "Drag around the area where active buff icons appear.",
@@ -158,6 +164,7 @@ impl MetinApp {
             .on_hover_text("Show detected Metin candidates on this image.");
     }
     pub(super) fn preview(&mut self, ui: &mut egui::Ui) {
+        let preview = self.presentation_snapshot();
         // Both layouts reserve stable space across idle, armed and live states.
         let wide = ui.available_width() >= 850.;
         ui.horizontal(|ui| {
@@ -181,8 +188,8 @@ impl MetinApp {
                 |ui| self.preview_overlays(ui),
             );
         }
-        let current = if self.snapshot.key == self.key() {
-            self.snapshot.frame.clone()
+        let current = if preview.key == self.key() {
+            preview.frame.clone()
         } else {
             None
         };
@@ -210,7 +217,7 @@ impl MetinApp {
             return;
         };
         let stale = !frozen
-            && self.snapshot.captured_at.is_none_or(|time| {
+            && preview.captured_at.is_none_or(|time| {
                 time.elapsed().as_secs_f64() > self.editor.profile.timing.sample_interval * 2. + 1.
             });
         if frozen
@@ -264,7 +271,7 @@ impl MetinApp {
                         .as_ref()
                         .map_or(0., |cache| cache.score)
                 } else {
-                    self.snapshot.panel_score
+                    preview.panel_score
                 }
             ));
             if self.editor.dirty() {
@@ -379,8 +386,13 @@ impl MetinApp {
         for (i, r) in self.editor.profile.masks.iter().copied().enumerate() {
             areas.push((EditMode::Mask(Some(i)), r));
         }
-        if matches!(self.mode, EditMode::BuffIcon { .. })
-            && let Some(r) = self.editor.region(self.mode)
+        if matches!(
+            self.mode,
+            EditMode::BuffIcon { .. }
+                | EditMode::SafetyReference(_)
+                | EditMode::VisualClick(_)
+                | EditMode::PeriodicClick(_)
+        ) && let Some(r) = self.editor.region(self.mode)
         {
             areas.push((self.mode, r));
         }
@@ -404,6 +416,8 @@ impl MetinApp {
                 egui::StrokeKind::Inside,
             );
             let name = match mode {
+                EditMode::SafetyReference(_) => "Visual reference",
+                EditMode::VisualClick(_) | EditMode::PeriodicClick(_) => "Click target",
                 EditMode::World => "Search area",
                 EditMode::Panel => "Target panel",
                 EditMode::Template => "Reference crop",
@@ -449,7 +463,7 @@ impl MetinApp {
                     .as_ref()
                     .map_or_else(Vec::new, |cache| cache.candidates.clone())
             } else {
-                self.snapshot.candidates.clone()
+                preview.candidates.clone()
             };
             for (i, c) in candidates.iter().enumerate() {
                 let r = Region {
@@ -639,6 +653,8 @@ fn handles(r: egui::Rect) -> [egui::Pos2; 8] {
 
 fn tool_name(mode: EditMode) -> &'static str {
     match mode {
+        EditMode::SafetyReference(_) => "Visual reference",
+        EditMode::VisualClick(_) | EditMode::PeriodicClick(_) => "Click target",
         EditMode::World => "Search area",
         EditMode::Color => "Metin color - click a pixel",
         EditMode::Panel => "Target panel",

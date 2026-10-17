@@ -182,14 +182,61 @@ mod probe {
         if pixel != [30, 170, 220] {
             return Err(format!("Captured pixels do not match rendered fixture: {pixel:?}").into());
         }
-        let profile = Profile::create("Isolated native acceptance");
+        let mut profile = Profile::create("Isolated native acceptance");
+        profile.frame_size = Some([frame.frame.width, frame.frame.height]);
+        let mut visual_checks = 0;
+        let mut verify = |backend: &mut dyn PlatformBackend| -> Result<()> {
+            let fresh = backend.capture(Instant::now() + Duration::from_secs(2), &stop, 0)?;
+            let offset = (80 * fresh.frame.width + 80) as usize * 3;
+            if fresh.frame.bgr[offset..offset + 3] != [30, 170, 220] {
+                return Err(PlatformError("Fixture changed before down".into()));
+            }
+            visual_checks += 1;
+            Ok(())
+        };
         let mut executor = InputExecutor::default();
-        executor.execute(
+        executor.execute_verified(
             &Action {
                 id: 1,
-                kind: ActionKind::Skill {
-                    shortcut: "Ctrl+G".into(),
-                    index: 0,
+                kind: ActionKind::Configured {
+                    input: metin_core::ActionInput::Key {
+                        shortcut: "Ctrl+G".into(),
+                        hold_seconds: 0.1,
+                    },
+                },
+            },
+            &profile,
+            backend.as_mut(),
+            &stop,
+            0,
+            Some(&mut verify),
+        )?;
+        executor.execute_verified(
+            &Action {
+                id: 2,
+                kind: ActionKind::Configured {
+                    input: metin_core::ActionInput::Click {
+                        region: Some(metin_core::Region {
+                            left: 70. / f64::from(frame.frame.width),
+                            top: 70. / f64::from(frame.frame.height),
+                            right: 90. / f64::from(frame.frame.width),
+                            bottom: 90. / f64::from(frame.frame.height),
+                        }),
+                    },
+                },
+            },
+            &profile,
+            backend.as_mut(),
+            &stop,
+            0,
+            Some(&mut verify),
+        )?;
+        executor.execute(
+            &Action {
+                id: 3,
+                kind: ActionKind::Attack {
+                    shortcut: "Space".into(),
+                    duration_seconds: 0.3,
                 },
             },
             &profile,
@@ -197,16 +244,21 @@ mod probe {
             &stop,
             0,
         )?;
-        executor.execute(
-            &Action {
-                id: 2,
-                kind: ActionKind::Click { point: [80, 80] },
-            },
-            &profile,
-            backend.as_mut(),
-            &stop,
-            0,
-        )?;
+        let mut held_captures = 0;
+        while executor.attack_held() {
+            executor.poll_attack(backend.as_mut(), &stop, 0)?;
+            if let Some(budget) = executor.capture_budget().filter(|_| executor.attack_held()) {
+                if let Err(error) = backend.capture(Instant::now() + budget, &stop, 0) {
+                    let _ = executor.release(backend.as_mut());
+                    return Err(error.into());
+                }
+                held_captures += 1;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        if held_captures == 0 {
+            return Err("No capture while native attack was held".into());
+        }
         // The fixture is our own exact child PID/title; close it after every up
         // event has been sent. Never send WM_CLOSE to a selected game process.
         unsafe {
@@ -224,6 +276,8 @@ mod probe {
             (WM_KEYUP, 0x11),
             (WM_LBUTTONDOWN, 1),
             (WM_LBUTTONUP, 0),
+            (WM_KEYDOWN, 0x20),
+            (WM_KEYUP, 0x20),
         ];
         let actual: Vec<_> = events
             .iter()
@@ -241,7 +295,7 @@ mod probe {
         std::fs::write(
             report,
             serde_json::to_vec_pretty(
-                &serde_json::json!({"success":true,"capture_matches_rendered_pixels":true,"captured_size":[frame.frame.width,frame.frame.height],"keyboard_and_mouse_order":true,"child_pid":child.id(),"game_input":false,"events":events}),
+                &serde_json::json!({"success":true,"capture_matches_rendered_pixels":true,"captured_size":[frame.frame.width,frame.frame.height],"keyboard_and_mouse_order":true,"visual_pre_down_captures":visual_checks,"persistent_attack_and_release":true,"captures_during_attack":held_captures,"child_pid":child.id(),"game_input":false,"events":events}),
             )?,
         )?;
         Ok(())

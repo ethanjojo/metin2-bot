@@ -5,10 +5,17 @@ impl MetinApp {
     pub(super) fn buffs_view(&mut self, ui: &mut egui::Ui) {
         widgets::heading(
             ui,
-            "Buffs & mount",
+            "Buffs",
             "Skills are used between targets, in the order shown. Changes apply when saved.",
         );
-        self.buff_behavior(ui);
+        if ui
+            .checkbox(&mut self.editor.profile.buffs.enabled, "Automatic buffs")
+            .on_hover_text("Enable the skill sequence between targets. Changes apply on Save.")
+            .changed()
+        {
+            self.runtime.stop();
+            self.editor.record();
+        }
         ui.separator();
         let height = ui.available_height();
         let list_width = if ui.available_width() < 950. {
@@ -60,55 +67,30 @@ impl MetinApp {
             });
         });
     }
-    fn buff_behavior(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn mount_view(&mut self, ui: &mut egui::Ui) {
         let mut changed = false;
-        let mut mounted = self.settings.last_mounted;
-        ui.horizontal_wrapped(|ui| {
-            changed|=ui.checkbox(&mut self.editor.profile.buffs.enabled,"Automatic buffs").on_hover_text("Enable the skill sequence between targets. At least one valid skill is required.").changed();
-            changed|=ui.checkbox(&mut self.editor.profile.buffs.fight_mounted,"Fight mounted").on_hover_text("Desired behavior: remount after buffing before continuing combat.").changed();
-            ui.separator();
-            ui.label("Declared state").on_hover_text("Manual declaration of what you currently see in the game. This is separate from desired fight behavior. Changing it pauses and applies immediately.");
-            ui.selectable_value(&mut mounted,false,"On foot").on_hover_text("Confirm that the character is currently on foot.");
-            ui.selectable_value(&mut mounted,true,"Mounted").on_hover_text("Confirm that the character is currently mounted.");
-        });
-        let unknown = self.snapshot.key == self.key()
-            && self.key().is_some()
-            && self.snapshot.mounted.is_none();
-        let mut confirm = false;
-        if unknown {
-            ui.horizontal_wrapped(|ui| {
-                widgets::badge(ui, "Mount state unknown: check the game.", widgets::AMBER);
-                confirm = button(
-                    ui,
-                    Icon::Check,
-                    "Confirm selected state",
-                    true,
-                    "Pause and apply the selected declaration immediately.",
-                )
-                .clicked();
-            });
+        self.mount_state_control(ui);
+        changed |= ui.checkbox(&mut self.editor.profile.buffs.fight_mounted, "Fight mounted")
+            .on_hover_text("Desired behavior: remount after buffing before continuing combat. This is separate from confirming the current mount state.").changed();
+        ui.separator();
+        {
+            ui.small("Declared state applies only to this connection and pauses automation. Other buff edits apply on Save. Uncertain toggle icons are skipped.");
+            ui.label("Mount shortcut");
+            let value = self.editor.profile.buffs.mount_shortcut.clone();
+            self.keybind_button(ui, Binding::Mount, &value);
+            changed |= numeric(
+                ui,
+                "Wait after mount toggle (s)",
+                "mount_wait_seconds",
+                &mut self.editor.profile.buffs.mount_wait_seconds,
+            );
+            changed |= numeric(
+                ui,
+                "Key hold duration (s)",
+                "key_hold_seconds",
+                &mut self.editor.profile.buffs.key_hold_seconds,
+            );
         }
-        if mounted != self.settings.last_mounted || confirm {
-            self.runtime.stop();
-            self.settings.last_mounted = mounted;
-            if let Err(e) = self.settings.save(&self.root) {
-                self.error = Some(e.to_string());
-            }
-            if let Some(key) = self.key() {
-                self.revision += 1;
-                self.send(Command::DeclareMount {
-                    key,
-                    mounted,
-                    revision: self.revision,
-                });
-            }
-        }
-        ui.collapsing("Mount shortcut & delays",|ui| {
-            ui.small("Declared state applies immediately and pauses automation. Other buff edits apply on Save. Uncertain toggle icons are skipped.");
-            ui.label("Mount shortcut");let value=self.editor.profile.buffs.mount_shortcut.clone();self.keybind_button(ui,Binding::Mount,&value);
-            changed|=numeric(ui,"Wait after mount toggle (s)","mount_wait_seconds",&mut self.editor.profile.buffs.mount_wait_seconds);
-            changed|=numeric(ui,"Key hold duration (s)","key_hold_seconds",&mut self.editor.profile.buffs.key_hold_seconds);
-        });
         if changed {
             self.runtime.stop();
             self.editor.record();

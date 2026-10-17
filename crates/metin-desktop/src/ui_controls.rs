@@ -2,6 +2,7 @@ use eframe::egui;
 use metin_core::{Key, Shortcut, validation::NUMBER_RULES};
 
 pub enum CapturedKey {
+    Space,
     Letter(char),
     Digit(u8),
     Function(u8),
@@ -17,6 +18,7 @@ pub fn capture_shortcut(
         shift,
         alt,
         key: match key {
+            CapturedKey::Space => Key::Space,
             CapturedKey::Letter(c) => Key::Letter(c),
             CapturedKey::Digit(n) => Key::Digit(n),
             CapturedKey::Function(n) => Key::Function(n),
@@ -40,12 +42,23 @@ pub fn numeric(ui: &mut egui::Ui, label: &str, name: &str, value: &mut f64) -> b
         .expect("known domain rule");
     ui.horizontal(|ui| {
         let hint = match name {
+            "puller_presses"=>"Number of item-key presses per sequence. Remaining presses are cancelled on pause or target end.",
+            "puller_press_gap"=>"Wait after releasing the item key before the next press in this sequence.",
+            "puller_wait_seconds"=>"Additional settling time after a completed sequence, before the repeat interval starts.",
+            "puller_interval_seconds"=>"Time between repeated combat sequences, after the configured settling time. No catch-up uses after a delayed frame or pause.",
+            "attack_hold_seconds"=>"Maximum time to hold the attack key. A target panel, Pause/F8, focus loss or an error releases it sooner.",
+            "idle_search_seconds"=>"Time spent searching or waiting after camera rotation without a target, excluding pauses and other actions. Existing search limits still apply.",
+            "search_attack_attempts"=>"Maximum search attacks without a confirmed combat. Reaching this limit or an existing search limit pauses automation.",
+            "visual_timeout_seconds"=>"Maximum time to reconfirm the event before input, and to verify disappearance after the post-input wait. Must allow enough fresh image samples.",
+            "visual_attempts"=>"Maximum total input attempts, including the first. Retries require the event to remain visible; exhaustion pauses automation.",
+            "safety_duration_seconds"=>"The reference must match in consecutive fresh frames for this long before the rule triggers.",
+            "interval_seconds"=>"Repeat interval before this action becomes due again. Periodic actions count active running time and wait until there is no target.",
             "sample_interval" => "Time between image samples. Shorter intervals use more CPU.",
             "stable_frames" => {
                 "Consecutive stable frames required before accepting a detection or panel match."
             }
             "threshold" => {
-                "Reference-image similarity required to confirm the target panel (0 to 1)."
+                "Reference-image similarity required to confirm a visual match (0 to 1)."
             }
             "acquire_timeout" => {
                 "Maximum time to confirm the clicked target. Must allow enough stable samples."
@@ -56,10 +69,10 @@ pub fn numeric(ui: &mut egui::Ui, label: &str, name: &str, value: &mut f64) -> b
                 "Wait after the target panel disappears before looking for another target."
             }
             "wait_seconds" => {
-                "Delay after sending this skill, before continuing the buff sequence."
+                "Delay after input before continuing or completing the action. Elapsed delay alone does not verify a game outcome."
             }
             "mount_wait_seconds" => "Delay after a mount toggle before continuing.",
-            "key_hold_seconds" => "How long each buff or mount shortcut remains pressed.",
+            "key_hold_seconds" => "How long the action shortcut remains pressed before release.",
             "click_hover_seconds" => {
                 "Wait for the cursor to settle over a candidate before clicking."
             }
@@ -78,6 +91,9 @@ pub fn numeric(ui: &mut egui::Ui, label: &str, name: &str, value: &mut f64) -> b
             "min_area" => "Minimum candidate area in pixels.",
             "min_width" => "Minimum candidate width in pixels.",
             "min_height" => "Minimum candidate height in pixels.",
+            "loot_presses" => "Number of pickup shortcut presses after each confirmed target end. A pause cancels remaining presses.",
+            "loot_delay_seconds" => "Wait after confirmed panel disappearance before the first pickup press.",
+            "loot_interval_seconds" => "Wait after releasing a pickup shortcut before sending the next press. Delayed frames never cause a burst of catch-up presses.",
             _ => {
                 "Edit this value by dragging or typing. The profile's numeric limits are enforced."
             }
@@ -135,7 +151,9 @@ pub fn numeric_u32(ui: &mut egui::Ui, label: &str, name: &str, value: &mut u32) 
 }
 pub fn egui_key(key: egui::Key) -> Option<CapturedKey> {
     let name = format!("{key:?}");
-    if let Some(number) = name.strip_prefix("Num").and_then(|n| n.parse().ok()) {
+    if key == egui::Key::Space {
+        Some(CapturedKey::Space)
+    } else if let Some(number) = name.strip_prefix("Num").and_then(|n| n.parse().ok()) {
         Some(CapturedKey::Digit(number))
     } else if let Some(number) = name.strip_prefix('F').and_then(|n| n.parse().ok()) {
         Some(CapturedKey::Function(number))

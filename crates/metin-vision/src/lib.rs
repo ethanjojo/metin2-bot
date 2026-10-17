@@ -61,19 +61,16 @@ pub fn crop(image: &Frame, region: metin_core::Region) -> Result<Frame> {
         .validate()
         .map_err(|e| VisionError::Invalid(e.to_string()))?;
     let [x1, y1, x2, y2] = region.pixels(image.width, image.height);
-    let source = mat(image)?;
-    frame(
-        &core::Mat::roi(
-            &source,
-            core::Rect::new(
-                x1 as i32,
-                y1 as i32,
-                (x2 - x1 + 1) as i32,
-                (y2 - y1 + 1) as i32,
-            ),
-        )?
-        .try_clone()?,
-    )
+    let width = x2 - x1 + 1;
+    let height = y2 - y1 + 1;
+    let row_bytes = width as usize * 3;
+    let stride = image.width as usize * 3;
+    let mut pixels = Vec::with_capacity(row_bytes * height as usize);
+    for y in y1..=y2 {
+        let start = y as usize * stride + x1 as usize * 3;
+        pixels.extend_from_slice(&image.bgr[start..start + row_bytes]);
+    }
+    Frame::new(width, height, pixels).map_err(|e| VisionError::Invalid(e.to_string()))
 }
 pub(crate) fn stddev(bytes: &[u8]) -> f64 {
     let mean = bytes.iter().map(|v| f64::from(*v)).sum::<f64>() / bytes.len() as f64;
@@ -129,3 +126,5 @@ pub fn pick_color(image: &Frame, point: [u32; 2]) -> Result<[u16; 3]> {
     let p = hsv.data_bytes()?;
     Ok([p[0].into(), p[1].into(), p[2].into()])
 }
+mod safety;
+pub use safety::SafetyDetector;

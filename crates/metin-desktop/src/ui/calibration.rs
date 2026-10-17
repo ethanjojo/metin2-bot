@@ -13,15 +13,16 @@ impl MetinApp {
             ui.allocate_ui_with_layout(egui::vec2(side,height),egui::Layout::top_down(egui::Align::Min),|ui| {
                 ui.set_max_width(side);
                 egui::ScrollArea::vertical().id_salt("calibration-controls").show(ui,|ui| {
-                    ui.heading(if self.return_to_buffs { "Buff capture" } else { "Calibration" });
+                    ui.heading(if self.return_to_safety {"Action capture"} else if self.return_to_buffs { "Buff capture" } else { "Calibration" });
                     ui.label("Prepare recognition on a frozen game snapshot."); ui.add_space(8.);
-                    if !self.return_to_buffs {
+                    if !self.return_to_buffs && !self.return_to_safety {
                     ui.label("Profile name");
                     if ui.add(egui::TextEdit::singleline(&mut self.editor.profile.name).hint_text("e.g. Warrior · forest").char_limit(80).desired_width(f32::INFINITY)).on_hover_text("A descriptive name for these saved calibration and buff settings.").changed() {self.runtime.stop();self.editor.record();}
                     }
                     self.window_picker(ui);
                     ui.separator();
-                    if self.return_to_buffs {
+                    if self.return_to_safety {self.safety_capture_controls(ui);}
+                    else if self.return_to_buffs {
                         self.buff_capture_controls(ui);
                     } else {
                         ui.strong("Recognition checklist (4 steps)");
@@ -67,12 +68,12 @@ impl MetinApp {
                         if button(ui,Icon::Plus,"Draw excluded area",self.editor.profile.masks.len()<30,"Draw an area that target detection should ignore.").clicked(){self.edit_area(EditMode::Mask(None));}
                     }
                     ui.add_space(8.);
-                    let ready=if self.return_to_buffs {
+                    let ready=if self.return_to_safety {self.calibration_ready(self.mode)} else if self.return_to_buffs {
                         self.calibration_ready(EditMode::BuffArea) && self.calibration_ready(EditMode::BuffIcon { index: self.selected_skill, inactive: false })
                     } else {
                         [EditMode::World,EditMode::Color,EditMode::Panel,EditMode::Template].iter().all(|m|self.calibration_ready(*m))
                     };
-                    let status=if self.return_to_buffs { if ready {"Skill recognition ready"} else {"Set the detection area and active icon"} } else if ready {"Recognition areas ready"} else {"Complete the needed areas"};
+                    let status=if self.return_to_safety {if ready {"Action capture ready"} else {"Draw the action capture"}} else if self.return_to_buffs { if ready {"Skill recognition ready"} else {"Set the detection area and active icon"} } else if ready {"Recognition areas ready"} else {"Complete the needed areas"};
                     widgets::badge(ui,status,if ready{widgets::GREEN}else{widgets::AMBER});
                     ui.small("Full start readiness also checks the window, buffs and numeric settings.");
                 });
@@ -94,7 +95,7 @@ impl MetinApp {
         ui.strong(name);
         if button(ui, Icon::Back, "Done & back to buffs", true, "Return to this skill's details. Captures are kept as unsaved profile edits; Save applies them.").clicked() {
             self.return_to_buffs = false;
-            self.navigate(Tab::Buffs);
+            self.navigate(Tab::Actions);
         }
         for (mode, label) in [
             (EditMode::BuffArea, "Detection area"),

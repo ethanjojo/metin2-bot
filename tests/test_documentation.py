@@ -41,7 +41,13 @@ class DocumentationTests(unittest.TestCase):
                     self.assertTrue(resolved.exists(), f"{path.name}: {target}")
 
     def test_documented_screenshots_are_complete_pngs(self):
-        for name in ("calibration-dark", "calibration-light", "buffs-dark", "buffs-light", "run-dark", "settings-dark"):
+        sizes = {name: (1280, 820) for name in (
+            "calibration-dark", "calibration-light", "actions-dark", "actions-light",
+            "run-dark", "run-light", "settings-dark", "safety-dark", "puller-dark",
+            "out-of-target-dark", "periodic-dark", "visual-rules-dark",
+        )}
+        sizes["event-history-dark"] = (800, 560)
+        for name, expected_size in sizes.items():
             with self.subTest(screenshot=name):
                 data = (ROOT / "docs/assets" / f"{name}.png").read_bytes()
                 self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
@@ -54,7 +60,7 @@ class DocumentationTests(unittest.TestCase):
                     crc = int.from_bytes(data[offset + 8 + length:offset + 12 + length], "big")
                     self.assertEqual(zlib.crc32(tag + payload), crc)
                     if tag == b"IHDR":
-                        self.assertEqual(struct.unpack(">II", payload[:8]), (1280, 820))
+                        self.assertEqual(struct.unpack(">II", payload[:8]), expected_size)
                     offset += length + 12
                     if tag == b"IEND":
                         ended = True
@@ -66,6 +72,17 @@ class DocumentationTests(unittest.TestCase):
         example = json.loads((ROOT / "profile.example.json").read_text(encoding="utf-8"))
         self.assertEqual(example["name"], "Main profile")
         self.assertEqual(example["process_name"], "game-client.exe")
+        periodic = example["periodic_actions"][0]
+        self.assertFalse(periodic["enabled"])
+        self.assertEqual(periodic["first_run"], "after_interval")
+        self.assertEqual(periodic["input"]["kind"], "key")
+        self.assertNotIn("timing", periodic)
+        visual = example["safety"]["rules"][0]
+        self.assertFalse(visual["enabled"])
+        self.assertIsNone(visual["reference"])
+        self.assertEqual(visual["execution"]["input"], {"kind": "click", "region": None})
+        self.assertEqual(visual["execution"]["verification"], "reference_gone")
+        self.assertEqual(visual["execution"]["after_success"], "pause")
 
 
 if __name__ == "__main__":

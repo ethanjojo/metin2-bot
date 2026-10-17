@@ -325,6 +325,11 @@ pub fn badge(ui: &mut egui::Ui, text: &str, color: Color32) {
     ui.label(egui::RichText::new(text).color(color).strong());
 }
 pub fn theme(ctx: &egui::Context, dark: bool) {
+    ctx.set_theme(if dark {
+        egui::Theme::Dark
+    } else {
+        egui::Theme::Light
+    });
     let mut visuals = if dark {
         egui::Visuals::dark()
     } else {
@@ -336,6 +341,11 @@ pub fn theme(ctx: &egui::Context, dark: bool) {
         Color32::from_rgb(246, 248, 251)
     };
     visuals.window_fill = visuals.panel_fill;
+    visuals.hyperlink_color = if dark {
+        Color32::from_rgb(90, 170, 255)
+    } else {
+        Color32::from_rgb(26, 94, 170)
+    };
     visuals.faint_bg_color = if dark {
         Color32::from_rgb(30, 35, 43)
     } else {
@@ -371,4 +381,27 @@ pub fn theme(ctx: &egui::Context, dark: bool) {
         style.spacing.interact_size = egui::vec2(32., 30.);
         style.spacing.combo_width = 180.;
     });
+}
+
+/// Shared secondary navigation; wraps at smaller widths without reserving a sidebar.
+pub(super) fn subtabs<T: Copy + PartialEq>(
+    ui: &mut egui::Ui,
+    selected: &mut T,
+    pages: &[(T, &str, &str)],
+) -> bool {
+    let mut changed = false;
+    ui.horizontal_wrapped(|ui| {
+        for &(page, label, hint) in pages {
+            if ui
+                .selectable_label(*selected == page, label)
+                .on_hover_text(hint)
+                .clicked()
+            {
+                changed |= *selected != page;
+                *selected = page;
+            }
+        }
+    });
+    ui.separator();
+    changed
 }

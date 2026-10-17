@@ -119,6 +119,14 @@ fn atomic_json(path: &Path, value: &impl Serialize) -> Result<()> {
     atomic_write(path, &bytes)
 }
 fn validate_icons(profile: &Profile) -> Result<()> {
+    for reference in profile
+        .safety
+        .rules
+        .iter()
+        .filter_map(|r| r.reference.as_ref())
+    {
+        metin_vision::validate_template(&metin_vision::decode_png(&reference.png_bytes()?)?)?;
+    }
     for skill in &profile.buffs.skills {
         for icon in [&skill.icon, &skill.inactive_icon].into_iter().flatten() {
             metin_vision::validate_template(&metin_vision::decode_png(&icon.png_bytes()?)?)?;
@@ -128,11 +136,50 @@ fn validate_icons(profile: &Profile) -> Result<()> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(from = "StoredUISettings")]
 pub struct UISettings {
     pub theme: String,
-    pub last_mounted: bool,
     pub profile_windows: std::collections::BTreeMap<Uuid, WindowPreference>,
+    pub ui_scale: f32,
+    pub preview_refresh_ms: u32,
+    pub lite_mode: bool,
+}
+/// Read the obsolete global hint once, without making it runtime state.
+/// Serialization always uses UISettings, which has no mount declaration.
+#[derive(Deserialize)]
+#[serde(default, deny_unknown_fields)]
+struct StoredUISettings {
+    theme: String,
+    #[serde(rename = "last_mounted")]
+    _obsolete_mount_hint: Option<bool>,
+    profile_windows: std::collections::BTreeMap<Uuid, WindowPreference>,
+    ui_scale: f32,
+    preview_refresh_ms: u32,
+    lite_mode: bool,
+}
+impl Default for StoredUISettings {
+    fn default() -> Self {
+        let settings = UISettings::default();
+        Self {
+            theme: settings.theme,
+            _obsolete_mount_hint: None,
+            profile_windows: settings.profile_windows,
+            ui_scale: settings.ui_scale,
+            preview_refresh_ms: settings.preview_refresh_ms,
+            lite_mode: settings.lite_mode,
+        }
+    }
+}
+impl From<StoredUISettings> for UISettings {
+    fn from(s: StoredUISettings) -> Self {
+        Self {
+            theme: s.theme,
+            profile_windows: s.profile_windows,
+            ui_scale: s.ui_scale,
+            preview_refresh_ms: s.preview_refresh_ms,
+            lite_mode: s.lite_mode,
+        }
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -144,8 +191,10 @@ impl Default for UISettings {
     fn default() -> Self {
         Self {
             theme: "light".into(),
-            last_mounted: false,
             profile_windows: Default::default(),
+            ui_scale: 1.,
+            preview_refresh_ms: 200,
+            lite_mode: false,
         }
     }
 }
@@ -161,6 +210,12 @@ impl UISettings {
         Ok(s)
     }
     fn validate(&self) -> Result<()> {
+        if !self.ui_scale.is_finite()
+            || !(0.75..=1.5).contains(&self.ui_scale)
+            || !(100..=5000).contains(&self.preview_refresh_ms)
+        {
+            return Err(invalid("Invalid UI scale or preview refresh interval."));
+        }
         if !["light", "dark"].contains(&self.theme.as_str()) {
             return Err(invalid("Invalid application theme."));
         }
@@ -255,6 +310,12 @@ pub struct ProfileStore {
     root: PathBuf,
     lock: File,
 }
+/// A committed profile save; obsolete asset cleanup cannot undo the commit.
+#[derive(Debug)]
+pub struct SaveOutcome {
+    pub profile: Profile,
+    pub cleanup_warning: Option<String>,
+}
 impl ProfileStore {
     pub fn open(root: &Path) -> Result<Self> {
         fs::create_dir_all(root)?;
@@ -285,7 +346,7 @@ impl ProfileStore {
     pub fn list(&self) -> Result<Vec<Profile>> {
         list_profiles(&self.root)
     }
-    pub fn save(&mut self, profile: &Profile, template: Option<&Frame>) -> Result<Profile> {
+    pub fn save(&mut self, profile: &Profile, template: Option<&Frame>) -> Result<SaveOutcome> {
         profile.validate()?;
         validate_icons(profile)?;
         let destination = self.folder(profile.id)?;
@@ -328,15 +389,27 @@ impl ProfileStore {
             }
             return Err(error);
         }
-        if let Some(old) = old.filter(|name| Some(name) != profile.template_file.as_ref()) {
-            let path = folder.join(old);
-            reject_link(&path)?;
-            fs::remove_file(path)?;
-        }
+        let obsolete = old
+            .filter(|name| Some(name) != profile.template_file.as_ref())
+            .map(|name| folder.join(name));
         if let Some(staging) = staging {
             fs::rename(staging.path(), destination)?;
         }
-        Ok(profile)
+        let cleanup_warning = obsolete.and_then(|path| {
+            reject_link(&path)
+                .and_then(|()| fs::remove_file(&path).map_err(Into::into))
+                .err()
+                .map(|error| {
+                    format!(
+                        "Profile saved, but obsolete template cleanup failed for {}: {error}",
+                        path.display()
+                    )
+                })
+        });
+        Ok(SaveOutcome {
+            profile,
+            cleanup_warning,
+        })
     }
     pub fn select(&self, id: Uuid) -> Result<()> {
         self.load(id)?;
@@ -391,7 +464,7 @@ impl ProfileStore {
             if let Some(region) = object.get("region").filter(|r| !r.is_null()) {
                 p.region = Some(serde_json::from_value(region.clone())?);
             }
-            self.save(&p, None)?
+            self.save(&p, None)?.profile
         };
         self.select(id)?;
         fs::rename(path, backup)?;

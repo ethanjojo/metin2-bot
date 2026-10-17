@@ -38,4 +38,19 @@ pub struct Cli {
     #[cfg(feature = "ui-smoke")]
     #[arg(long, requires = "ui_screenshot")]
     pub ui_sizes: bool,
+    #[cfg(feature = "ui-smoke")]
+    #[arg(long, requires = "ui_screenshot")]
+    pub ui_actions: Option<crate::ui::ActionsPage>,
+    #[cfg(feature = "ui-smoke")]
+    #[arg(long, requires = "ui_screenshot")]
+    pub ui_settings: Option<crate::ui::SettingsPage>,
+    #[cfg(feature = "ui-smoke")]
+    #[arg(long, requires = "ui_screenshot")]
+    pub ui_safety: Option<crate::ui::SafetyPage>,
+    #[cfg(feature = "ui-smoke")]
+    #[arg(long,requires_all=["ui_screenshot","ui_fixture"])]
+    pub ui_safety_capture: bool,
+    #[cfg(feature = "ui-smoke")]
+    #[arg(long,requires_all=["ui_screenshot","ui_fixture"])]
+    pub ui_run_state: Option<crate::ui::RunFixture>,
 }

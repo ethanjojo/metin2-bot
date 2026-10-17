@@ -66,6 +66,7 @@ fn all_original_controller_test_replays_match() {
                     c.buffs.mounted = row["mounted"].as_bool();
                     let o = &row["observation"];
                     let observation = Observation {
+                        safety_scores: vec![],
                         ready: o["ready"].as_bool().unwrap(),
                         candidates: serde_json::from_value(o["candidates"].clone()).unwrap(),
                         panel_present: o["panel_present"].as_bool().unwrap(),
@@ -94,6 +95,18 @@ fn all_original_controller_test_replays_match() {
                         }
                         ActionKind::Skill { shortcut, .. } => {
                             serde_json::json!({"kind":"skill","point":null,"shortcut":shortcut})
+                        }
+                        ActionKind::Configured { .. }
+                        | ActionKind::Key { .. }
+                        | ActionKind::Scheduled { .. }
+                        | ActionKind::Recover
+                        | ActionKind::Attack { .. }
+                        | ActionKind::ReleaseAttack
+                        | ActionKind::Pull { .. } => {
+                            panic!("new automation is disabled in reference profiles")
+                        }
+                        ActionKind::Loot { shortcut } => {
+                            serde_json::json!({"kind":"loot","point":null,"shortcut":shortcut})
                         }
                     });
                     assert_eq!(

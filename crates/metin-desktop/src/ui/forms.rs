@@ -1,5 +1,111 @@
 use super::*;
 impl MetinApp {
+    pub(super) fn action_input_editor(
+        &mut self,
+        ui: &mut egui::Ui,
+        input: &mut metin_core::ActionInput,
+        binding: Binding,
+        mode: EditMode,
+    ) -> bool {
+        let mut changed = false;
+        let mut click = matches!(input, metin_core::ActionInput::Click { .. });
+        ui.horizontal(|ui| {
+            ui.label("Input");
+            changed |= ui.radio_value(&mut click, false, "Key").changed();
+            changed |= ui.radio_value(&mut click, true, "Click").changed();
+        });
+        if changed {
+            self.binding = None;
+            *input = if click {
+                metin_core::ActionInput::Click { region: None }
+            } else {
+                metin_core::ActionInput::default()
+            };
+        }
+        match input {
+            metin_core::ActionInput::Key {
+                shortcut,
+                hold_seconds,
+            } => {
+                self.keybind_button(ui, binding, shortcut);
+                changed |= crate::ui_controls::numeric(
+                    ui,
+                    "Key hold (s)",
+                    "key_hold_seconds",
+                    hold_seconds,
+                );
+            }
+            metin_core::ActionInput::Click { region } => {
+                ui.horizontal(|ui| {
+                if widgets::button(ui, widgets::Icon::Target, "Select click target", true, "Open Calibration. Draw a small rectangle inside the intended button; input clicks its center in the original game pixels. A window-size change clears this target.").clicked() {
+                    // Store the chosen input kind before opening Calibration.
+                    self.edit_area(mode);
+                }
+                if widgets::button(ui, widgets::Icon::Trash, "", region.is_some(), "Clear this click target. Configure it again before enabling the action.").clicked() {
+                    *region = None;
+                    changed = true;
+                }
+                });
+                self.click_target_preview(ui, *region);
+            }
+        }
+        changed
+    }
+    pub(super) fn click_target_preview(
+        &mut self,
+        ui: &mut egui::Ui,
+        region: Option<metin_core::Region>,
+    ) {
+        let Some(region) = region else {
+            ui.small("Click target missing.");
+            return;
+        };
+        if let Some([width, height]) = self.editor.profile.frame_size {
+            ui.small(format!(
+                "Click center: {:.0}, {:.0} px · target {:.0} × {:.0} px",
+                (region.left + region.right) * 0.5 * f64::from(width),
+                (region.top + region.bottom) * 0.5 * f64::from(height),
+                (region.right - region.left) * f64::from(width),
+                (region.bottom - region.top) * f64::from(height)
+            ));
+        }
+        if let Some(frame) = self.editor.frozen.as_ref() {
+            let cached = self
+                .click_preview
+                .as_ref()
+                .is_some_and(|(source, area, _)| {
+                    Arc::ptr_eq(&source.bgr, &frame.bgr) && *area == region
+                });
+            if !cached {
+                self.click_preview = None;
+            }
+            if !cached && let Ok(crop) = metin_vision::crop(frame, region) {
+                let rgb = crop
+                    .bgr
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
+                    .flat_map(|pixel| [pixel[2], pixel[1], pixel[0]])
+                    .collect::<Vec<_>>();
+                let texture = ui.ctx().load_texture(
+                    "click-target-preview",
+                    egui::ColorImage::from_rgb([crop.width as usize, crop.height as usize], &rgb),
+                    egui::TextureOptions::NEAREST,
+                );
+                self.click_preview = Some((frame.clone(), region, texture));
+            }
+            if let Some((_, _, texture)) = &self.click_preview {
+                let size = texture.size_vec2();
+                ui.horizontal(|ui| {
+                    ui.image((
+                        texture.id(),
+                        size * (96. / size.x).min(64. / size.y).min(1.),
+                    ));
+                    ui.small("Current snapshot preview");
+                });
+            }
+        }
+    }
     pub(super) fn keybind_button(&mut self, ui: &mut egui::Ui, binding: Binding, value: &str) {
         let active = self
             .binding
@@ -16,7 +122,7 @@ impl MetinApp {
             response.request_focus();
             self.binding = Some((binding, response.id));
         }
-        response.on_hover_text("Ctrl, Shift or Alt with a letter, number or F1–F12. F7/F8 are reserved. Escape cancels.");
+        response.on_hover_text("Ctrl, Shift or Alt with Space, a letter, number or F1–F12. F7/F8 are reserved. Escape cancels.");
     }
     pub(super) fn capture_binding(&mut self, ctx: &egui::Context) {
         let Some((binding, id)) = self.binding else {
@@ -50,15 +156,53 @@ impl MetinApp {
                     }
                     return;
                 }
-                if let Some(key) = crate::ui_controls::egui_key(physical_key.unwrap_or(key)) {
+                if let Some(captured_key) =
+                    crate::ui_controls::egui_key(physical_key.unwrap_or(key))
+                {
                     match crate::ui_controls::capture_shortcut(
-                        key,
+                        captured_key,
                         modifiers.ctrl,
                         modifiers.shift,
                         modifiers.alt,
                     ) {
                         Ok(shortcut) => {
                             match binding {
+                                Binding::OutOfTarget => {
+                                    self.editor.profile.out_of_target.shortcut = shortcut
+                                }
+                                Binding::Puller => {
+                                    self.editor.profile.puller.timing.shortcut = shortcut
+                                }
+                                Binding::Periodic(id) => {
+                                    if let Some(action) = self
+                                        .editor
+                                        .profile
+                                        .periodic_actions
+                                        .iter_mut()
+                                        .find(|a| a.id == id)
+                                        && let metin_core::ActionInput::Key {
+                                            shortcut: key, ..
+                                        } = &mut action.input
+                                    {
+                                        *key = shortcut;
+                                    }
+                                }
+                                Binding::Visual(id) => {
+                                    if let Some(rule) = self
+                                        .editor
+                                        .profile
+                                        .safety
+                                        .rules
+                                        .iter_mut()
+                                        .find(|r| r.id == id)
+                                        && let metin_core::ActionInput::Key {
+                                            shortcut: key, ..
+                                        } = &mut rule.execution.input
+                                    {
+                                        *key = shortcut;
+                                    }
+                                }
+                                Binding::Loot => self.editor.profile.loot.shortcut = shortcut,
                                 Binding::Mount => {
                                     self.editor.profile.buffs.mount_shortcut = shortcut
                                 }
@@ -69,6 +213,11 @@ impl MetinApp {
                                     }
                                 }
                             }
+                            // Space also activates a focused button; consume the recorded key
+                            // before rendering so it cannot re-arm this recorder.
+                            ctx.input_mut(|input| {
+                                input.consume_key(modifiers, key);
+                            });
                             self.editor.record();
                             self.binding = None;
                         }

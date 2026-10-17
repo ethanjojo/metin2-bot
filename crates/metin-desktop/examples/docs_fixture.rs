@@ -89,6 +89,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     profile.panel.region = Some(region([335, 20, 290, 66]));
     profile.template_region = Some(region([344, 30, 24, 24]));
     profile.buffs.enabled = true;
+    profile.loot.enabled = true;
+    profile.safety.stop_enabled = true;
+    profile.safety.breaks_enabled = true;
     profile.buffs.icon_region = Some(region([30, 22, 125, 65]));
     profile.buffs.skills = vec![
         BuffSkill {
@@ -113,6 +116,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ..Default::default()
         },
     ];
+    let mut periodic = metin_core::PeriodicAction::new("Use item");
+    periodic.id = uuid::Uuid::from_u128(10);
+    periodic.enabled = true;
+    periodic.input = metin_core::ActionInput::Click {
+        region: Some(region([344, 30, 24, 24])),
+    };
+    profile.periodic_actions.push(periodic);
+    profile.out_of_target.after_combat = true;
+    profile.out_of_target.during_search = true;
+    profile.puller.enabled = true;
+    profile.puller.timing.shortcut = "F4".into();
+    let mut rule = metin_core::SafetyRule::new("Dismiss dialog");
+    rule.id = uuid::Uuid::from_u128(11);
+    rule.reference = Some(icon([344, 30, 24, 24])?);
+    rule.reaction = metin_core::RuleReactions {
+        notify: true,
+        pause: false,
+        execute: true,
+    };
+    rule.execution.input = metin_core::ActionInput::Click {
+        region: Some(region([344, 30, 24, 24])),
+    };
+    profile.safety.rules.push(rule);
     let template = metin_vision::crop(&scene, profile.template_region.unwrap())?;
     let mut store = ProfileStore::open(&root.join("profiles"))?;
     store.save(&profile, Some(&template))?;

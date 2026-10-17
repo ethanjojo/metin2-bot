@@ -3,14 +3,72 @@ use crate::*;
 use metin_core::{Action, ActionKind, Key, Profile, Shortcut};
 use std::{thread, time::Duration};
 
+/// A fresh visual precondition checked immediately before input is sent.
+pub type InputVerification<'a> = dyn FnMut(&mut dyn PlatformBackend) -> Result<()> + 'a;
 #[derive(Default)]
 pub struct InputExecutor {
     owned: Vec<u16>,
     mouse: Option<[u32; 2]>,
     expected_cursor: Option<[i32; 2]>,
     click_sent: bool,
+    deadline: Option<Instant>,
+    attack: Option<(TargetState, Instant, u64)>,
 }
 impl InputExecutor {
+    pub fn set_deadline(&mut self, deadline: Option<Instant>) {
+        self.deadline = deadline;
+    }
+    pub fn attack_held(&self) -> bool {
+        self.attack.is_some()
+    }
+    /// Leave the last 100 ms before any input deadline for polling/release,
+    /// rather than starting capture that could run across that deadline.
+    pub fn capture_budget(&self) -> Option<Duration> {
+        let now = Instant::now();
+        let limit = self
+            .deadline
+            .into_iter()
+            .chain(self.attack.map(|(_, end, _)| end))
+            .min();
+        let maximum = if self.attack.is_some() {
+            Duration::from_millis(100)
+        } else {
+            Duration::from_secs(2)
+        };
+        match limit.map(|end| end.saturating_duration_since(now)) {
+            Some(left) if left <= Duration::from_millis(100) => None,
+            Some(left) => Some(maximum.min(left - Duration::from_millis(100))),
+            None => Some(maximum),
+        }
+    }
+    /// Checked every worker iteration, including iterations with no new image sample.
+    pub fn poll_attack(
+        &mut self,
+        backend: &mut dyn PlatformBackend,
+        stop: &StopToken,
+        generation: u64,
+    ) -> Result<()> {
+        let Some((baseline, end, held_generation)) = self.attack else {
+            return Ok(());
+        };
+        let checked = if generation != held_generation {
+            Err(PlatformError(
+                "Input generation changed during attack.".into(),
+            ))
+        } else {
+            self.guard(backend, baseline, stop, held_generation, None)
+        };
+        if let Err(error) = checked {
+            return match self.release(backend) {
+                Ok(()) => Err(error),
+                Err(cleanup) => Err(PlatformError(format!("{error}; {cleanup}"))),
+            };
+        }
+        if Instant::now() >= end {
+            self.release(backend)?;
+        }
+        Ok(())
+    }
     pub fn click_sent(&self) -> bool {
         self.click_sent
     }
@@ -22,6 +80,11 @@ impl InputExecutor {
         generation: u64,
         point: Option<[i32; 2]>,
     ) -> Result<()> {
+        if self.deadline.is_some_and(|d| Instant::now() >= d) {
+            return Err(PlatformError(
+                "Automatic stop: safety limit reached during input.".into(),
+            ));
+        }
         if stop.cancelled(generation) || backend.emergency_pressed()? {
             return Err(PlatformError("Emergency stop (F8 / Pause).".into()));
         }
@@ -88,6 +151,9 @@ impl InputExecutor {
             }
         }
         self.expected_cursor = None;
+        if self.owned.is_empty() && self.mouse.is_none() {
+            self.attack = None;
+        }
         if errors.is_empty() {
             Ok(())
         } else {
@@ -105,7 +171,64 @@ impl InputExecutor {
         stop: &StopToken,
         generation: u64,
     ) -> Result<()> {
+        self.execute_verified(action, profile, backend, stop, generation, None)
+    }
+    pub fn execute_verified(
+        &mut self,
+        action: &Action,
+        profile: &Profile,
+        backend: &mut dyn PlatformBackend,
+        stop: &StopToken,
+        generation: u64,
+        mut verify: Option<&mut InputVerification<'_>>,
+    ) -> Result<()> {
         self.click_sent = false;
+        if self.attack.is_some() || matches!(action.kind, ActionKind::ReleaseAttack) {
+            self.release(backend)?;
+        }
+        if matches!(action.kind, ActionKind::ReleaseAttack) {
+            return Ok(());
+        }
+        // All configured inputs resolve into the same guarded click/key path.
+        let resolved;
+        let action = match &action.kind {
+            ActionKind::Configured { input } | ActionKind::Scheduled { input, .. } => {
+                input
+                    .validate(true, profile.frame_size)
+                    .map_err(|e| PlatformError(e.to_string()))?;
+                let kind = match input {
+                    metin_core::ActionInput::Key {
+                        shortcut,
+                        hold_seconds,
+                    } => ActionKind::Key {
+                        shortcut: shortcut.clone(),
+                        hold_seconds: *hold_seconds,
+                    },
+                    metin_core::ActionInput::Click { region } => {
+                        let [w, h] = profile
+                            .frame_size
+                            .ok_or_else(|| PlatformError("Missing click calibration.".into()))?;
+                        let [x1, y1, x2, y2] = region.expect("validated click region").pixels(w, h);
+                        ActionKind::Click {
+                            point: [x1 + (x2 - x1) / 2, y1 + (y2 - y1) / 2],
+                        }
+                    }
+                };
+                resolved = Action {
+                    id: action.id,
+                    kind,
+                };
+                &resolved
+            }
+            _ => action,
+        };
+        if let ActionKind::Attack {
+            duration_seconds, ..
+        } = action.kind
+            && (!duration_seconds.is_finite() || duration_seconds <= 0. || duration_seconds > 30.)
+        {
+            return Err(PlatformError("Invalid attack hold duration.".into()));
+        }
         if !self.owned.is_empty() || self.mouse.is_some() {
             return Err(PlatformError(
                 "Previous owned inputs must be released first.".into(),
@@ -113,6 +236,14 @@ impl InputExecutor {
         }
         self.expected_cursor = None;
         let baseline = backend.inspect()?;
+        if profile
+            .frame_size
+            .is_some_and(|size| size != [baseline.width, baseline.height])
+        {
+            return Err(PlatformError(
+                "The game dimensions changed. Recalibrate before input.".into(),
+            ));
+        }
         backend.check_input_access()?;
         self.guard(backend, baseline, stop, generation, None)?;
         if [
@@ -185,6 +316,10 @@ impl InputExecutor {
                     generation,
                     Some(target),
                 )?;
+                if let Some(verify) = verify.as_mut() {
+                    verify(backend)?;
+                }
+                self.guard(backend, baseline, stop, generation, Some(target))?;
                 self.mouse = Some(*point);
                 backend.mouse(*point, true)?;
                 self.click_sent = true;
@@ -208,7 +343,35 @@ impl InputExecutor {
                     None,
                 )
             }
-            ActionKind::Mount { shortcut } | ActionKind::Skill { shortcut, .. } => {
+            ActionKind::Recover => {
+                if backend.key_held(0x1b) {
+                    return Err(PlatformError("Release Escape before recovery.".into()));
+                }
+                self.down(0x1b, backend)?;
+                self.wait(0.05, backend, baseline, stop, generation, None)?;
+                backend.key(0x1b, false, false)?;
+                self.owned.pop();
+                self.guard(backend, baseline, stop, generation, None)?;
+                self.down(0x45, backend)?;
+                self.wait(
+                    profile.timing.rotate_seconds,
+                    backend,
+                    baseline,
+                    stop,
+                    generation,
+                    None,
+                )
+            }
+            ActionKind::ReleaseAttack => unreachable!("handled before input guards"),
+            ActionKind::Scheduled { .. } | ActionKind::Configured { .. } => {
+                unreachable!("resolved before input guards")
+            }
+            ActionKind::Mount { shortcut }
+            | ActionKind::Skill { shortcut, .. }
+            | ActionKind::Loot { shortcut }
+            | ActionKind::Key { shortcut, .. }
+            | ActionKind::Pull { shortcut, .. }
+            | ActionKind::Attack { shortcut, .. } => {
                 let shortcut =
                     Shortcut::parse(shortcut).map_err(|e| PlatformError(e.to_string()))?;
                 let mut keys = vec![];
@@ -222,14 +385,13 @@ impl InputExecutor {
                     keys.push(0x12);
                 }
                 keys.push(match shortcut.key {
+                    Key::Space => 0x20,
                     Key::Letter(c) => c as u16,
                     Key::Digit(n) => u16::from(b'0' + n),
                     Key::Function(n) => 0x6f + u16::from(n),
                 });
                 if keys.iter().any(|key| backend.key_held(*key)) {
-                    return Err(PlatformError(
-                        "Release the skill or mount shortcut keys.".into(),
-                    ));
+                    return Err(PlatformError("Release the action shortcut keys.".into()));
                 }
                 for key in &keys[..keys.len() - 1] {
                     self.guard(backend, baseline, stop, generation, None)?;
@@ -239,16 +401,37 @@ impl InputExecutor {
                     self.wait(0.1, backend, baseline, stop, generation, None)?;
                 }
                 self.guard(backend, baseline, stop, generation, None)?;
+                if let Some(verify) = verify.as_mut() {
+                    verify(backend)?;
+                }
+                self.guard(backend, baseline, stop, generation, None)?;
                 let main = *keys.last().expect("main key");
                 self.down(main, backend)?;
                 self.wait(
-                    profile.buffs.key_hold_seconds,
+                    match action.kind {
+                        ActionKind::Loot { .. } => profile.loot.hold_seconds,
+                        ActionKind::Key { hold_seconds, .. }
+                        | ActionKind::Pull { hold_seconds, .. } => hold_seconds,
+                        ActionKind::Attack { .. } => 0.,
+                        _ => profile.buffs.key_hold_seconds,
+                    },
                     backend,
                     baseline,
                     stop,
                     generation,
                     None,
                 )?;
+                if let ActionKind::Attack {
+                    duration_seconds, ..
+                } = action.kind
+                {
+                    self.attack = Some((
+                        baseline,
+                        Instant::now() + Duration::from_secs_f64(duration_seconds),
+                        generation,
+                    ));
+                    return Ok(());
+                }
                 if keys.len() > 1 {
                     backend.key(main, false, self.owned.contains(&0x12))?;
                     self.owned.pop();
@@ -257,6 +440,9 @@ impl InputExecutor {
                 Ok(())
             }
         })();
+        if result.is_ok() && matches!(action.kind, ActionKind::Attack { .. }) {
+            return Ok(());
+        }
         let release = self.release(backend);
         match (result, release) {
             (Err(error), Err(cleanup)) => Err(PlatformError(format!("{error}; {cleanup}"))),

@@ -3,6 +3,7 @@ use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Key {
+    Space,
     Letter(char),
     Digit(u8),
     Function(u8),
@@ -47,7 +48,9 @@ impl Shortcut {
             *slot = true;
         }
         let key = parts.last().expect("nonempty");
-        result.key = if key.len() == 1 && key.as_bytes()[0].is_ascii_uppercase() {
+        result.key = if key == "SPACE" {
+            Key::Space
+        } else if key.len() == 1 && key.as_bytes()[0].is_ascii_uppercase() {
             Key::Letter(key.chars().next().expect("one character"))
         } else if key.len() == 1 && key.as_bytes()[0].is_ascii_digit() {
             Key::Digit(key.as_bytes()[0] - b'0')
@@ -59,7 +62,9 @@ impl Shortcut {
             require(n != 7 && n != 8, "F7 and F8 are reserved for bot control.")?;
             Key::Function(n)
         } else {
-            return Err(ValidationError("Use a letter, digit or F1–F12.".into()));
+            return Err(ValidationError(
+                "Use Space, a letter, digit or F1–F12.".into(),
+            ));
         };
         Ok(result)
     }
@@ -76,6 +81,7 @@ impl fmt::Display for Shortcut {
             write!(f, "Alt+")?;
         }
         match self.key {
+            Key::Space => write!(f, "Space"),
             Key::Letter(c) => write!(f, "{c}"),
             Key::Digit(n) => write!(f, "{n}"),
             Key::Function(n) => write!(f, "F{n}"),

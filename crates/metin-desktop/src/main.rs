@@ -101,6 +101,17 @@ fn startup(cli: Cli) -> Result<(), String> {
                     if let Some(case) = cli.ui_window_picker {
                         app.set_window_picker_fixture(case);
                     }
+                    app.prepare_actions_fixture(cli.ui_actions, cli.ui_run_state);
+                    if let Some(page) = cli.ui_settings {
+                        app.prepare_settings_fixture(page);
+                    }
+                    if let Some(page) = cli.ui_safety {
+                        app.prepare_safety_fixture(page);
+                    }
+                    if cli.ui_safety_capture {
+                        app.prepare_safety_capture_fixture()
+                            .map_err(std::io::Error::other)?;
+                    }
                     app.request_screenshot(path, cli.ui_tab);
                 }
                 app

@@ -76,7 +76,7 @@ try {
     if ($CompilerPath) {
         & $CompilerPath /Q (Join-Path $repoRoot 'packaging/check_compiler.iss')
         if ($LASTEXITCODE -ne 0) { throw 'Installer compiler verification failed.' }
-        & $CompilerPath "/DAppVersion=$version" "/DWindowsVersion=$($manifest.windows_version)" "/DAppPublisher=$($identity.publisher)" "/DAppCopyright=$($identity.copyright)" "/DBundleDir=$bundle" "/DReleaseDir=$stage" (Join-Path $repoRoot 'packaging/installer.iss')
+        & $CompilerPath "/DAppVersion=$version" "/DWindowsVersion=$($manifest.windows_version)" "/DAppPublisher=$($identity.publisher)" "/DAppModelId=$($identity.app_id)" "/DAppCopyright=$($identity.copyright)" "/DBundleDir=$bundle" "/DReleaseDir=$stage" (Join-Path $repoRoot 'packaging/installer.iss')
         if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
     }
     & $PythonPath tools/verify-app-branding.py (Join-Path $stage "MetinBotSetup-$version-windows-x64.exe") | Out-Host

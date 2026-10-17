@@ -1,4 +1,46 @@
 use super::*;
+#[cfg(windows)]
+#[test]
+fn committed_save_marks_editor_saved_and_configures_despite_cleanup_warning() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let (mut app, _ctx, dir) = setup();
+    app.editor.template = Some(
+        metin_platform::Frame::new(10, 10, (0..300).map(|n| (n % 251) as u8).collect()).unwrap(),
+    );
+    app.save().unwrap();
+    let original = app.editor.profile.clone();
+    let old_asset = dir
+        .path()
+        .join("profiles")
+        .join(original.id.to_string())
+        .join(original.template_file.as_ref().unwrap());
+    let locked = std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(3)
+        .open(old_asset)
+        .unwrap();
+    app.editor.profile.name = "Committed despite cleanup warning".into();
+    app.target = Some(TargetToken {
+        handle: 100,
+        pid: 201,
+        created: 1,
+    });
+    let revision = app.revision;
+
+    assert!(app.save().is_ok());
+    assert!(!app.editor.dirty());
+    assert_eq!(app.editor.profile.name, "Committed despite cleanup warning");
+    assert_ne!(app.editor.profile.template_file, original.template_file);
+    assert_eq!(app.revision, revision + 1);
+    assert_eq!(app.store.load(original.id).unwrap().0, app.editor.profile);
+    assert!(
+        app.error
+            .as_ref()
+            .is_some_and(|warning| warning.contains("cleanup"))
+    );
+    drop(locked);
+    app.runtime.shutdown().unwrap();
+}
 #[cfg(feature = "ui-smoke")]
 #[test]
 fn window_selection_native_fixture_really_opens_the_picker_and_keeps_start_blocked() {
@@ -334,7 +376,7 @@ fn refinement_sizes_checkbox_is_independent_of_detections() {
     app.runtime.shutdown().unwrap();
 }
 #[test]
-fn runtime_mount_is_persisted_only_for_current_acknowledged_revision() {
+fn mount_declaration_is_read_only_for_current_acknowledged_session() {
     let (mut app, _ctx, dir) = setup();
     let target = TargetToken {
         handle: 1,
@@ -349,15 +391,12 @@ fn runtime_mount_is_persisted_only_for_current_acknowledged_revision() {
         mounted: Some(true),
         ..Default::default()
     });
-    app.remember_mount();
-    assert!(UISettings::load(dir.path()).unwrap().last_mounted);
+    assert_eq!(app.declared_mount(), Some(true));
     app.revision = 5;
-    app.settings.last_mounted = false;
-    app.remember_mount();
-    assert!(!app.settings.last_mounted);
+    assert_eq!(app.declared_mount(), None);
     app.target = None;
-    app.remember_mount();
-    assert!(!app.settings.last_mounted);
+    assert_eq!(app.declared_mount(), None);
+    assert!(!dir.path().join("ui-settings.json").exists());
 }
 fn draw(app: &mut MetinApp, ctx: &egui::Context, mut events: Vec<egui::Event>) {
     draw_at_size(app, ctx, &mut events, egui::vec2(1280., 820.));
@@ -402,6 +441,594 @@ fn setup() -> (MetinApp, egui::Context, tempfile::TempDir) {
     app.edit_area(EditMode::World);
     (app, ctx, dir)
 }
+
+#[test]
+fn run_can_confirm_mount_without_snapshot_or_calibration() {
+    let (mut app, ctx, _dir) = setup();
+    app.editor = Editor::new(Profile::create("Not calibrated"), None);
+    app.editor.profile.buffs.enabled = true;
+    app.tab = Tab::Run;
+    app.editing = false;
+    app.target = Some(TargetToken {
+        handle: 100,
+        pid: 201,
+        created: 1,
+    });
+    let snapshot = Arc::new(RuntimeSnapshot {
+        key: app.key(),
+        revision: app.revision,
+        mounted: None,
+        ..Default::default()
+    });
+    app.snapshot = snapshot.clone();
+    app.window_fixture = Some(window_selection::WindowFixture {
+        snapshot,
+        open_popup: false,
+    });
+    let revision = app.revision;
+    let profile = app.editor.profile.clone();
+    click_label(&mut app, &ctx, "On foot");
+    assert_eq!(app.revision, revision + 1);
+    assert!(app.editor.frozen.is_none());
+    assert!(app.editor.template.is_none());
+    assert_eq!(app.editor.profile, profile);
+    assert_eq!(
+        app.declared_mount(),
+        None,
+        "Wait for runtime acknowledgement rather than assuming success"
+    );
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn run_mount_waits_for_connection_acknowledgement_without_cancelling_connect() {
+    let (mut app, ctx, _dir) = setup();
+    app.tab = Tab::Run;
+    app.target = Some(TargetToken {
+        handle: 100,
+        pid: 201,
+        created: 1,
+    });
+    let snapshot = Arc::new(RuntimeSnapshot::default());
+    app.snapshot = snapshot.clone();
+    app.window_fixture = Some(window_selection::WindowFixture {
+        snapshot,
+        open_popup: false,
+    });
+    let revision = app.revision;
+    let generation = app.runtime.stop_generation();
+    click_label(&mut app, &ctx, "On foot");
+    assert_eq!(app.revision, revision);
+    assert_eq!(app.runtime.stop_generation(), generation);
+    assert_eq!(app.declared_mount(), None);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn run_readiness_keeps_mount_independent_from_calibration_and_routes_directly() {
+    let (mut app, _ctx, _dir) = setup();
+    app.editor = Editor::new(Profile::create("Incomplete"), None);
+    app.editor.profile.buffs.enabled = true;
+    app.target = Some(TargetToken {
+        handle: 100,
+        pid: 201,
+        created: 1,
+    });
+    let steps = app.run_setup_steps();
+    assert!(steps.iter().any(|step| step.action == SetupAction::Mount));
+    assert_eq!(
+        steps
+            .iter()
+            .filter(|step| step.action == SetupAction::Calibration)
+            .count(),
+        1
+    );
+    assert!(!steps.iter().any(|step| step.action == SetupAction::Window));
+    app.snapshot = Arc::new(RuntimeSnapshot {
+        key: app.key(),
+        revision: app.revision,
+        mounted: Some(false),
+        ..Default::default()
+    });
+    assert!(
+        !app.run_setup_steps()
+            .iter()
+            .any(|step| step.action == SetupAction::Mount)
+    );
+    assert!(
+        app.run_setup_steps()
+            .iter()
+            .any(|step| step.action == SetupAction::Calibration)
+    );
+    app.open_setup(SetupAction::Mount);
+    assert_eq!(app.tab, Tab::Actions);
+    assert_eq!(app.actions_page, ActionsPage::Mount);
+    app.open_setup(SetupAction::Calibration);
+    assert_eq!(app.tab, Tab::Calibration);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn run_setup_routes_visual_errors_once_to_the_visual_rule_editor() {
+    let (mut app, _ctx, _dir) = setup();
+    app.editor
+        .profile
+        .safety
+        .rules
+        .push(metin_core::SafetyRule::new(""));
+    let steps = app.run_setup_steps();
+    let visual: Vec<_> = steps
+        .iter()
+        .filter(|s| s.action == SetupAction::VisualRules)
+        .collect();
+    assert_eq!(visual.len(), 1);
+    assert!(visual[0].detail.contains("name"));
+    assert!(
+        !steps
+            .iter()
+            .any(|s| s.action != SetupAction::VisualRules && s.detail == visual[0].detail)
+    );
+    app.open_setup(SetupAction::VisualRules);
+    assert_eq!(app.tab, Tab::Actions);
+    assert_eq!(app.actions_page, ActionsPage::VisualRules);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn run_setup_opens_invalid_periodic_action_even_with_enabled_puller() {
+    let (mut app, _ctx, _dir) = setup();
+    app.editor.profile.puller.enabled = true;
+    let action = metin_core::PeriodicAction::new("");
+    app.editor.profile.periodic_actions.push(action);
+    let step = app
+        .run_setup_steps()
+        .into_iter()
+        .find(|step| step.action == SetupAction::Actions(ActionsPage::Periodic))
+        .expect("periodic setup issue");
+    assert!(step.detail.contains("name"));
+    app.open_setup(step.action);
+    assert_eq!(app.tab, Tab::Actions);
+    assert_eq!(app.actions_page, ActionsPage::Periodic);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn run_preview_toggle_updates_capture_demand_without_changing_automation_or_profile() {
+    let (mut app, ctx, _dir) = setup();
+    app.tab = Tab::Run;
+    app.target = Some(TargetToken {
+        handle: 100,
+        pid: 201,
+        created: 1,
+    });
+    let snapshot = Arc::new(RuntimeSnapshot {
+        key: app.key(),
+        revision: app.revision,
+        mounted: Some(false),
+        frame: app.editor.frozen.clone(),
+        running: true,
+        ..Default::default()
+    });
+    app.snapshot = snapshot.clone();
+    app.window_fixture = Some(window_selection::WindowFixture {
+        snapshot,
+        open_popup: false,
+    });
+    let profile = app.editor.profile.clone();
+    click_label(&mut app, &ctx, "Live preview");
+    assert!(!app.run_live);
+    assert!(!app.preview_demand.unwrap().1);
+    assert!(app.snapshot.running);
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(text, _)| text == "Preview off")
+    );
+    click_label(&mut app, &ctx, "Live preview");
+    assert!(app.run_live);
+    assert!(app.preview_demand.unwrap().1);
+    assert_eq!(app.editor.profile, profile);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn action_links_have_readable_contrast_in_both_themes() {
+    fn luminance(color: egui::Color32) -> f64 {
+        let linear = |value: u8| {
+            let x = f64::from(value) / 255.;
+            if x <= 0.04045 {
+                x / 12.92
+            } else {
+                ((x + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * linear(color.r()) + 0.7152 * linear(color.g()) + 0.0722 * linear(color.b())
+    }
+    let ctx = egui::Context::default();
+    for dark in [false, true] {
+        widgets::theme(&ctx, dark);
+        let style = ctx.style_of(if dark {
+            egui::Theme::Dark
+        } else {
+            egui::Theme::Light
+        });
+        let visuals = &style.visuals;
+        for background in [
+            visuals.panel_fill,
+            visuals.faint_bg_color,
+            visuals.window_fill,
+        ] {
+            let a = luminance(visuals.hyperlink_color);
+            let b = luminance(background);
+            let ratio = (a.max(b) + 0.05) / (a.min(b) + 0.05);
+            assert!(ratio >= 4.5, "link contrast {ratio:.2}: dark={dark}");
+        }
+    }
+}
+
+#[test]
+fn run_groups_confirmed_mount_with_activity_and_replaces_the_buff_only_shortcut() {
+    let (mut app, ctx, _dir) = setup();
+    app.tab = Tab::Run;
+    app.target = Some(TargetToken {
+        handle: 100,
+        pid: 201,
+        created: 1,
+    });
+    let snapshot = Arc::new(RuntimeSnapshot {
+        key: app.key(),
+        revision: app.revision,
+        mounted: Some(true),
+        running: true,
+        ..Default::default()
+    });
+    app.window_fixture = Some(window_selection::WindowFixture {
+        snapshot,
+        open_popup: false,
+    });
+    let mut output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    for _ in 0..3 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    let texts = text_regions(&output);
+    assert!(
+        texts.iter().any(|(t, _)| t == "Change"),
+        "confirmed mount needs a compact Change action"
+    );
+    assert!(
+        !texts.iter().any(|(t, _)| t == "On foot"),
+        "choices are hidden until Change"
+    );
+    assert!(!texts.iter().any(|(t, _)| t == "Edit buffs"));
+    assert!(texts.iter().any(|(t, _)| t == "Configure actions"));
+    let profile = app.editor.profile.clone();
+    click_label(&mut app, &ctx, "Change");
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(text_regions(&output).iter().any(|(t, _)| t == "On foot"));
+    assert_eq!(app.editor.profile, profile);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn run_history_opens_a_dialog_and_escape_restores_the_same_overview_position() {
+    let (mut app, ctx, _dir) = setup();
+    app.tab = Tab::Run;
+    app.window_fixture = Some(window_selection::WindowFixture {
+        snapshot: Arc::new(RuntimeSnapshot {
+            running: true,
+            events: (0..12)
+                .map(|i| metin_core::RunEvent {
+                    id: i,
+                    message: format!("Dialog record {i}"),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
+        }),
+        open_popup: false,
+    });
+    let mut output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    for _ in 0..3 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    let preview = text_regions(&output)
+        .into_iter()
+        .find(|(t, _)| t == "Game preview")
+        .unwrap()
+        .1;
+    click_label(&mut app, &ctx, "View event history (12)");
+    for _ in 0..4 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(t, _)| t == "Close history"),
+        "full history must be a dialog"
+    );
+    assert!(app.snapshot.running);
+    draw(
+        &mut app,
+        &ctx,
+        vec![egui::Event::Key {
+            key: egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Default::default(),
+        }],
+    );
+    for _ in 0..4 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    assert!(
+        !text_regions(&output)
+            .iter()
+            .any(|(t, _)| t == "Close history")
+    );
+    let restored = text_regions(&output)
+        .into_iter()
+        .find(|(t, _)| t == "Game preview")
+        .unwrap()
+        .1;
+    assert_eq!(restored, preview);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn run_schedule_links_open_the_exact_action_skill_and_safety_page() {
+    let (mut app, ctx, _dir) = setup();
+    app.target = Some(TargetToken {
+        handle: 100,
+        pid: 201,
+        created: 1,
+    });
+    app.run_live = false;
+    app.editor.profile.buffs.enabled = true;
+    app.editor.profile.loot.enabled = true;
+    app.editor.profile.buffs.skills = vec![
+        metin_core::BuffSkill {
+            name: "First skill".into(),
+            ..Default::default()
+        },
+        metin_core::BuffSkill {
+            name: "Armor spell".into(),
+            shortcut: "F2".into(),
+            ..Default::default()
+        },
+    ];
+    let action = metin_core::PeriodicAction::new("Supply action");
+    let id = action.id;
+    app.editor.profile.periodic_actions.push(action);
+    app.editor.mark_saved(app.editor.profile.clone());
+    let snapshot = Arc::new(RuntimeSnapshot {
+        key: app.key(),
+        revision: app.revision,
+        mounted: Some(false),
+        running: true,
+        recoveries: 1,
+        action_timers: vec![
+            metin_core::ActionTimer {
+                key: metin_core::ScheduledKey::Periodic(id),
+                name: "Supply action".into(),
+                remaining_seconds: Some(10.),
+            },
+            metin_core::ActionTimer {
+                key: metin_core::ScheduledKey::Puller,
+                name: "Auto-puller".into(),
+                remaining_seconds: Some(3.),
+            },
+        ],
+        ..Default::default()
+    });
+    app.window_fixture = Some(window_selection::WindowFixture {
+        snapshot,
+        open_popup: false,
+    });
+    let before = app.editor.profile.clone();
+    let generation = app.runtime.stop_generation();
+    let reveal_schedule = |app: &mut MetinApp| {
+        app.tab = Tab::Run;
+        draw(
+            app,
+            &ctx,
+            vec![
+                egui::Event::PointerMoved(egui::pos2(750., 700.)),
+                egui::Event::MouseWheel {
+                    phase: egui::TouchPhase::Move,
+                    source: egui::MouseWheelSource::Unknown,
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0., -2000.),
+                    modifiers: Default::default(),
+                },
+            ],
+        );
+        for _ in 0..20 {
+            draw(app, &ctx, vec![]);
+        }
+    };
+    for (label, expected) in [
+        ("Armor spell", ActionsPage::Buffs),
+        ("Supply action", ActionsPage::Periodic),
+        ("Auto-puller", ActionsPage::Puller),
+        ("Loot", ActionsPage::Loot),
+    ] {
+        reveal_schedule(&mut app);
+        click_label(&mut app, &ctx, label);
+        assert_eq!(app.tab, Tab::Actions, "link: {label}");
+        assert_eq!(app.actions_page, expected, "link: {label}");
+        if label == "Armor spell" {
+            assert_eq!(app.selected_skill, 1);
+        }
+        if label == "Supply action" {
+            assert_eq!(app.selected_periodic, Some(id));
+        }
+    }
+    for (label, expected) in [
+        ("Safety schedule", SafetyPage::Schedule),
+        ("Recovery", SafetyPage::Recovery),
+    ] {
+        reveal_schedule(&mut app);
+        click_label(&mut app, &ctx, label);
+        assert_eq!(app.tab, Tab::Safety);
+        assert_eq!(app.safety_page, expected);
+    }
+    assert_eq!(app.editor.profile, before);
+    assert_eq!(
+        app.runtime.stop_generation(),
+        generation,
+        "navigation does not pause a running bot"
+    );
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn history_dialog_close_and_backdrop_do_not_activate_underlying_run_controls() {
+    let (mut app, ctx, _dir) = setup();
+    app.tab = Tab::Run;
+    click_label(&mut app, &ctx, "View event history (0)");
+    assert!(app.history_open);
+    let generation = app.runtime.stop_generation();
+    click_label(&mut app, &ctx, "Close history");
+    assert!(!app.history_open);
+    click_label(&mut app, &ctx, "View event history (0)");
+    click_label(&mut app, &ctx, "Actions"); // outside the modal: closes its backdrop only
+    assert_eq!(app.tab, Tab::Run);
+    assert!(!app.history_open);
+    assert_eq!(app.runtime.stop_generation(), generation);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn run_history_keeps_five_in_overview_and_filters_full_dialog() {
+    let (mut app, ctx, _dir) = setup();
+    app.tab = Tab::Run;
+    app.run_live = false;
+    app.target = Some(TargetToken {
+        handle: 100,
+        pid: 201,
+        created: 1,
+    });
+    let snapshot = Arc::new(RuntimeSnapshot {
+        key: app.key(),
+        running: true,
+        events: (0..12)
+            .map(|i| metin_core::RunEvent {
+                id: i,
+                activity: "Action".into(),
+                message: format!("History record {i}"),
+                level: if i % 3 == 0 {
+                    metin_core::EventLevel::Info
+                } else {
+                    metin_core::EventLevel::Warning
+                },
+                ..Default::default()
+            })
+            .collect(),
+        ..Default::default()
+    });
+    app.snapshot = snapshot.clone();
+    app.window_fixture = Some(window_selection::WindowFixture {
+        snapshot,
+        open_popup: false,
+    });
+    let size = egui::vec2(1280., 1500.);
+    let mut output = draw_at_size(&mut app, &ctx, &mut vec![], size);
+    for _ in 0..3 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], size);
+    }
+    let records = |output: &egui::FullOutput| {
+        text_regions(output)
+            .into_iter()
+            .filter(|(text, _)| text.starts_with("History record "))
+            .map(|(text, _)| text)
+            .collect::<Vec<_>>()
+    };
+    let compact = records(&output);
+    assert_eq!(compact.len(), 5);
+    assert_eq!(compact[0], "History record 11");
+    let pos = text_regions(&output)
+        .into_iter()
+        .find(|(text, _)| text == "Show full history")
+        .unwrap()
+        .1
+        .center();
+    for pressed in [true, false] {
+        draw_at_size(
+            &mut app,
+            &ctx,
+            &mut vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Default::default(),
+                },
+            ],
+            size,
+        );
+    }
+    assert!(app.history_open);
+    app.warnings_only = true;
+    // Inspect the dialog's own layer: the unchanged Run behind its backdrop
+    // deliberately still contains its unfiltered five-event summary.
+    let render_dialog = |app: &mut MetinApp, events: Vec<egui::Event>| {
+        ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                events,
+                ..Default::default()
+            },
+            |ui| app.run_history_dialog(ui.ctx()),
+        )
+    };
+    let mut output = render_dialog(&mut app, vec![]);
+    for _ in 0..3 {
+        output = render_dialog(&mut app, vec![]);
+    }
+    let warnings = records(&output);
+    assert!(warnings.len() >= 3);
+    assert!(!warnings.iter().any(|text| {
+        [
+            "History record 9",
+            "History record 6",
+            "History record 3",
+            "History record 0",
+        ]
+        .contains(&text.as_str())
+    }));
+    let pos = text_regions(&output)
+        .into_iter()
+        .find(|(text, _)| text == "History record 11")
+        .unwrap()
+        .1
+        .center();
+    let mut seen = warnings;
+    for _ in 0..12 {
+        let output = render_dialog(
+            &mut app,
+            vec![
+                egui::Event::PointerMoved(pos),
+                egui::Event::MouseWheel {
+                    phase: egui::TouchPhase::Move,
+                    source: egui::MouseWheelSource::Unknown,
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0., -80.),
+                    modifiers: Default::default(),
+                },
+            ],
+        );
+        seen.extend(records(&output));
+    }
+    seen.sort();
+    seen.dedup();
+    assert_eq!(seen.len(), 8, "All warnings remain accessible by scrolling");
+    assert!(seen.contains(&"History record 1".into()));
+    app.runtime.shutdown().unwrap();
+}
+
 #[test]
 fn migrated_template_pixels_and_start_explanation_share_one_readiness_model() {
     let (mut app, _ctx, _dir) = setup();
@@ -540,7 +1167,13 @@ fn all_tabs_and_both_themes_render_with_complete_buff_controls() {
         } else {
             egui::Visuals::light()
         });
-        for tab in [Tab::Run, Tab::Calibration, Tab::Buffs, Tab::Settings] {
+        for tab in [
+            Tab::Run,
+            Tab::Calibration,
+            Tab::Actions,
+            Tab::Safety,
+            Tab::Settings,
+        ] {
             app.tab = tab;
             draw(&mut app, &ctx, vec![]);
         }
@@ -567,7 +1200,13 @@ fn minimum_window_and_simulated_hidpi_render_all_tabs_with_eight_skills() {
             } else {
                 egui::Visuals::light()
             });
-            for tab in [Tab::Run, Tab::Calibration, Tab::Buffs, Tab::Settings] {
+            for tab in [
+                Tab::Run,
+                Tab::Calibration,
+                Tab::Actions,
+                Tab::Safety,
+                Tab::Settings,
+            ] {
                 app.tab = tab;
                 draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(800., 560.));
             }
@@ -678,9 +1317,10 @@ fn pointer_navigation_preserves_dirty_profile_and_only_calibration_has_editable_
     app.editor.profile.name = "Edited profile".into();
     app.editor.record();
     for (label, tab) in [
-        ("Buffs", Tab::Buffs),
+        ("Actions", Tab::Actions),
         ("Run", Tab::Run),
         ("Settings", Tab::Settings),
+        ("Safety", Tab::Safety),
         ("Calibration", Tab::Calibration),
     ] {
         click_label(&mut app, &ctx, label);
@@ -700,7 +1340,7 @@ fn skill_buttons_move_the_selected_skill_and_keep_detail_identity() {
             ..Default::default()
         });
     }
-    app.navigate(Tab::Buffs);
+    app.navigate(Tab::Actions);
     let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
     let label = text_regions(&output)
         .into_iter()
@@ -796,7 +1436,7 @@ fn typing_and_text_undo_do_not_undo_the_profile_or_remove_a_skill() {
     app.add_skill();
     app.editor.profile.buffs.skills[0].name = "Aura".into();
     app.editor.record();
-    app.navigate(Tab::Buffs);
+    app.navigate(Tab::Actions);
     click_label(&mut app, &ctx, "Aura");
     draw(&mut app, &ctx, vec![egui::Event::Text("x".into())]);
     assert_ne!(app.editor.profile.buffs.skills[0].name, "Aura");
@@ -927,7 +1567,7 @@ fn start_readiness_routes_to_window_name_and_buff_fixes_before_allowing_start() 
         "A running session must not tell the user to start again"
     );
     app.editor.profile.name.clear();
-    assert!(app.start_blocker().unwrap().tab == Tab::Calibration);
+    assert!(app.start_blocker().unwrap().action == SetupAction::Calibration);
     app.editor.profile.name = "Valid".into();
     app.editor.profile.buffs.enabled = true;
     app.editor.profile.buffs.skills.push(metin_core::BuffSkill {
@@ -935,7 +1575,7 @@ fn start_readiness_routes_to_window_name_and_buff_fixes_before_allowing_start() 
         interval_seconds: None,
         ..Default::default()
     });
-    assert!(app.start_blocker().unwrap().tab == Tab::Buffs);
+    assert!(app.start_blocker().unwrap().action == SetupAction::Actions(ActionsPage::Buffs));
     app.runtime.shutdown().unwrap();
 }
 #[test]
@@ -999,7 +1639,7 @@ fn switching_profiles_retires_the_previous_skill_crop_mode() {
         index: 0,
         inactive: false,
     });
-    app.switch_profile(other.id);
+    app.switch_profile(other.profile.id);
     assert!(app.mode == EditMode::World);
     assert!(!app.return_to_buffs);
     assert!(app.editor.profile.buffs.skills.is_empty());
@@ -1014,7 +1654,14 @@ fn long_profile_names_keep_pause_and_navigation_visible_in_small_window() {
     for _ in 0..3 {
         output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(800., 560.));
     }
-    for label in ["Pause · F8", "Run", "Calibration", "Buffs", "Settings"] {
+    for label in [
+        "Pause · F8",
+        "Run",
+        "Calibration",
+        "Actions",
+        "Safety",
+        "Settings",
+    ] {
         let (_, rect) = text_regions(&output)
             .into_iter()
             .find(|(text, _)| text == label)
@@ -1032,7 +1679,7 @@ fn scrolling_buff_detail_reaches_icon_capture_and_returns_to_the_same_skill() {
     app.add_skill();
     app.editor.profile.buffs.skills[0].mode = metin_core::BuffMode::Inactive;
     app.editor.profile.buffs.skills[0].interval_seconds = None;
-    app.navigate(Tab::Buffs);
+    app.navigate(Tab::Actions);
     for _ in 0..3 {
         draw(&mut app, &ctx, vec![]);
     }
@@ -1058,7 +1705,7 @@ fn scrolling_buff_detail_reaches_icon_capture_and_returns_to_the_same_skill() {
     assert!(app.return_to_buffs);
     assert!(matches!(app.mode, EditMode::BuffIcon { index: 0, .. }));
     click_label(&mut app, &ctx, "Done & back to buffs");
-    assert!(app.tab == Tab::Buffs);
+    assert!(app.tab == Tab::Actions);
     assert_eq!(app.selected_skill, 0);
     app.runtime.shutdown().unwrap();
 }
@@ -1210,7 +1857,7 @@ fn user_review_four_calibration_steps_hover_select_and_preserve_edits() {
 fn user_review_shortcut_recording_cancel_reserved_key_and_clear_are_real_key_events() {
     let (mut app, ctx, _dir) = setup();
     app.add_skill();
-    app.navigate(Tab::Buffs);
+    app.navigate(Tab::Actions);
     click_label(&mut app, &ctx, "F1");
     assert!(app.binding.is_some());
     draw(
@@ -1262,7 +1909,7 @@ fn user_review_buff_mode_and_unit_menus_apply_to_the_selected_skill_only() {
     let (mut app, ctx, _dir) = setup();
     app.add_skill();
     app.add_skill();
-    app.navigate(Tab::Buffs);
+    app.navigate(Tab::Actions);
     let first = app.editor.profile.buffs.skills[0].clone();
     app.editor.profile.buffs.skills[1].interval_seconds = Some(180.);
     click_label(&mut app, &ctx, "seconds");
@@ -1472,7 +2119,7 @@ fn user_review_unknown_mount_confirmation_is_visible_and_applies_without_dirtyin
                 )),
                 ..Default::default()
             },
-            |ui| app.buffs_view(ui),
+            |ui| app.mount_view(ui),
         );
         let texts = text_regions(&output);
         assert!(
@@ -1482,11 +2129,11 @@ fn user_review_unknown_mount_confirmation_is_visible_and_applies_without_dirtyin
         );
         button_pos = texts
             .iter()
-            .find(|(text, _)| text == "Confirm selected state")
+            .find(|(text, _)| text == "On foot")
             .map(|(_, rect)| rect.center());
         output.textures_delta.clear();
     }
-    let pos = button_pos.expect("Unknown mount must offer explicit confirmation");
+    let pos = button_pos.expect("Unknown mount must offer an explicit On foot declaration");
     for pressed in [true, false] {
         let mut output = ctx.run_ui(
             egui::RawInput {
@@ -1505,14 +2152,14 @@ fn user_review_unknown_mount_confirmation_is_visible_and_applies_without_dirtyin
                 ],
                 ..Default::default()
             },
-            |ui| app.buffs_view(ui),
+            |ui| app.mount_view(ui),
         );
         output.textures_delta.clear();
     }
     assert_eq!(app.revision, old_revision + 1);
     assert_eq!(app.editor.profile, before);
     assert!(!app.editor.dirty());
-    assert!(!UISettings::load(dir.path()).unwrap().last_mounted);
+    assert!(!dir.path().join("ui-settings.json").exists());
     app.runtime.shutdown().unwrap();
 }
 
@@ -1646,7 +2293,7 @@ fn feedback_one_wheel_notch_does_not_repeat_zoom_during_smoothing() {
 fn feedback_periodic_skills_do_not_offer_unused_icon_recognition() {
     let (mut app, ctx, _dir) = setup();
     app.add_skill();
-    app.navigate(Tab::Buffs);
+    app.navigate(Tab::Actions);
     let mut output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
     for _ in 0..3 {
         output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
@@ -2126,7 +2773,7 @@ fn buff_capture_shows_context_switches_states_and_returns_to_same_skill() {
     );
     assert!(!labels.iter().any(|(text, _)| text == "Profile name"));
     click_label(&mut app, &ctx, "Done & back to buffs");
-    assert_eq!(app.tab, Tab::Buffs);
+    assert_eq!(app.tab, Tab::Actions);
     assert!(!app.editing && !app.return_to_buffs);
     assert_eq!(app.selected_skill, 0);
     assert!(app.editor.profile.buffs.skills[0].inactive_icon.is_some());
@@ -2167,7 +2814,7 @@ fn skill_row_actions(output: &egui::FullOutput, label: egui::Rect) -> [egui::Rec
                 if (25. ..=33.).contains(&s.rect.width())
                     && (14. ..=33.).contains(&s.rect.height())
                     && s.rect.left() > label.right()
-                    && s.rect.right() < 270.
+                    && s.rect.right() < label.right() + 170.
                     && s.rect.center().y > label.center().y - 17.
                     && s.rect.center().y < label.center().y + 17. =>
             {
@@ -2204,7 +2851,7 @@ fn skill_row_trash_deletes_its_own_skill_and_last_skill_can_be_restored() {
     }
     app.editor.record();
     app.selected_skill = 1;
-    app.navigate(Tab::Buffs);
+    app.navigate(Tab::Actions);
     for _ in 0..3 {
         draw(&mut app, &ctx, vec![]);
     }
@@ -2461,5 +3108,674 @@ fn theme_toggle_stays_at_right_edge_and_switches_with_target_tooltip() {
         }
         assert_ne!(app.settings.theme, before);
     }
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn actions_subpages_and_safety_preserve_edits_and_expose_all_controls() {
+    let (mut app, ctx, _dir) = setup();
+    app.add_skill();
+    app.navigate(Tab::Actions);
+    click_label(&mut app, &ctx, "Loot");
+    assert_eq!(app.actions_page, ActionsPage::Loot);
+    click_label(&mut app, &ctx, "Automatic loot");
+    assert!(app.editor.profile.loot.enabled);
+    click_label(&mut app, &ctx, "Mount");
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(800., 560.));
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(s, _)| s == "Mount state")
+    );
+    click_label(&mut app, &ctx, "Safety");
+    click_label(&mut app, &ctx, "Stop after active time");
+    click_label(&mut app, &ctx, "Take regular breaks");
+    assert!(app.editor.profile.safety.stop_enabled);
+    assert!(app.editor.profile.safety.breaks_enabled);
+    assert!(app.editor.profile.loot.enabled);
+    assert_eq!(app.editor.profile.buffs.skills.len(), 1);
+    assert!(app.editor.dirty());
+    app.runtime.shutdown().unwrap();
+}
+#[test]
+fn loot_key_recording_uses_reserved_key_validation_and_cancels_on_navigation() {
+    let (mut app, ctx, _dir) = setup();
+    app.navigate(Tab::Actions);
+    click_label(&mut app, &ctx, "Loot");
+    click_label(&mut app, &ctx, "Automatic loot");
+    click_label(&mut app, &ctx, "Z");
+    draw(
+        &mut app,
+        &ctx,
+        vec![egui::Event::Key {
+            key: egui::Key::Y,
+            physical_key: Some(egui::Key::Y),
+            pressed: true,
+            repeat: false,
+            modifiers: Default::default(),
+        }],
+    );
+    assert_eq!(app.editor.profile.loot.shortcut, "Y");
+    click_label(&mut app, &ctx, "Y");
+    click_label(&mut app, &ctx, "Safety");
+    assert!(app.binding.is_none());
+    app.runtime.shutdown().unwrap();
+}
+#[test]
+fn every_actions_page_and_safety_fit_both_themes_at_minimum_size_without_mutation() {
+    let (mut app, ctx, _dir) = setup();
+    app.add_skill();
+    let before = app.editor.profile.clone();
+    for dark in [false, true] {
+        ctx.set_visuals(if dark {
+            egui::Visuals::dark()
+        } else {
+            egui::Visuals::light()
+        });
+        app.tab = Tab::Actions;
+        for page in [ActionsPage::Buffs, ActionsPage::Loot, ActionsPage::Mount] {
+            app.actions_page = page;
+            for _ in 0..3 {
+                draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(800., 560.));
+            }
+        }
+        app.tab = Tab::Safety;
+        for _ in 0..3 {
+            draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(800., 560.));
+        }
+    }
+    assert_eq!(app.editor.profile, before);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn break_countdown_and_history_jump_are_visible_and_do_not_offer_another_start() {
+    let (mut app, ctx, _dir) = setup();
+    let snapshot = Arc::new(RuntimeSnapshot {
+        events: (0..8)
+            .map(|i| metin_core::RunEvent {
+                id: i,
+                at_seconds: i as f64,
+                level: metin_core::EventLevel::Info,
+                activity: "Action".into(),
+                message: format!("Recorded event {i}"),
+                ..Default::default()
+            })
+            .collect(),
+        running: true,
+        state: "On break".into(),
+        schedule: metin_core::ScheduleSnapshot {
+            break_ends_in: Some(60.),
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+    app.window_fixture = Some(window_selection::WindowFixture {
+        snapshot,
+        open_popup: false,
+    });
+    app.tab = Tab::Run;
+    let mut output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    for _ in 0..3 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    let texts = text_regions(&output);
+    assert!(texts.iter().any(|(s, _)| s == "Continues in 00:01:00"));
+    assert!(!texts.iter().any(|(s, _)| s == "Before you start"));
+    click_label(&mut app, &ctx, "View event history (8)");
+    for _ in 0..20 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    }
+    assert!(
+        text_regions(&output)
+            .iter()
+            .filter(|(s, _)| s.starts_with("Recorded event "))
+            .count()
+            >= 3,
+        "History must show several events after jumping to it: {:?}",
+        text_regions(&output)
+    );
+    assert!(app.snapshot.running);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn clock_only_schedule_explains_pending_start_instead_of_claiming_no_limits() {
+    let mut profile = Profile::create("Clock only");
+    profile.safety.clock_enabled = true;
+    let schedule = metin_core::Controller::new(profile).schedule(0.);
+    let ctx = egui::Context::default();
+    let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+        safety::schedule_labels(ui, &schedule, false)
+    });
+    let text = text_regions(&output);
+    output.textures_delta.clear();
+    assert!(
+        text.iter()
+            .any(|(s, _)| s.contains("Local-time stop: 23:00"))
+    );
+    assert!(!text.iter().any(|(s, _)| s.contains("No automatic stop")));
+}
+
+#[test]
+fn remaining_pages_are_reachable_and_keep_profile_values_across_navigation() {
+    let (mut app, ctx, _dir) = setup();
+    app.navigate(Tab::Actions);
+    click_label(&mut app, &ctx, "Periodic actions");
+    click_label(&mut app, &ctx, "Add action");
+    assert_eq!(app.editor.profile.periodic_actions.len(), 1);
+    assert_eq!(app.editor.profile.periodic_actions[0].name, "New action");
+    click_label(&mut app, &ctx, "Enable this action");
+    click_label(&mut app, &ctx, "Auto-puller");
+    click_label(&mut app, &ctx, "Automatic puller");
+    click_label(&mut app, &ctx, "Repeat during combat");
+    assert_eq!(
+        app.editor.profile.puller.mode,
+        metin_core::PullerMode::CombatPeriodic
+    );
+    click_label(&mut app, &ctx, "Settings");
+    for label in [
+        "Combat & timing",
+        "Appearance & performance",
+        "Diagnostics",
+        "Detection",
+    ] {
+        click_label(&mut app, &ctx, label);
+    }
+    assert!(app.editor.profile.periodic_actions[0].enabled);
+    click_label(&mut app, &ctx, "Actions");
+    click_label(&mut app, &ctx, "Visual rules");
+    click_label(&mut app, &ctx, "Add rule");
+    assert!(!app.editor.profile.safety.rules[0].enabled);
+    click_label(&mut app, &ctx, "Capture reference");
+    assert_eq!(app.tab, Tab::Calibration);
+    assert!(app.return_to_safety);
+    click_label(&mut app, &ctx, "Done & back to Actions");
+    assert_eq!(app.actions_page, ActionsPage::VisualRules);
+    assert_eq!(app.tab, Tab::Actions);
+    app.runtime.shutdown().unwrap();
+}
+#[test]
+fn all_remaining_subpages_render_in_both_themes_at_small_size_without_edits() {
+    let (mut app, ctx, _dir) = setup();
+    let before = app.editor.profile.clone();
+    for dark in [false, true] {
+        ctx.set_visuals(if dark {
+            egui::Visuals::dark()
+        } else {
+            egui::Visuals::light()
+        });
+        app.tab = Tab::Actions;
+        for page in [
+            ActionsPage::Periodic,
+            ActionsPage::Puller,
+            ActionsPage::VisualRules,
+        ] {
+            app.actions_page = page;
+            for _ in 0..3 {
+                draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(800., 560.));
+            }
+        }
+        app.tab = Tab::Settings;
+        for page in [
+            SettingsPage::Detection,
+            SettingsPage::Combat,
+            SettingsPage::Appearance,
+            SettingsPage::Diagnostics,
+        ] {
+            app.settings_page = page;
+            for _ in 0..3 {
+                draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(800., 560.));
+            }
+        }
+        app.tab = Tab::Safety;
+        for page in [
+            SafetyPage::Schedule,
+            SafetyPage::Recovery,
+            SafetyPage::Notifications,
+        ] {
+            app.safety_page = page;
+            for _ in 0..3 {
+                draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(800., 560.));
+            }
+        }
+    }
+    assert_eq!(app.editor.profile, before);
+    app.runtime.shutdown().unwrap();
+}
+#[test]
+fn lite_preview_preserves_capture_settings_and_reuses_one_coherent_snapshot() {
+    let (mut app, ctx, _dir) = setup();
+    let before = app.editor.profile.timing.clone();
+    app.settings.lite_mode = true;
+    let first = app.presentation_snapshot();
+    let mut newer = (*first).clone();
+    newer.frame_id = 42;
+    app.snapshot = Arc::new(newer);
+    let held = app.presentation_snapshot();
+    assert_eq!(held.frame_id, first.frame_id);
+    app.preview_updated = std::time::Instant::now() - std::time::Duration::from_secs(2);
+    assert_eq!(app.presentation_snapshot().frame_id, 42);
+    assert_eq!(app.editor.profile.timing, before);
+    draw(&mut app, &ctx, vec![]);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn incomplete_imported_safety_reference_does_not_offer_a_snapshot_test() {
+    let (mut app, ctx, _dir) = setup();
+    app.editor
+        .profile
+        .safety
+        .rules
+        .push(metin_core::SafetyRule::new("Imported"));
+    app.editor
+        .freeze(
+            metin_platform::Frame::new(100, 100, (0..30000).map(|n| (n % 251) as u8).collect())
+                .unwrap(),
+        )
+        .unwrap();
+    app.editor
+        .set_region(
+            EditMode::SafetyReference(0),
+            metin_core::Region {
+                left: 0.1,
+                top: 0.1,
+                right: 0.2,
+                bottom: 0.2,
+            },
+        )
+        .unwrap();
+    app.editor.profile.safety.rules[0]
+        .reference
+        .as_mut()
+        .unwrap()
+        .region = None;
+    app.tab = Tab::Actions;
+    app.actions_page = ActionsPage::VisualRules;
+    click_label(&mut app, &ctx, "Test on snapshot");
+    assert!(app.snapshot_score.is_none());
+    assert!(!app.editor.profile.safety.rules[0].enabled);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn disabled_puller_cannot_change_mode_or_record_a_key_but_preserves_its_values() {
+    let (mut app, ctx, _dir) = setup();
+    app.tab = Tab::Actions;
+    app.actions_page = ActionsPage::Puller;
+    let before = app.editor.profile.puller.clone();
+    click_label(&mut app, &ctx, "Repeat during combat");
+    click_label(&mut app, &ctx, "F4");
+    assert!(app.binding.is_none());
+    assert_eq!(app.editor.profile.puller, before);
+    click_label(&mut app, &ctx, "Automatic puller");
+    click_label(&mut app, &ctx, "Repeat during combat");
+    assert_eq!(
+        app.editor.profile.puller.mode,
+        metin_core::PullerMode::CombatPeriodic
+    );
+    click_label(&mut app, &ctx, "Automatic puller");
+    click_label(&mut app, &ctx, "At combat start");
+    assert_eq!(
+        app.editor.profile.puller.mode,
+        metin_core::PullerMode::CombatPeriodic
+    );
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn combat_options_show_only_relevant_fields_and_record_space() {
+    let (mut app, ctx, _dir) = setup();
+    app.tab = Tab::Actions;
+    app.actions_page = ActionsPage::Puller;
+    click_label(&mut app, &ctx, "Automatic puller");
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(
+        !text_regions(&output)
+            .iter()
+            .any(|(t, _)| t == "Repeat interval (s)")
+    );
+    click_label(&mut app, &ctx, "Repeat during combat");
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(t, _)| t == "Repeat interval (s)")
+    );
+    click_label(&mut app, &ctx, "Out-of-target attack");
+    click_label(&mut app, &ctx, "Attack after a target ends");
+    click_label(&mut app, &ctx, "Space");
+    draw(
+        &mut app,
+        &ctx,
+        vec![egui::Event::Key {
+            key: egui::Key::Space,
+            physical_key: Some(egui::Key::Space),
+            pressed: true,
+            repeat: false,
+            modifiers: Default::default(),
+        }],
+    );
+    assert_eq!(app.editor.profile.out_of_target.shortcut, "Space");
+    assert!(app.binding.is_none());
+    draw(
+        &mut app,
+        &ctx,
+        vec![egui::Event::Key {
+            key: egui::Key::Space,
+            physical_key: Some(egui::Key::Space),
+            pressed: false,
+            repeat: false,
+            modifiers: Default::default(),
+        }],
+    );
+    assert!(app.binding.is_none());
+    click_label(&mut app, &ctx, "Attack when searching takes too long");
+    assert!(app.editor.profile.out_of_target.during_search);
+    let before = app.editor.profile.clone();
+    for dark in [false, true] {
+        widgets::theme(&ctx, dark);
+        draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(800., 560.));
+    }
+    assert_eq!(app.editor.profile, before);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn small_attack_form_scrolls_to_the_search_limits_and_event_link_opens_it() {
+    let (mut app, ctx, _dir) = setup();
+    app.window_fixture = Some(window_selection::WindowFixture {
+        snapshot: Arc::new(RuntimeSnapshot {
+            events: vec![metin_core::RunEvent {
+                activity: "Out-of-target attack".into(),
+                message: "Attack key released.".into(),
+                destination: metin_core::EventDestination::OutOfTarget,
+                ..Default::default()
+            }],
+            ..Default::default()
+        }),
+        open_popup: false,
+    });
+    app.tab = Tab::Run;
+    click_label(&mut app, &ctx, "View event history (1)");
+    for _ in 0..20 {
+        draw(&mut app, &ctx, vec![]);
+    }
+    click_label(&mut app, &ctx, "Open setup");
+    assert_eq!(app.tab, Tab::Actions);
+    assert_eq!(app.actions_page, ActionsPage::OutOfTarget);
+    app.editor.profile.out_of_target.during_search = true;
+    let size = egui::vec2(800., 560.);
+    for _ in 0..3 {
+        draw_at_size(&mut app, &ctx, &mut vec![], size);
+    }
+    draw_at_size(
+        &mut app,
+        &ctx,
+        &mut vec![
+            egui::Event::PointerMoved(egui::pos2(600., 450.)),
+            egui::Event::MouseWheel {
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Unknown,
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0., -1200.),
+                modifiers: Default::default(),
+            },
+        ],
+        size,
+    );
+    let mut output = draw_at_size(&mut app, &ctx, &mut vec![], size);
+    for _ in 0..20 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], size);
+    }
+    let limits = text_regions(&output)
+        .into_iter()
+        .find(|(t, _)| t == "Maximum search attacks")
+        .expect("search limit rendered");
+    assert!(
+        limits.1.top() > 137. && limits.1.bottom() < 520.,
+        "Limit must be accessible after scrolling: {:?}",
+        limits.1
+    );
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn periodic_key_click_first_run_and_capture_use_one_input() {
+    let (mut app, ctx, _dir) = setup();
+    app.navigate(Tab::Actions);
+    app.actions_page = ActionsPage::Periodic;
+    click_label(&mut app, &ctx, "Add action");
+    assert!(!app.editor.profile.periodic_actions[0].enabled);
+    assert_eq!(
+        app.editor.profile.periodic_actions[0].first_run,
+        metin_core::FirstRun::AfterInterval
+    );
+    click_label(&mut app, &ctx, "Enable this action");
+    click_label(&mut app, &ctx, "Immediately when available");
+    assert_eq!(
+        app.editor.profile.periodic_actions[0].first_run,
+        metin_core::FirstRun::Immediate
+    );
+    click_label(&mut app, &ctx, "F4");
+    draw(
+        &mut app,
+        &ctx,
+        vec![egui::Event::Key {
+            key: egui::Key::F6,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::default(),
+        }],
+    );
+    assert_eq!(
+        app.editor.profile.periodic_actions[0].input.shortcut(),
+        Some("F6")
+    );
+    click_label(&mut app, &ctx, "Click");
+    assert!(!app.editor.profile.periodic_actions[0].enabled);
+    let id = app.editor.profile.periodic_actions[0].id;
+    click_label(&mut app, &ctx, "Select click target");
+    assert_eq!(app.mode, EditMode::PeriodicClick(id));
+    app.editor
+        .freeze(metin_platform::Frame::new(100, 100, vec![50; 30000]).unwrap())
+        .unwrap();
+    let region = metin_core::Region {
+        left: 0.2,
+        top: 0.3,
+        right: 0.4,
+        bottom: 0.5,
+    };
+    app.editor.set_region(app.mode, region).unwrap();
+    assert_eq!(app.editor.region(app.mode), Some(region));
+    click_label(&mut app, &ctx, "Done & back to Actions");
+    assert_eq!(app.tab, Tab::Actions);
+    assert_eq!(app.actions_page, ActionsPage::Periodic);
+    click_label(&mut app, &ctx, "Enable this action");
+    assert!(app.editor.profile.periodic_actions[0].enabled);
+    app.editor
+        .freeze(metin_platform::Frame::new(200, 100, vec![50; 60000]).unwrap())
+        .unwrap();
+    assert_eq!(
+        app.editor.profile.periodic_actions[0].input,
+        metin_core::ActionInput::Click { region: None }
+    );
+    assert!(!app.editor.profile.periodic_actions[0].enabled);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn visual_execution_controls_keep_disabled_fields_and_capture_return() {
+    let (mut app, ctx, _dir) = setup();
+    app.navigate(Tab::Actions);
+    app.actions_page = ActionsPage::VisualRules;
+    click_label(&mut app, &ctx, "Add rule");
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(
+        !text_regions(&output)
+            .iter()
+            .any(|(text, _)| text == "Wait only")
+    );
+    assert_eq!(
+        app.editor.profile.safety.rules[0].execution.verification,
+        metin_core::Verification::ReferenceGone
+    );
+    click_label(&mut app, &ctx, "Pause immediately");
+    click_label(&mut app, &ctx, "Perform action");
+    assert_eq!(
+        app.editor.profile.safety.rules[0].reaction,
+        metin_core::RuleReactions {
+            notify: true,
+            pause: false,
+            execute: true
+        }
+    );
+    click_label(&mut app, &ctx, "Wait only");
+    assert_eq!(
+        app.editor.profile.safety.rules[0].execution.verification,
+        metin_core::Verification::Delay
+    );
+    click_label(&mut app, &ctx, "Continue from a fresh frame");
+    assert_eq!(
+        app.editor.profile.safety.rules[0].execution.after_success,
+        metin_core::AfterSuccess::Continue
+    );
+    click_label(&mut app, &ctx, "F4");
+    draw(
+        &mut app,
+        &ctx,
+        vec![egui::Event::Key {
+            key: egui::Key::F5,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::default(),
+        }],
+    );
+    assert_eq!(
+        app.editor.profile.safety.rules[0]
+            .execution
+            .input
+            .shortcut(),
+        Some("F5")
+    );
+    click_label(&mut app, &ctx, "Click");
+    click_label(&mut app, &ctx, "Select click target");
+    assert_eq!(app.mode, EditMode::VisualClick(0));
+    assert!(app.return_to_safety);
+    click_label(&mut app, &ctx, "Done & back to Actions");
+    assert_eq!(app.actions_page, ActionsPage::VisualRules);
+    assert_eq!(app.tab, Tab::Actions);
+    assert!(!app.editor.profile.safety.rules[0].enabled);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn visual_event_setup_link_opens_the_matching_rule_in_actions() {
+    let (mut app, ctx, _dir) = setup();
+    let rule = metin_core::SafetyRule::new("Dialog");
+    let id = rule.id;
+    app.editor.profile.safety.rules.push(rule);
+    app.window_fixture = Some(window_selection::WindowFixture {
+        snapshot: Arc::new(RuntimeSnapshot {
+            events: vec![metin_core::RunEvent {
+                activity: "Visual rule".into(),
+                message: "Dialog found".into(),
+                destination: metin_core::EventDestination::Safety,
+                subject: Some(id),
+                ..Default::default()
+            }],
+            ..Default::default()
+        }),
+        open_popup: false,
+    });
+    app.tab = Tab::Run;
+    click_label(&mut app, &ctx, "View event history (1)");
+    for _ in 0..20 {
+        draw(&mut app, &ctx, vec![]);
+    }
+    click_label(&mut app, &ctx, "Open setup");
+    assert_eq!(app.tab, Tab::Actions);
+    assert_eq!(app.actions_page, ActionsPage::VisualRules);
+    assert_eq!(app.editor.profile.safety.rules[app.selected_safety].id, id);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn narrow_visual_execution_scrolls_to_completion_controls() {
+    let (mut app, ctx, _dir) = setup();
+    let mut rule = metin_core::SafetyRule::new("Dialog");
+    rule.reaction = metin_core::RuleReactions {
+        notify: true,
+        pause: false,
+        execute: true,
+    };
+    app.editor.profile.safety.rules.push(rule);
+    app.tab = Tab::Actions;
+    app.actions_page = ActionsPage::VisualRules;
+    let size = egui::vec2(800., 560.);
+    for _ in 0..3 {
+        draw_at_size(&mut app, &ctx, &mut vec![], size);
+    }
+    draw_at_size(
+        &mut app,
+        &ctx,
+        &mut vec![
+            egui::Event::PointerMoved(egui::pos2(600., 450.)),
+            egui::Event::MouseWheel {
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Unknown,
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0., -2000.),
+                modifiers: Default::default(),
+            },
+        ],
+        size,
+    );
+    let mut output = draw_at_size(&mut app, &ctx, &mut vec![], size);
+    for _ in 0..20 {
+        output = draw_at_size(&mut app, &ctx, &mut vec![], size);
+    }
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(text, rect)| text == "Continue from a fresh frame" && rect.right() <= 800.)
+    );
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn visual_reaction_checkboxes_keep_notify_independent_and_block_pause_action_conflict() {
+    let (mut app, ctx, _dir) = setup();
+    app.navigate(Tab::Actions);
+    app.actions_page = ActionsPage::VisualRules;
+    click_label(&mut app, &ctx, "Add rule");
+    click_label(&mut app, &ctx, "Perform action");
+    assert!(!app.editor.profile.safety.rules[0].reaction.execute);
+    assert!(app.editor.profile.safety.rules[0].reaction.pause);
+    click_label(&mut app, &ctx, "Notify");
+    assert!(!app.editor.profile.safety.rules[0].reaction.notify);
+    click_label(&mut app, &ctx, "Pause immediately");
+    assert!(!app.editor.profile.safety.rules[0].reaction.any());
+    let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(t, _)| t.contains("Choose at least one reaction"))
+    );
+    click_label(&mut app, &ctx, "Enable this rule");
+    assert!(!app.editor.profile.safety.rules[0].enabled);
+    click_label(&mut app, &ctx, "Perform action");
+    assert!(app.editor.profile.safety.rules[0].reaction.execute);
+    click_label(&mut app, &ctx, "Pause immediately");
+    assert!(!app.editor.profile.safety.rules[0].reaction.pause);
+    click_label(&mut app, &ctx, "Notify");
+    assert!(app.editor.profile.safety.rules[0].reaction.notify);
+    assert!(app.editor.profile.safety.rules[0].reaction.execute);
+    click_label(&mut app, &ctx, "Configure notifications");
+    assert_eq!(app.tab, Tab::Safety);
+    assert_eq!(app.safety_page, SafetyPage::Notifications);
     app.runtime.shutdown().unwrap();
 }
