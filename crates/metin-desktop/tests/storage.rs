@@ -115,7 +115,7 @@ fn committed_profile_save_succeeds_when_obsolete_template_is_locked() {
     use std::os::windows::fs::OpenOptionsExt;
     let dir = tempfile::tempdir().unwrap();
     // Windows accepts aliases with different casing (and CI may use 8.3 temp paths).
-    let alias = std::path::PathBuf::from(dir.path().to_string_lossy().to_uppercase());
+    let alias = std::path::PathBuf::from(dir.path().as_os_str().to_ascii_uppercase());
     let mut store = ProfileStore::open(&alias).unwrap();
     let frame = Frame::new(10, 10, (0..300).map(|n| (n % 251) as u8).collect()).unwrap();
     let original = store
