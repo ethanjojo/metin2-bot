@@ -114,16 +114,18 @@ fn committed_profile_save_succeeds_when_obsolete_template_is_locked() {
     use metin_platform::Frame;
     use std::os::windows::fs::OpenOptionsExt;
     let dir = tempfile::tempdir().unwrap();
-    let mut store = ProfileStore::open(dir.path()).unwrap();
+    // Windows accepts aliases with different casing (and CI may use 8.3 temp paths).
+    let alias = std::path::PathBuf::from(dir.path().to_string_lossy().to_uppercase());
+    let mut store = ProfileStore::open(&alias).unwrap();
     let frame = Frame::new(10, 10, (0..300).map(|n| (n % 251) as u8).collect()).unwrap();
     let original = store
         .save(&Profile::create("Original"), Some(&frame))
         .unwrap()
         .profile;
-    let old_asset = dir
-        .path()
+    let old_asset = alias
         .join(original.id.to_string())
         .join(original.template_file.as_ref().unwrap());
+    let canonical_asset = old_asset.canonicalize().unwrap();
     let locked = std::fs::OpenOptions::new()
         .read(true)
         .share_mode(3)
@@ -142,7 +144,9 @@ fn committed_profile_save_succeeds_when_obsolete_template_is_locked() {
         outcome
             .cleanup_warning
             .as_ref()
-            .is_some_and(|warning| warning.contains(&old_asset.display().to_string()))
+            .is_some_and(|warning| warning.contains(&canonical_asset.display().to_string())),
+        "Cleanup warning must identify the locked asset: {:?}",
+        outcome.cleanup_warning
     );
     let committed = store.load(original.id).unwrap().0;
     assert_eq!(outcome.profile, committed);
