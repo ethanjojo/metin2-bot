@@ -10,7 +10,7 @@ fn main() {
     let service = metin_desktop::notifications::NotificationService::default();
     service
         .send(metin_desktop::notifications::Notice {
-            title: "MetinBot notification test".into(),
+            title: format!("{} notification test", metin_desktop::PRODUCT_NAME),
             body: "Local notification test. No game input is sent.".into(),
             system,
             sound,

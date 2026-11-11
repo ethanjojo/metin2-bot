@@ -85,6 +85,7 @@ impl PlatformBackend for Fake {
     fn attach(&mut self, _: TargetToken) -> Result<()> {
         Ok(())
     }
+    fn stop_capture(&mut self) {}
     fn inspect(&mut self) -> Result<TargetState> {
         Ok(self.state)
     }

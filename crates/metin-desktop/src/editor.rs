@@ -1,13 +1,14 @@
+mod recalibration;
 use base64::{Engine, engine::general_purpose::STANDARD};
-use metin_core::{ActionInput, BuffIcon, ColorConfig, PanelConfig, Profile, Region};
+use metin_core::{ActionInput, BuffIcon, ColorConfig, Profile, Region};
 use metin_platform::Frame;
+pub use recalibration::ReviewRegion;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EditMode {
     World,
     Mask(Option<usize>),
     Color,
-    Panel,
     Template,
     BuffArea,
     BuffIcon { index: usize, inactive: bool },
@@ -27,6 +28,8 @@ pub struct Editor {
     history: Vec<Snapshot>,
     index: usize,
     saved: Snapshot,
+    review_base: Option<Box<Editor>>,
+    change_id: u64,
 }
 type Result<T> = std::result::Result<T, String>;
 impl Editor {
@@ -42,6 +45,8 @@ impl Editor {
             history: vec![saved.clone()],
             index: 0,
             saved,
+            review_base: None,
+            change_id: 0,
         }
     }
     fn snapshot(&self) -> Snapshot {
@@ -58,6 +63,19 @@ impl Editor {
         self.saved = self.snapshot();
         self.record();
     }
+    /// Restore the last successfully saved transaction; retains undo history.
+    pub fn revert(&mut self) {
+        self.profile = self.saved.profile.clone();
+        self.template = self.saved.template.clone();
+        if self
+            .frozen
+            .as_ref()
+            .is_some_and(|frame| self.profile.frame_size != Some([frame.width, frame.height]))
+        {
+            self.frozen = None;
+        }
+        self.record();
+    }
     pub fn record(&mut self) {
         let state = self.snapshot();
         if self.history.get(self.index) == Some(&state) {
@@ -69,6 +87,11 @@ impl Editor {
             self.history.remove(0);
         }
         self.index = self.history.len() - 1;
+        self.change_id = self.change_id.wrapping_add(1);
+    }
+    /// Identifies the current history operation, including undo/redo/branch edits.
+    pub fn change_id(&self) -> u64 {
+        self.change_id
     }
     pub fn undo(&mut self) {
         if self.index > 0 {
@@ -83,9 +106,17 @@ impl Editor {
         }
     }
     fn restore(&mut self) {
+        self.change_id = self.change_id.wrapping_add(1);
         let s = self.history[self.index].clone();
         self.profile = s.profile;
         self.template = s.template;
+        if self
+            .frozen
+            .as_ref()
+            .is_some_and(|f| self.profile.frame_size != Some([f.width, f.height]))
+        {
+            self.frozen = None;
+        }
     }
     pub fn can_undo(&self) -> bool {
         self.index > 0
@@ -93,45 +124,32 @@ impl Editor {
     pub fn can_redo(&self) -> bool {
         self.index + 1 < self.history.len()
     }
+    /// Attach source pixels without ever retiring calibration implicitly.
     pub fn freeze(&mut self, frame: Frame) -> Result<()> {
         let size = [frame.width, frame.height];
-        let size_changed = self.profile.frame_size != Some(size);
-        if self.profile.frame_size.is_some_and(|s| s != size) {
-            self.profile.region = None;
-            self.profile.masks.clear();
-            self.profile.color = None;
-            self.profile.panel = PanelConfig::default();
-            self.profile.template_file = None;
-            self.profile.template_region = None;
-            self.profile.buffs.icon_region = None;
-            for s in &mut self.profile.buffs.skills {
-                s.icon = None;
-                s.inactive_icon = None;
-            }
-            self.template = None;
-            for action in &mut self.profile.periodic_actions {
-                if let ActionInput::Click { region } = &mut action.input {
-                    *region = None;
-                    action.enabled = false;
-                }
-            }
-            for rule in &mut self.profile.safety.rules {
-                if let ActionInput::Click { region } = &mut rule.execution.input {
-                    *region = None;
-                }
-                rule.reference = None;
-                rule.enabled = false;
-            }
+        if let Some(previous) = self.profile.frame_size
+            && previous != size
+        {
+            return Err(format!(
+                "Game size changed from {} × {} to {} × {} pixels. Calibration was kept. Restore the original game size or create a new profile for this resolution.",
+                previous[0], previous[1], size[0], size[1]
+            ));
         }
         self.profile.frame_size = Some(size);
         self.frozen = Some(frame);
-        if size_changed {
-            self.history = vec![self.snapshot()];
-            self.index = 0;
-        } else {
-            self.record();
-        }
+        self.record();
         Ok(())
+    }
+    /// Native selection is a draft until explicit confirmation. Dropping it is cancel.
+    pub fn begin_capture(&self, mode: EditMode, frame: Frame) -> Result<CaptureEdit> {
+        let mut draft = Self::new(self.profile.clone(), self.template.clone());
+        draft.freeze(frame)?;
+        Ok(CaptureEdit {
+            reviewing: self.is_recalibrating(),
+            base: self.snapshot(),
+            draft,
+            mode,
+        })
     }
     pub fn region(&self, mode: EditMode) -> Option<Region> {
         match mode {
@@ -163,7 +181,6 @@ impl Editor {
                 .and_then(|r| r.region),
             EditMode::World => self.profile.region,
             EditMode::Mask(Some(i)) => self.profile.masks.get(i).copied(),
-            EditMode::Panel => self.profile.panel.region,
             EditMode::Template => self.profile.template_region,
             EditMode::BuffArea => self.profile.buffs.icon_region,
             EditMode::BuffIcon { index, inactive } => self
@@ -196,6 +213,14 @@ impl Editor {
         Ok(())
     }
     pub fn set_region(&mut self, mode: EditMode, region: Region) -> Result<()> {
+        self.set_region_checked(mode, region, !self.is_recalibrating())
+    }
+    fn set_region_checked(
+        &mut self,
+        mode: EditMode,
+        region: Region,
+        validate_profile: bool,
+    ) -> Result<()> {
         region.validate().map_err(|e| e.to_string())?;
         let frame = self
             .frozen
@@ -253,18 +278,7 @@ impl Editor {
                     profile.masks.push(region);
                 }
             }
-            EditMode::Panel => {
-                if !profile.template_region.is_some_and(|r| region.contains(r)) {
-                    profile.template_file = None;
-                    profile.template_region = None;
-                    template = None;
-                }
-                profile.panel.region = Some(region);
-            }
             EditMode::Template => {
-                if !profile.panel.region.is_some_and(|r| r.contains(region)) {
-                    return Err("The fixed crop must be inside the target panel area.".into());
-                }
                 let image = metin_vision::crop(frame, region).map_err(|e| e.to_string())?;
                 metin_vision::validate_template(&image).map_err(|e| e.to_string())?;
                 template = Some(image);
@@ -273,13 +287,6 @@ impl Editor {
             }
             EditMode::BuffArea => profile.buffs.icon_region = Some(region),
             EditMode::BuffIcon { index, inactive } => {
-                if !profile
-                    .buffs
-                    .icon_region
-                    .is_some_and(|r| r.contains(region))
-                {
-                    return Err("Select the icon inside the buff area.".into());
-                }
                 let image = metin_vision::crop(frame, region).map_err(|e| e.to_string())?;
                 metin_vision::validate_template(&image).map_err(|e| e.to_string())?;
                 if image.width > 128 || image.height > 128 {
@@ -313,10 +320,31 @@ impl Editor {
                 } else {
                     skill.icon = Some(icon);
                 }
+                if !profile
+                    .buffs
+                    .icon_region
+                    .is_some_and(|area| area.contains(region))
+                {
+                    let padded = Region {
+                        left: (region.left - 6. / f64::from(frame.width)).max(0.),
+                        top: (region.top - 6. / f64::from(frame.height)).max(0.),
+                        right: (region.right + 6. / f64::from(frame.width)).min(1.),
+                        bottom: (region.bottom + 6. / f64::from(frame.height)).min(1.),
+                    };
+                    profile.buffs.icon_region =
+                        Some(profile.buffs.icon_region.map_or(padded, |old| Region {
+                            left: old.left.min(padded.left),
+                            top: old.top.min(padded.top),
+                            right: old.right.max(padded.right),
+                            bottom: old.bottom.max(padded.bottom),
+                        }));
+                }
             }
             EditMode::Color => return Err("Pick a color with a click.".into()),
         }
-        profile.validate().map_err(|e| e.to_string())?;
+        if validate_profile {
+            profile.validate().map_err(|e| e.to_string())?;
+        }
         self.profile = profile;
         self.template = template;
         self.record();
@@ -354,12 +382,6 @@ impl Editor {
                 }
             }
             EditMode::Color => self.profile.color = None,
-            EditMode::Panel => {
-                self.profile.panel.region = None;
-                self.profile.template_region = None;
-                self.profile.template_file = None;
-                self.template = None;
-            }
             EditMode::Template => {
                 self.profile.template_region = None;
                 self.profile.template_file = None;
@@ -382,142 +404,64 @@ impl Editor {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Viewport {
-    pub size: [u32; 2],
-    pub canvas: [f64; 2],
-    pub zoom: f64,
-    pub offset: [f64; 2],
+/// A single frozen source, the previous calibration and a private editing draft.
+/// No caller can change the live editor merely by opening or closing the selector.
+pub struct CaptureEdit {
+    reviewing: bool,
+    base: Snapshot,
+    draft: Editor,
+    mode: EditMode,
 }
-impl Default for Viewport {
-    fn default() -> Self {
-        Self {
-            size: [1, 1],
-            canvas: [1., 1.],
-            zoom: 1.,
-            offset: [0., 0.],
+impl CaptureEdit {
+    pub fn current(&self, editor: &Editor) -> bool {
+        self.reviewing == editor.is_recalibrating() && self.base == editor.snapshot()
+    }
+    pub fn frame(&self) -> &Frame {
+        self.draft
+            .frozen
+            .as_ref()
+            .expect("capture has source pixels")
+    }
+    pub fn profile(&self) -> &Profile {
+        &self.draft.profile
+    }
+    pub fn initial_region(&self) -> Option<Region> {
+        let region = self.draft.region(self.mode)?;
+        if region.validate().is_ok() {
+            return Some(region);
         }
-    }
-}
-impl Viewport {
-    pub fn fit(&mut self, size: [u32; 2], canvas: [f64; 2]) {
-        if size != self.size {
-            self.reset();
-        }
-        self.size = size;
-        self.canvas = canvas;
-    }
-    pub fn reset(&mut self) {
-        self.zoom = 1.;
-        self.offset = [0., 0.];
-    }
-    pub fn scale(&self) -> f64 {
-        (self.canvas[0] / f64::from(self.size[0])).min(self.canvas[1] / f64::from(self.size[1]))
-            * self.zoom
-    }
-    pub fn to_canvas(&self, p: [f64; 2]) -> [f64; 2] {
-        [
-            p[0] * self.scale() + self.offset[0],
-            p[1] * self.scale() + self.offset[1],
-        ]
-    }
-    pub fn to_image(&self, p: [f64; 2], clamp: bool) -> Option<[u32; 2]> {
-        let x = (p[0] - self.offset[0]) / self.scale();
-        let y = (p[1] - self.offset[1]) / self.scale();
-        if !clamp
-            && (x < 0. || y < 0. || x >= f64::from(self.size[0]) || y >= f64::from(self.size[1]))
-        {
-            return None;
-        }
-        Some([
-            (x + 1e-8).floor().clamp(0., f64::from(self.size[0] - 1)) as u32,
-            (y + 1e-8).floor().clamp(0., f64::from(self.size[1] - 1)) as u32,
-        ])
-    }
-    pub fn zoom_at(&mut self, p: [f64; 2], factor: f64) {
-        let old = self.scale();
-        let anchored = [(p[0] - self.offset[0]) / old, (p[1] - self.offset[1]) / old];
-        self.zoom = (self.zoom * factor).clamp(1., 8.);
-        let scale = self.scale();
-        self.offset = [p[0] - anchored[0] * scale, p[1] - anchored[1] * scale];
-        if self.zoom == 1. {
-            self.offset = [0., 0.];
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Gesture {
-    Create {
-        start: [u32; 2],
-    },
-    Move {
-        start: [u32; 2],
-        original: Region,
-    },
-    Resize {
-        start: [u32; 2],
-        original: Region,
-        handle: [i8; 2],
-    },
-}
-impl Gesture {
-    pub fn region(self, end: [u32; 2], size: [u32; 2]) -> Option<Region> {
-        let normalized = |p: [u32; 2]| {
-            [
-                f64::from(p[0]) / f64::from(size[0]),
-                f64::from(p[1]) / f64::from(size[1]),
-            ]
+        // Visible selection seed only. The private draft retains the invalid
+        // original until the user explicitly confirms a repaired rectangle.
+        let clipped = Region {
+            left: region.left.clamp(0., 1.),
+            top: region.top.clamp(0., 1.),
+            right: region.right.clamp(0., 1.),
+            bottom: region.bottom.clamp(0., 1.),
         };
-        let end = normalized(end);
-        let r = match self {
-            Self::Create { start } => {
-                let start = normalized(start);
-                Region {
-                    left: start[0].min(end[0]),
-                    top: start[1].min(end[1]),
-                    right: start[0].max(end[0]),
-                    bottom: start[1].max(end[1]),
-                }
-            }
-            Self::Move { start, original: r } => {
-                let start = normalized(start);
-                let dx = (end[0] - start[0]).clamp(-r.left, 1. - r.right);
-                let dy = (end[1] - start[1]).clamp(-r.top, 1. - r.bottom);
-                Region {
-                    left: r.left + dx,
-                    right: r.right + dx,
-                    top: r.top + dy,
-                    bottom: r.bottom + dy,
-                }
-            }
-            Self::Resize {
-                start,
-                original: mut r,
-                handle,
-            } => {
-                let start = normalized(start);
-                let delta = [end[0] - start[0], end[1] - start[1]];
-                if handle[0] < 0 {
-                    r.left = (r.left + delta[0]).clamp(0., 1.);
-                }
-                if handle[0] > 0 {
-                    r.right = (r.right + delta[0]).clamp(0., 1.);
-                }
-                if handle[1] < 0 {
-                    r.top = (r.top + delta[1]).clamp(0., 1.);
-                }
-                if handle[1] > 0 {
-                    r.bottom = (r.bottom + delta[1]).clamp(0., 1.);
-                }
-                Region {
-                    left: r.left.min(r.right),
-                    right: r.left.max(r.right),
-                    top: r.top.min(r.bottom),
-                    bottom: r.top.max(r.bottom),
-                }
-            }
-        };
-        r.validate().ok().map(|()| r)
+        clipped.validate().ok().map(|()| clipped)
+    }
+    pub fn commit(
+        mut self,
+        editor: &mut Editor,
+        region: Option<Region>,
+        point: [u32; 2],
+    ) -> Result<()> {
+        if !self.current(editor) {
+            return Err("The profile changed during selection. Open the selection again.".into());
+        }
+        if self.mode == EditMode::Color {
+            self.draft.color(point)?;
+        } else {
+            self.draft.set_region_checked(
+                self.mode,
+                region.ok_or("Draw a non-empty area.")?,
+                !editor.is_recalibrating(),
+            )?;
+        }
+        editor.profile = self.draft.profile;
+        editor.template = self.draft.template;
+        editor.frozen = self.draft.frozen;
+        editor.record();
+        Ok(())
     }
 }

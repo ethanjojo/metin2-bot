@@ -1,99 +1,64 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="packaging/icons/logo-dark.svg">
-  <img src="packaging/icons/logo.svg" alt="MetinBot logo" width="72">
-</picture>
+<img src="packaging/icons/companion-256.png" alt="Companion logo" width="72">
 
-# MetinBot
+# Companion
 
-A Rust desktop app for visual target recognition, calibration and action scheduling, built with **egui** and **OpenCV**. Processing and profiles stay on your computer.
+A compact Windows desktop app for visual target recognition and configurable actions, built with **Rust**, **egui** and **OpenCV**. Profiles and image processing stay on your computer.
 
-[Download prereleases](https://github.com/ethanjojo/metin2-bot/releases) · [User guide](docs/user-guide.md) · [Development](docs/development.md)
+[Download](https://github.com/ethanjojo/metin2-bot/releases) · [User guide](docs/user-guide.md) · [Development](docs/development.md) · [Changelog](CHANGELOG.md)
 
-<a href="docs/assets/calibration-dark.png">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/calibration-dark.png">
-  <img src="docs/assets/calibration-light.png" alt="Calibration with search area, excluded areas, target panel and detection boxes" width="1280">
-</picture>
-</a>
+<a href="docs/assets/run.png"><img src="docs/assets/run.png" alt="Companion Run overview with activity, timers, statistics and mount controls" width="460"></a>
 
-*Actual application views using an isolated demonstration profile and a geometric sample scene. These images do not show a live game session.*
+*Screenshots are actual application views with an isolated demonstration profile and a synthetic scene; they do not show a live game session.*
 
-## What it does
+## Features
 
-- **Run** — current activity, mount confirmation, target preview, countdowns, action links and a five-event summary with full history in a separate dialog.
-- **Calibration** — window selection, snapshots, color picking, editable regions, zoom and undo/redo.
-- **Actions** — ordered buffs, icon recognition, mount behavior, pickup, periodic keys/clicks, calibrated visual rules, combat-triggered auto-puller and bounded out-of-target attacks.
-- **Safety** — automatic stops, scheduled breaks, limited recovery and local alerts.
-- **Settings** — separate detection, combat timing, appearance/performance and diagnostics pages.
-- **Profiles** — separate calibration, skills and remembered game-window selection for each setup.
+- **Run:** activity, countdowns, session statistics, mount confirmation and event history.
+- **Recognition:** searchable window thumbnails; direct region, color and icon selection over a frozen capture; movable/resizable areas and live game annotations.
+- **Actions:** ordered buffs with icon recognition, loot, mount behavior, periodic keys/clicks, visual rules, auto-puller and bounded attacks outside a selected target.
+- **Safety:** automatic stops, scheduled breaks, limited recovery, local notifications and emergency pause.
+- **Profiles:** independent calibration and action settings, with Save, Revert, Undo and Redo.
+- **Updates:** Stable/Preview channels, verified downloads and explicitly confirmed installation. Startup checks are off by default.
 
-## Get started on Windows
+## Install and start
 
-Requires **Windows x64, Windows 10 version 2004 / build 19041 or newer**, and a D3D11-capable graphics device.
+Requires **Windows x64**, Windows 10 build 19041 or newer, and a D3D11-capable graphics device. Windows x64 setup is the only supported distribution.
 
-1. Download the installer or portable ZIP and `SHA256SUMS.txt` from [Releases](https://github.com/ethanjojo/metin2-bot/releases). Compare the file's SHA-256 checksum before installing.
-2. Install and launch MetinBot, or extract the **entire** ZIP and run `MetinBot.exe`. Packages include the required runtime libraries.
-3. Create a profile. In **Calibration**, select the game window and take a **Snapshot**.
-4. Set the search area, exclusions, Metin color, target panel and reference crop. Configure **Actions** and optional **Safety** limits, then save.
-5. Review readiness in **Run**. **F7** starts and **F8** pauses. Keep the selected game in the foreground.
+1. Download the setup and `SHA256SUMS.txt` from [Releases](https://github.com/ethanjojo/metin2-bot/releases) and compare the installer's SHA-256 checksum.
+2. Run setup and review its administrator, mandatory HIDMaestro driver, signing-certificate and GameInput service changes. Native dependencies are included; no installed .NET runtime is needed.
+3. Open Companion, choose a game window from the thumbnail grid and select or create a profile.
+4. In **Recognition**, select the search area, target color and a fixed HP-panel detail. Configure **Actions** and optional **Safety** limits, then save.
+5. Review readiness in **Run**. **F7** starts; **F8** pauses. Keep the selected game in the foreground.
 
-The app starts stopped. Live preview is for observation; take a snapshot before editing. The [user guide](docs/user-guide.md) explains every setup step and common validation messages.
+Companion starts paused. Capture selection pauses automation and waits for held inputs to release. See the [setup guide](docs/user-guide.md) for calibration, shortcuts and troubleshooting.
 
-**Prerelease:** the full in-game cycle still needs acceptance testing. Windows packages request administrator confirmation and are currently unsigned; `jojo` is product metadata, not a verified publisher.
+**Release candidate:** the complete integrated targeting, attack, buff and mount cycle still requires live-game acceptance. App and setup are unsigned; `jojo` is product metadata, not a verified Windows publisher. Setup explains the shared driver's machine-wide changes and [removal policy](docs/user-guide.md#installation-and-hid-driver).
 
-## A closer look
+## Screenshots
 
-### Actions
+<a href="docs/assets/calibration.png"><img src="docs/assets/calibration.png" alt="Recognition controls for search, color, HP detail and game annotations" width="360"></a>
+<a href="docs/assets/actions.png"><img src="docs/assets/actions.png" alt="Ordered buffs with shortcut, timing and icon recognition settings" width="360"></a>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/actions-dark.png">
-  <img src="docs/assets/actions-light.png" alt="Buff editor with three ordered skills, shortcut and refresh settings" width="1280" loading="lazy">
-</picture>
+<a href="docs/assets/window-chooser.png"><img src="docs/assets/window-chooser.png" alt="Searchable window selection with screenshot thumbnails" width="740" loading="lazy"></a>
 
-### Run
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/run-dark.png">
-  <img src="docs/assets/run-light.png" alt="Run with current activity, mount confirmation, game preview, session statistics and action links" width="1280" loading="lazy">
-</picture>
-
-Full event history opens in its own dialog; closing it keeps your place in Run. See the [user guide](docs/user-guide.md#event-history).
-
-### Safety
-
-![Safety with automatic-stop limits and scheduled breaks](docs/assets/safety-dark.png)
-
-### Settings
-
-![Settings with recognition controls and grouped configuration pages](docs/assets/settings-dark.png)
-
-## Platform support
-
-| Platform | Current scope |
-| --- | --- |
-| Windows x64 | Prerelease with native window capture and guarded input. Full game-cycle acceptance is pending. |
-| Linux | Editor, recognition and desktop integration preview. Automation is disabled. |
-| macOS | Editor and application bundle support. Full native execution and Dock/Finder appearance still require verification. Automation is disabled. |
-
-See [platform support](docs/platform-support.md) for verification boundaries.
+More views and explanations are in the [user guide](docs/user-guide.md).
 
 ## Your data
 
-Windows stores profiles, settings and logs in `%LOCALAPPDATA%/MetinBot`. Back up the complete folder, including PNG assets. Import copies a data folder without modifying its source; uninstall retains user data. Other platform paths and troubleshooting are in the [user guide](docs/user-guide.md).
+Installation: `Program Files/Companion`. Profiles, PNG references, settings and logs: `%LOCALAPPDATA%/Companion`.
+
+Back up the complete data folder. Upgrades preserve profiles and migrate previous default paths with verified backups; explicit custom data paths stay explicit. Uninstall retains user data and the shared driver by default. See [data and diagnostics](docs/user-guide.md#data-and-troubleshooting).
 
 ## Build and contribute
 
-The workspace uses **Rust 1.99.0** with locked dependencies. Native OpenCV and Clang are required. Follow [development setup](docs/development.md) for platform prerequisites, tests and reproducible screenshots.
+Use the pinned Rust toolchain and follow [development setup](docs/development.md) for native prerequisites, tests and reproducible screenshots. Release packages are built from clean, tested commits; see the [release procedure](docs/releasing.md).
 
-| Directory | Responsibility |
+| Directory | Purpose |
 | --- | --- |
 | `crates/metin-core` | Profiles, validation, targeting and scheduling |
-| `crates/metin-vision` | Detection, image processing and template matching |
-| `crates/metin-platform` | Native capture, input and platform capabilities |
-| `crates/metin-desktop` | egui interface, persistence and runtime worker |
-| `tests/parity` | Reference images, profiles and controller traces |
-| `tools`, `packaging` | Build verification, installers, icons and license notices |
+| `crates/metin-vision` | Detection and image matching |
+| `crates/metin-platform` | Guarded Windows capture and input |
+| `crates/metin-desktop` | Interface, storage and runtime worker |
+| `native` | Pinned HID SDK adapter and NativeAOT bridge |
+| `tests`, `tools`, `packaging` | Fixtures, build checks and installation |
 
-[Changelog](CHANGELOG.md) · [Prerelease notes](docs/release-notes.md) · [Release procedure](docs/releasing.md)
-
-Third-party notices are included in distributions. A source-code license has not yet been selected by the owner.
+Project-authored source code is [MIT licensed](LICENSE). Artwork and other third-party materials retain their original rights; see [licenses and notices](THIRD_PARTY_NOTICES.md).

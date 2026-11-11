@@ -1,0 +1,264 @@
+{
+  "language": "en",
+  "verified_on": "2026-11-11",
+  "scope": "Official English normal/base-grade names for the existing 44 class skill IDs. English labels affect display only; source artwork and recognition remain unchanged.",
+  "classes": [
+    {
+      "id": "warrior",
+      "name": "Warrior",
+      "portrait": "published/native-character/faces/warrior_m",
+      "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Warrior",
+      "skills": [
+        {
+          "id": 1,
+          "name": "Three-Way Cut",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Three-Way_Cut"
+        },
+        {
+          "id": 2,
+          "name": "Sword Spin",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Sword_Spin"
+        },
+        {
+          "id": 3,
+          "name": "Berserk",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Berserk"
+        },
+        {
+          "id": 4,
+          "name": "Aura of the Sword",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Aura_of_the_Sword"
+        },
+        {
+          "id": 5,
+          "name": "Dash",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Dash"
+        },
+        {
+          "id": 16,
+          "name": "Spirit Strike (W)",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Spirit_Strike_%28W%29"
+        },
+        {
+          "id": 17,
+          "name": "Bash",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Bash"
+        },
+        {
+          "id": 18,
+          "name": "Stump",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Stump"
+        },
+        {
+          "id": 19,
+          "name": "Strong Body",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Strong_Body"
+        },
+        {
+          "id": 20,
+          "name": "Sword Strike",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Sword_Strike"
+        }
+      ]
+    },
+    {
+      "id": "assassin",
+      "name": "Ninja",
+      "portrait": "published/native-character/faces/assassin_w",
+      "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Ninja",
+      "skills": [
+        {
+          "id": 31,
+          "name": "Ambush",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Ambush"
+        },
+        {
+          "id": 32,
+          "name": "Fast Attack",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Fast_Attack"
+        },
+        {
+          "id": 33,
+          "name": "Rolling Dagger",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Rolling_Dagger"
+        },
+        {
+          "id": 34,
+          "name": "Stealth",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Stealth"
+        },
+        {
+          "id": 35,
+          "name": "Poisonous Cloud",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Poisonous_Cloud"
+        },
+        {
+          "id": 46,
+          "name": "Repetitive Shot",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Repetitive_Shot"
+        },
+        {
+          "id": 47,
+          "name": "Arrow Shower",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Arrow_Shower"
+        },
+        {
+          "id": 48,
+          "name": "Fire Arrow",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Fire_Arrow"
+        },
+        {
+          "id": 49,
+          "name": "Feather Walk",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Feather_Walk"
+        },
+        {
+          "id": 50,
+          "name": "Poison Arrow",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Poison_Arrow"
+        }
+      ]
+    },
+    {
+      "id": "sura",
+      "name": "Sura",
+      "portrait": "published/native-character/faces/sura_m",
+      "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Sura",
+      "skills": [
+        {
+          "id": 61,
+          "name": "Finger Strike",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Finger_Strike"
+        },
+        {
+          "id": 62,
+          "name": "Dragon Swirl",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Dragon_Swirl"
+        },
+        {
+          "id": 63,
+          "name": "Enchanted Blade",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Enchanted_Blade"
+        },
+        {
+          "id": 64,
+          "name": "Fear",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Fear"
+        },
+        {
+          "id": 65,
+          "name": "Enchanted Armour",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Enchanted_Armour"
+        },
+        {
+          "id": 66,
+          "name": "Dispel",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Dispel"
+        },
+        {
+          "id": 76,
+          "name": "Dark Strike",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Dark_Strike"
+        },
+        {
+          "id": 77,
+          "name": "Flame Strike",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Flame_Strike"
+        },
+        {
+          "id": 78,
+          "name": "Flame Spirit",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Flame_Spirit"
+        },
+        {
+          "id": 79,
+          "name": "Dark Protection",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Dark_Protection"
+        },
+        {
+          "id": 80,
+          "name": "Spirit Strike (S)",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Spirit_Strike_%28S%29"
+        },
+        {
+          "id": 81,
+          "name": "Dark Orb",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Dark_Orb"
+        }
+      ]
+    },
+    {
+      "id": "shaman",
+      "name": "Shaman",
+      "portrait": "published/native-character/faces/shaman_w",
+      "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Shaman",
+      "skills": [
+        {
+          "id": 91,
+          "name": "Flying Talisman",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Flying_Talisman"
+        },
+        {
+          "id": 92,
+          "name": "Shooting Dragon",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Shooting_Dragon"
+        },
+        {
+          "id": 93,
+          "name": "Dragon's Roar",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Dragon%27s_Roar"
+        },
+        {
+          "id": 94,
+          "name": "Blessing",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Blessing"
+        },
+        {
+          "id": 95,
+          "name": "Reflect",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Reflect"
+        },
+        {
+          "id": 96,
+          "name": "Dragon's Strength",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Dragon%27s_Strength"
+        },
+        {
+          "id": 106,
+          "name": "Lightning Throw",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Lightning_Throw"
+        },
+        {
+          "id": 107,
+          "name": "Summon Lightning",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Summon_Lightning"
+        },
+        {
+          "id": 108,
+          "name": "Lightning Claw",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Lightning_Claw"
+        },
+        {
+          "id": 109,
+          "name": "Cure",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Cure"
+        },
+        {
+          "id": 110,
+          "name": "Swiftness",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Swiftness"
+        },
+        {
+          "id": 111,
+          "name": "Attack Up",
+          "source_page": "https://en-wiki.metin2.gameforge.com/index.php/Attack_Up"
+        }
+      ]
+    }
+  ],
+  "icon_labels": {
+    "item/70038": "Puller",
+    "skill/130": "Horse Riding",
+    "utility/common/check": "Confirm"
+  }
+}

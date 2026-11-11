@@ -86,7 +86,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     profile.region = Some(region([70, 110, 730, 405]));
     profile.masks = vec![region([820, 25, 125, 140]), region([290, 525, 380, 60])];
     profile.color = Some(ColorConfig::default());
-    profile.panel.region = Some(region([335, 20, 290, 66]));
     profile.template_region = Some(region([344, 30, 24, 24]));
     profile.buffs.enabled = true;
     profile.loot.enabled = true;
@@ -122,6 +121,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     periodic.input = metin_core::ActionInput::Click {
         region: Some(region([344, 30, 24, 24])),
     };
+    profile.buffs.skills[0].display_icon = metin_core::SkillIconId::from_id(4);
+    profile.buffs.skills[1].display_icon = metin_core::SkillIconId::from_id(96);
     profile.periodic_actions.push(periodic);
     profile.out_of_target.after_combat = true;
     profile.out_of_target.during_search = true;

@@ -55,14 +55,12 @@ impl ColorConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PanelConfig {
-    pub region: Option<Region>,
     pub threshold: f64,
     pub stable_frames: u32,
 }
 impl Default for PanelConfig {
     fn default() -> Self {
         Self {
-            region: None,
             threshold: 0.88,
             stable_frames: 3,
         }
@@ -162,6 +160,45 @@ pub enum BuffMode {
     Inactive,
 }
 
+/// A base skill image from the four supported classes, including both specializations.
+/// The private value prevents arbitrary atlas paths or unsupported skill IDs in profiles.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "u16", into = "u16")]
+pub struct SkillIconId(u16);
+
+impl SkillIconId {
+    pub fn new(id: u16) -> Result<Self> {
+        Self::from_id(id).ok_or_else(|| ValidationError("Unknown class skill icon.".into()))
+    }
+
+    pub const fn from_id(id: u16) -> Option<Self> {
+        if matches!(id, 1..=5 | 16..=20 | 31..=35 | 46..=50 | 61..=66 | 76..=81 | 91..=96 | 106..=111)
+        {
+            Some(Self(id))
+        } else {
+            None
+        }
+    }
+
+    pub const fn get(self) -> u16 {
+        self.0
+    }
+}
+
+impl TryFrom<u16> for SkillIconId {
+    type Error = ValidationError;
+
+    fn try_from(id: u16) -> Result<Self> {
+        Self::new(id)
+    }
+}
+
+impl From<SkillIconId> for u16 {
+    fn from(id: SkillIconId) -> Self {
+        id.get()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct BuffSkill {
@@ -170,8 +207,12 @@ pub struct BuffSkill {
     pub mode: BuffMode,
     pub icon: Option<BuffIcon>,
     pub inactive_icon: Option<BuffIcon>,
+    pub active_hold_seconds: f64,
     pub interval_seconds: Option<f64>,
     pub name: String,
+    /// Presentation artwork only; captured recognition references remain independent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_icon: Option<SkillIconId>,
 }
 impl Default for BuffSkill {
     fn default() -> Self {
@@ -181,8 +222,10 @@ impl Default for BuffSkill {
             mode: BuffMode::Refresh,
             icon: None,
             inactive_icon: None,
+            active_hold_seconds: 1.5,
             interval_seconds: Some(120.),
             name: String::new(),
+            display_icon: None,
         }
     }
 }
@@ -190,6 +233,7 @@ impl BuffSkill {
     pub fn validate(&self) -> Result<()> {
         Shortcut::parse(&self.shortcut)?;
         number("wait_seconds", self.wait_seconds)?;
+        number("buff_active_hold_seconds", self.active_hold_seconds)?;
         require(
             self.name.chars().count() <= 60 && !self.name.chars().any(|c| (c as u32) < 32),
             "Skill name must be at most 60 characters without control characters.",
@@ -248,6 +292,7 @@ impl BuffConfig {
             let mut c = c.clone();
             for s in &mut c.skills {
                 s.name.clear();
+                s.display_icon = None;
             }
             c
         };
@@ -282,10 +327,6 @@ impl BuffConfig {
 pub struct Profile {
     pub id: Uuid,
     pub name: String,
-    // Stored process metadata. Desktop window selection uses
-    // per-profile UI preferences; this value does not filter the window list.
-    #[serde(default = "default_process")]
-    pub process_name: String,
     #[serde(default)]
     pub region: Option<Region>,
     #[serde(default)]
@@ -314,9 +355,6 @@ pub struct Profile {
     pub template_file: Option<String>,
     #[serde(default)]
     pub template_region: Option<Region>,
-}
-fn default_process() -> String {
-    "game-client.exe".into()
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimingPreset {
@@ -369,7 +407,6 @@ impl Profile {
         Self {
             id: Uuid::new_v4(),
             name: name.into(),
-            process_name: default_process(),
             region: None,
             masks: vec![],
             color: None,
@@ -389,7 +426,6 @@ impl Profile {
     pub fn ready(&self) -> bool {
         self.region.is_some()
             && self.color.is_some()
-            && self.panel.region.is_some()
             && self.frame_size.is_some()
             && self.template_file.is_some()
             && self.buffs.ready()
@@ -409,16 +445,12 @@ impl Profile {
             !self.name.trim().is_empty() && self.name.chars().count() <= 80,
             "Profile name must contain 1–80 characters.",
         )?;
-        require(
-            !self.process_name.is_empty() && !self.process_name.contains(['/', '\\', '\0']),
-            "Process hint must be a filename without a path.",
-        )?;
         require(self.masks.len() <= 30, "Configure at most 30 masks.")?;
-        for r in self.masks.iter().chain(
-            [self.region, self.panel.region, self.template_region]
-                .iter()
-                .flatten(),
-        ) {
+        for r in self
+            .masks
+            .iter()
+            .chain([self.region, self.template_region].iter().flatten())
+        {
             r.validate()?;
         }
         if let Some(size) = self.frame_size {
@@ -481,6 +513,14 @@ impl Profile {
         let object = v
             .as_object_mut()
             .ok_or_else(|| ValidationError("Profile must be a JSON object.".into()))?;
+        // Existing saved profiles may contain this retired window hint. Window
+        // connection now belongs to the application session and is never saved.
+        object.remove("process_name");
+        // HP details now always match across the connected client. Discard the
+        // retired restriction when loading existing profiles; retain the reference.
+        if let Some(panel) = object.get_mut("panel").and_then(|p| p.as_object_mut()) {
+            panel.remove("region");
+        }
         if let Some(id) = object.get("id").and_then(|v| v.as_str()) {
             crate::validation::canonical_uuid(id)?;
         }

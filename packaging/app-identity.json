@@ -1,9 +1,9 @@
 {
-  "app_id": "app.jojo.MetinBot",
-  "product_name": "MetinBot",
+  "app_id": "app.jojo.Companion",
+  "product_name": "Companion",
   "publisher": "jojo",
-  "description": "MetinBot desktop application",
-  "internal_name": "MetinBot",
-  "original_filename": "MetinBot.exe",
+  "description": "Companion desktop application",
+  "internal_name": "Companion",
+  "original_filename": "Companion.exe",
   "copyright": "Copyright (c) 2026 jojo"
 }

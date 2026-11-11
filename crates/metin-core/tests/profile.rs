@@ -1,14 +1,168 @@
 use metin_core::{Profile, Region, Shortcut};
 
 #[test]
-fn default_process_is_generic_and_explicit_process_names_roundtrip() {
-    let mut profile = Profile::create("Main profile");
-    assert_eq!(profile.process_name, "game-client.exe");
-    profile.process_name = "custom-client.exe".into();
-    let encoded = serde_json::to_string(&profile).unwrap();
+fn display_icons_allow_only_the_complete_four_class_catalog() {
+    let mut count = 0;
+    for id in 0..=u16::MAX {
+        let allowed = matches!(id, 1..=5 | 16..=20 | 31..=35 | 46..=50 | 61..=66 | 76..=81 | 91..=96 | 106..=111);
+        let parsed = metin_core::SkillIconId::new(id);
+        assert_eq!(parsed.is_ok(), allowed, "{id}");
+        let saved = serde_json::from_value::<metin_core::SkillIconId>(serde_json::json!(id));
+        assert_eq!(saved.is_ok(), allowed, "{id}");
+        if let Ok(icon) = parsed {
+            count += 1;
+            assert_eq!(icon.get(), id);
+            assert_eq!(saved.unwrap(), icon);
+            assert_eq!(serde_json::to_value(icon).unwrap(), serde_json::json!(id));
+        }
+    }
+    assert_eq!(count, 44);
+    for value in [
+        serde_json::json!("4"),
+        serde_json::json!(-1),
+        serde_json::json!(65536),
+        serde_json::json!(true),
+    ] {
+        assert!(serde_json::from_value::<metin_core::SkillIconId>(value).is_err());
+    }
+}
+
+#[test]
+fn presentation_icon_migrates_and_roundtrips_without_affecting_buff_execution() {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    let reference = |width: u32| {
+        // Core validates headers; actual PNG decoding belongs to vision/storage tests.
+        let mut header = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        header.extend(width.to_be_bytes());
+        header.extend(16u32.to_be_bytes());
+        metin_core::BuffIcon {
+            png: STANDARD.encode(header),
+            region: Some(Region {
+                left: 0.1,
+                top: 0.1,
+                right: 0.2,
+                bottom: 0.2,
+            }),
+        }
+    };
+    let mut profile = Profile::create("Icons");
+    profile.buffs.skills.push(metin_core::BuffSkill {
+        icon: Some(reference(16)),
+        inactive_icon: Some(reference(17)),
+        ..Default::default()
+    });
+    let old = serde_json::to_value(&profile).unwrap();
+    assert!(old["buffs"]["skills"][0].get("display_icon").is_none());
+    let loaded = Profile::from_json(&old.to_string()).unwrap();
+    assert_eq!(loaded.buffs.skills[0].display_icon, None);
+    let mut decorated = loaded.clone();
+    decorated.buffs.skills[0].display_icon = Some(metin_core::SkillIconId::new(96).unwrap());
+    decorated.buffs.skills[0].name = "Custom skill name".into();
+    assert_ne!(decorated, loaded);
+    assert!(decorated.buffs.execution_eq(&loaded.buffs));
+    assert_eq!(decorated.buffs.skills[0].icon, loaded.buffs.skills[0].icon);
     assert_eq!(
-        Profile::from_json(&encoded).unwrap().process_name,
-        "custom-client.exe"
+        decorated.buffs.skills[0].inactive_icon,
+        loaded.buffs.skills[0].inactive_icon
+    );
+    assert_eq!(
+        Profile::from_json(&serde_json::to_string(&decorated).unwrap()).unwrap(),
+        decorated
+    );
+    let mut changed_reference = decorated.clone();
+    changed_reference.buffs.skills[0].icon = None;
+    assert!(!changed_reference.buffs.execution_eq(&decorated.buffs));
+    let mut invalid = old;
+    invalid["buffs"]["skills"][0]["display_icon"] = serde_json::json!(130);
+    assert!(Profile::from_json(&invalid.to_string()).is_err());
+}
+
+#[test]
+fn buff_hold_defaults_for_saved_profiles_roundtrips_and_rejects_invalid_values() {
+    let mut value = serde_json::to_value(metin_core::BuffSkill::default()).unwrap();
+    value.as_object_mut().unwrap().remove("active_hold_seconds");
+    let mut skill: metin_core::BuffSkill = serde_json::from_value(value).unwrap();
+    assert_eq!(skill.active_hold_seconds, 1.5);
+    skill.active_hold_seconds = 2.;
+    let loaded: metin_core::BuffSkill =
+        serde_json::from_str(&serde_json::to_string(&skill).unwrap()).unwrap();
+    assert_eq!(loaded, skill);
+    for seconds in [-0.1, 5.1, f64::NAN, f64::INFINITY] {
+        skill.active_hold_seconds = seconds;
+        assert!(skill.validate().is_err());
+    }
+    skill.active_hold_seconds = 0.;
+    assert!(skill.validate().is_ok());
+}
+
+#[test]
+fn calibrated_profile_is_ready_and_roundtrips_without_hp_search_bounds() {
+    let p = Profile::from_json(include_str!(
+        "../../../tests/parity/profiles/calibrated.json"
+    ))
+    .unwrap();
+    assert!(p.ready());
+    let encoded = serde_json::to_value(&p).unwrap();
+    assert!(encoded["panel"].get("region").is_none());
+    let roundtrip = Profile::from_json(&encoded.to_string()).unwrap();
+    assert_eq!(roundtrip, p);
+    assert!(roundtrip.ready());
+}
+
+#[test]
+fn saved_hp_search_bounds_are_discarded_without_changing_other_configuration() {
+    let mut canonical = Profile::from_json(include_str!(
+        "../../../tests/parity/profiles/calibrated.json"
+    ))
+    .unwrap();
+    canonical.template_region = Some(Region {
+        left: 0.1,
+        top: 0.1,
+        right: 0.2,
+        bottom: 0.2,
+    });
+    canonical.masks.push(Region {
+        left: 0.7,
+        top: 0.7,
+        right: 0.9,
+        bottom: 0.9,
+    });
+    canonical.panel.threshold = 0.93;
+    canonical.panel.stable_frames = 4;
+    canonical.validate().unwrap();
+    for retired in [
+        serde_json::json!({"left": 0.7, "top": 0.7, "right": 0.71, "bottom": 0.71}),
+        serde_json::Value::Null,
+    ] {
+        let mut saved = serde_json::to_value(&canonical).unwrap();
+        saved["panel"]["region"] = retired;
+        let migrated = Profile::from_json(&saved.to_string()).unwrap();
+        assert_eq!(migrated, canonical);
+        assert_eq!(migrated.template_file, canonical.template_file);
+        assert_eq!(migrated.template_region, canonical.template_region);
+        assert!(
+            serde_json::to_value(migrated).unwrap()["panel"]
+                .get("region")
+                .is_none()
+        );
+    }
+    let mut unexpected = serde_json::to_value(&canonical).unwrap();
+    unexpected["panel"]["unexpected"] = serde_json::json!(true);
+    assert!(Profile::from_json(&unexpected.to_string()).is_err());
+}
+
+#[test]
+fn profiles_discard_old_window_hints_and_never_save_a_connection() {
+    let profile = Profile::create("Main profile");
+    let mut old = serde_json::to_value(&profile).unwrap();
+    old["process_name"] = serde_json::json!("custom-client.exe");
+    let loaded = Profile::from_json(&old.to_string()).unwrap();
+    assert_eq!(loaded, profile);
+    assert!(
+        serde_json::to_value(loaded)
+            .unwrap()
+            .get("process_name")
+            .is_none()
     );
 }
 
@@ -70,6 +224,34 @@ fn half_even_pixel_conversion_matches_reference() {
             left: 0.5,
             right: 0.4,
             ..r
+        }
+        .validate()
+        .is_err()
+    );
+}
+
+#[test]
+fn precise_five_pixel_regions_at_eight_k_are_valid_but_zero_extent_is_rejected() {
+    let region = Region {
+        left: 100. / 8192.,
+        top: 200. / 4320.,
+        right: 104. / 8192.,
+        bottom: 204. / 4320.,
+    };
+    assert!(region.validate().is_ok());
+    assert_eq!(region.pixels(8192, 4320), [100, 200, 104, 204]);
+    assert!(
+        Region {
+            right: region.left,
+            ..region
+        }
+        .validate()
+        .is_err()
+    );
+    assert!(
+        Region {
+            bottom: region.top,
+            ..region
         }
         .validate()
         .is_err()

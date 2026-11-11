@@ -1,29 +1,23 @@
 # Platform support
 
-Platform availability is explicit. An unsupported backend prevents Start and displays the reason; the application does not substitute desktop capture or unguarded input.
+Companion supports Windows x64 only. Releases contain a setup installer and `SHA256SUMS.txt`.
 
-| Capability | Windows x64 | Linux | macOS |
-| --- | --- | --- | --- |
-| Profiles, calibration editor, buff configuration | Implemented | Implemented | Implemented; full native acceptance pending |
-| Recognition on stored images | Tested | Tested | Native verification pending |
-| Selected-window capture | Implemented | Unavailable | Unavailable |
-| Guarded game input | Implemented | Unavailable | Unavailable |
-| Automation Start | Subject to readiness checks | Disabled | Disabled |
-| Distribution | Installer and portable ZIP prerelease | Native editor preview packaging | Application bundle implementation |
+| Capability | Windows x64 |
+| --- | --- |
+| Profiles, calibration, actions and recognition | Implemented |
+| Selected-window capture | Implemented |
+| Guarded keyboard and mouse input | Generic HIDMaestro v2.1.0 through bundled NativeAOT bridge |
+| Automation Start | Requires valid profile, selected target and ready driver/bridge |
+| Distribution | Administrator-installed setup prerelease |
 
-## Appearance and desktop integration
+Windows 10 version 2004 / build 19041 or newer and a D3D11-capable graphics device are required. Setup includes native runtime dependencies; an installed .NET runtime is unnecessary. Portable core logic remains testable independently of the Windows desktop backend.
 
-The interface uses black artwork on light surfaces and white artwork on dark surfaces. Windows runtime window/taskbar icons follow the selected theme; executable/installer icons use a fixed contrast design suitable for either taskbar background.
+Driver installation is explicit setup/management work, never a side effect of Start. Setup discloses the machine code-signing certificate stores and `GameInputSvc` changes. App uninstall retains the shared driver by default; explicit removal refuses while another consumer is running. Removal does not restore the original `GameInputSvc` startup setting. See [installation](user-guide.md#installation-and-hid-driver).
 
-Linux X11 runtime icons follow the theme. Wayland identifies the application through `app.jojo.MetinBot`; launchers resolve its installed contrast icon from the desktop entry and icon theme. The package includes desktop entries and standard icon sizes.
+The interface uses one fixed Metin appearance with original game artwork and readable text. Window/taskbar, executable and installer icons use the fixed Companion identity. Previous saved theme preferences are discarded safely while retaining other settings.
 
-macOS includes an ICNS bundle icon and a themed Dock icon implementation. The platform-specific module has been cross-checked for Intel and Apple Silicon, but that does not establish full application execution, Finder appearance or Dock behavior on real hardware. Build and verify each architecture natively before distribution.
+## Verification boundaries
 
-## Acceptance still required
+Native fixture checks confirmed Ctrl+G, a held Space key, mouse click and balanced release. On 10 November 2026, the operator confirmed isolated Escape and X-control click responses in the game. These checks establish the chosen input transport, not acceptance of the complete integrated automation cycle.
 
-- Complete the Windows target selection, attack, buff and mount cycle in a live game with calibrated profiles.
-- Run the final artifact through disposable hosted installation, upgrade and uninstall checks before publication.
-- Complete native macOS build/runtime and Finder/Dock verification.
-- Implement and accept native capture/input before enabling Linux or macOS automation.
-
-Local checks do not imply that hosted CI has run or that an artifact has been published. See [release notes](release-notes.md) and [release procedure](releasing.md).
+The final Windows target-selection, attack, buff and mount cycle still requires a calibrated live-game test. The final artifact must also pass disposable hosted installation, upgrade and uninstall checks before publication. Local tests do not establish hosted CI or publication. See [release procedure](releasing.md).

@@ -1,6 +1,6 @@
+use super::catalog::Artwork;
 use super::*;
 use crate::ui_controls::{numeric, numeric_u32};
-use widgets::section;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "ui-smoke", derive(clap::ValueEnum))]
@@ -16,60 +16,74 @@ pub enum ActionsPage {
 
 impl MetinApp {
     pub(super) fn actions_view(&mut self, ui: &mut egui::Ui) {
-        if widgets::subtabs(
-            ui,
-            &mut self.actions_page,
-            &[
-                (
-                    ActionsPage::Buffs,
-                    "Buffs",
-                    "Skill order, timers and icon recognition.",
-                ),
-                (
-                    ActionsPage::Loot,
-                    "Loot",
-                    "Pickup after a confirmed target end.",
-                ),
-                (
-                    ActionsPage::Mount,
-                    "Mount",
-                    "Desired behavior and current declaration.",
-                ),
-                (
-                    ActionsPage::VisualRules,
-                    "Visual rules",
-                    "Recognize a fixed image and notify, pause or perform an action.",
-                ),
-                (
-                    ActionsPage::Periodic,
-                    "Periodic actions",
-                    "Named key or click actions performed between targets.",
-                ),
-                (
-                    ActionsPage::OutOfTarget,
-                    "Out-of-target attack",
-                    "Timed attacks after combat or during a long search.",
-                ),
-                (
-                    ActionsPage::Puller,
-                    "Auto-puller",
-                    "A sequence at confirmed combat start or repeated during combat.",
-                ),
-            ],
-        ) {
-            self.binding = None;
+        if !self.actions_detail {
+            egui::ScrollArea::vertical()
+                .id_salt("action-catalog")
+                .show(ui, |ui| {
+                    widgets::heading(ui, "Actions", "Choose a behavior. Changes apply on Save.");
+                    for summary in action_summary::summaries(&self.editor.profile) {
+                        let (kind, label) = match summary.page {
+                            ActionsPage::Buffs => (Artwork::Skills.into(), "Buffs"),
+                            ActionsPage::Loot => (Artwork::Loot.into(), "Loot"),
+                            ActionsPage::Mount => (Artwork::Mount.into(), "Mount"),
+                            ActionsPage::VisualRules => (Artwork::Camera.into(), "Visual rules"),
+                            ActionsPage::Periodic => (
+                                widgets::Glyph::Vector(widgets::Icon::Clock),
+                                "Periodic actions",
+                            ),
+                            ActionsPage::OutOfTarget => {
+                                (Artwork::AutoAttack.into(), "Out-of-target attack")
+                            }
+                            ActionsPage::Puller => (Artwork::Puller.into(), "Auto-puller"),
+                        };
+                        let status_color = match summary.state {
+                            action_summary::ActionState::On => widgets::GREEN,
+                            action_summary::ActionState::Off => ui.visuals().weak_text_color(),
+                            action_summary::ActionState::SetupNeeded => widgets::AMBER,
+                        };
+                        let response = widgets::catalog_row_status(
+                            ui,
+                            kind,
+                            label,
+                            &summary.text(),
+                            summary.state.label(),
+                            status_color,
+                        );
+                        if response.clicked() {
+                            self.actions_page = summary.page;
+                            self.actions_detail = true;
+                            self.buff_detail = false;
+                            self.binding = None;
+                        }
+                    }
+                });
+            return;
         }
+        let nested_detail = (self.actions_page == ActionsPage::Buffs && self.buff_detail)
+            || (self.actions_page == ActionsPage::Periodic && self.selected_periodic.is_some())
+            || (self.actions_page == ActionsPage::VisualRules && self.visual_detail);
+        if !nested_detail
+            && widgets::button(
+                ui,
+                widgets::Icon::Back,
+                "Actions",
+                true,
+                "Back to all actions",
+            )
+            .clicked()
+        {
+            self.actions_detail = false;
+            self.buff_detail = false;
+            self.binding = None;
+            return;
+        }
+        ui.add_space(6.);
         match self.actions_page {
             ActionsPage::Buffs => self.buffs_view(ui),
             ActionsPage::VisualRules => {
                 egui::ScrollArea::vertical()
                     .id_salt("visual-rules-scroll")
                     .show(ui, |ui| {
-                        widgets::heading(
-                            ui,
-                            "Visual rules",
-                            "Recognize an event and choose a reaction. Changes apply on Save.",
-                        );
                         self.safety_rules(ui);
                     });
             }
@@ -81,12 +95,7 @@ impl MetinApp {
                 egui::ScrollArea::vertical()
                     .id_salt("mount-scroll")
                     .show(ui, |ui| {
-                        widgets::heading(
-                            ui,
-                            "Mount",
-                            "Confirm the current state before using automatic buffs.",
-                        );
-                        section(ui, "Mount behavior", |ui| self.mount_view(ui));
+                        self.mount_view(ui);
                         ui.small(
                             "Mount changes are part of Automatic buffs. Other edits apply on Save.",
                         );
@@ -95,33 +104,23 @@ impl MetinApp {
         }
     }
     fn loot_view(&mut self, ui: &mut egui::Ui) {
-        egui::ScrollArea::vertical().id_salt("loot-scroll").show(ui, |ui| {
-            widgets::heading(ui, "Loot", "Collect nearby items between targets. Changes apply on Save.");
-            let mut changed = false;
-            section(ui, "After a target ends", |ui| {
-                changed |= ui.checkbox(&mut self.editor.profile.loot.enabled, "Automatic loot")
-                    .on_hover_text("Starts only after a previously confirmed target panel disappears for the required number of frames. Never loots on startup or after an unconfirmed click.").changed();
-                let enabled = self.editor.profile.loot.enabled;
-                ui.add_enabled_ui(enabled, |ui| {
-                    ui.label("Pickup shortcut");
-                    let value = self.editor.profile.loot.shortcut.clone();
-                    self.keybind_button(ui, Binding::Loot, &value);
-                    let loot = &mut self.editor.profile.loot;
-                    changed |= numeric_u32(ui, "Pickup presses", "loot_presses", &mut loot.presses);
-                    changed |= numeric(ui, "Delay before pickup (s)", "loot_delay_seconds", &mut loot.delay_seconds);
-                    changed |= numeric(ui, "Wait between presses (s)", "loot_interval_seconds", &mut loot.interval_seconds);
-                    changed |= numeric(ui, "Pickup key hold (s)", "key_hold_seconds", &mut loot.hold_seconds);
+        egui::ScrollArea::vertical().id_salt("loot-scroll").show(ui,|ui| {
+            widgets::icon_heading(ui,Artwork::Loot,"Loot","Collect nearby items after a confirmed target ends. This sends the pickup key; it does not inspect inventory or item names.");
+            let mut changed=ui.checkbox(&mut self.editor.profile.loot.enabled,"Automatic loot").changed();
+            ui.add_enabled_ui(self.editor.profile.loot.enabled,|ui| {
+                let key=self.editor.profile.loot.shortcut.clone();
+                widgets::field(ui,"Pickup shortcut",|ui|self.keybind_button(ui,Binding::Loot,&key));
+                changed|=numeric_u32(ui,"Pickup presses","loot_presses",&mut self.editor.profile.loot.presses);
+                egui::CollapsingHeader::new("Advanced timing").show(ui,|ui| {
+                    let loot=&mut self.editor.profile.loot;
+                    changed|=numeric(ui,"Delay before pickup (s)","loot_delay_seconds",&mut loot.delay_seconds);
+                    changed|=numeric(ui,"Wait between presses (s)","loot_interval_seconds",&mut loot.interval_seconds);
+                    changed|=numeric(ui,"Pickup key hold (s)","key_hold_seconds",&mut loot.hold_seconds);
+                    crate::ui_controls::help(ui,"Order: target end, optional timed attack, loot, settling, a due break, buffs and next target. Pause/F8 or focus loss interrupts pickup and releases input.");
                 });
-                ui.small("Uses the selected game's pickup key. Item names and inventory contents are not detected.");
             });
-            if let Err(error) = self.editor.profile.loot.validate(&self.editor.profile) {
-                ui.colored_label(widgets::RED, error.to_string());
-            }
-            section(ui, "Execution order", |ui| {
-                ui.label("Target end, optional out-of-target attack, loot, settling, a due break, buffs and the next target.");
-                ui.small("Pause, F8, focus loss or a new target panel interrupts pickup and releases held keys. Pickup is never resumed automatically after a pause.");
-            });
-            if changed { self.runtime.stop(); self.editor.record(); }
+            if let Err(error)=self.editor.profile.loot.validate(&self.editor.profile){ui.colored_label(widgets::RED,error.to_string());}
+            if changed{self.runtime.stop();self.editor.record();}
         });
     }
 }

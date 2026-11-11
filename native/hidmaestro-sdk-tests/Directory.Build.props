@@ -1,0 +1,4 @@
+<Project><PropertyGroup>
+  <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)../../build/input-sdk-tests-obj/</BaseIntermediateOutputPath>
+  <BaseOutputPath>$(MSBuildThisFileDirectory)../../build/input-sdk-tests-managed/</BaseOutputPath>
+</PropertyGroup></Project>

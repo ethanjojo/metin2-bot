@@ -25,7 +25,7 @@ impl NotificationService {
         let status = Arc::new(Mutex::new("No notifications sent.".into()));
         let output = status.clone();
         std::thread::Builder::new()
-            .name("metin-notifications".into())
+            .name("companion-notifications".into())
             .spawn(move || {
                 while let Ok(notice) = receiver.recv() {
                     let result = deliver(notice);
@@ -61,52 +61,27 @@ impl NotificationService {
             .unwrap_or_else(|_| "Notification status unavailable.".into())
     }
 }
+#[cfg(not(windows))]
+fn deliver(_notice: Notice) -> Result<(), String> {
+    Err("Desktop notifications require Windows.".into())
+}
+
+#[cfg(windows)]
 fn deliver(notice: Notice) -> Result<(), String> {
     let mut errors = vec![];
     if notice.system {
-        #[cfg(windows)]
         register_windows_identity()?;
         let mut n = notify_rust::Notification::new();
         n.summary(&notice.title).body(&notice.body).timeout(6000);
-        #[cfg(windows)]
         n.app_id(crate::APP_ID);
-        #[cfg(target_os = "linux")]
-        {
-            n.appname("MetinBot")
-                .hint(notify_rust::Hint::SuppressSound(!notice.sound));
-            if notice.sound {
-                n.sound_name("dialog-warning");
-            }
-        }
-        #[cfg(target_os = "macos")]
-        if notice.sound {
-            n.sound_name("Glass");
-        }
         if let Err(error) = n.show() {
             errors.push(error.to_string());
         }
     }
-    #[cfg(windows)]
     if notice.sound
         && unsafe { windows_sys::Win32::System::Diagnostics::Debug::MessageBeep(0x30) } == 0
     {
         errors.push("Windows could not play the notification sound.".into());
-    }
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    if notice.sound && !notice.system {
-        #[cfg(target_os = "linux")]
-        let result = std::process::Command::new("canberra-gtk-play")
-            .args(["--id", "dialog-warning"])
-            .output();
-        #[cfg(target_os = "macos")]
-        let result = std::process::Command::new("/usr/bin/afplay")
-            .arg("/System/Library/Sounds/Glass.aiff")
-            .output();
-        match result {
-            Ok(output) if output.status.success() => {}
-            Ok(_) => errors.push("The operating system could not play the sound.".into()),
-            Err(error) => errors.push(format!("Sound service unavailable: {error}")),
-        }
     }
     if errors.is_empty() {
         Ok(())
@@ -132,7 +107,7 @@ fn register_windows_identity() -> Result<(), String> {
     let result = (|| {
         let executable = std::env::current_exe().map_err(|e| e.to_string())?;
         for (name, value) in [
-            ("DisplayName", "MetinBot".to_owned()),
+            ("DisplayName", crate::PRODUCT_NAME.to_owned()),
             ("IconUri", executable.to_string_lossy().into_owned()),
         ] {
             let name = wide(name);

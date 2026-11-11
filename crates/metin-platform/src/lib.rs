@@ -112,6 +112,8 @@ pub trait PlatformBackend: Send {
     fn capabilities(&self) -> CapabilityReport;
     fn list_targets(&mut self) -> Result<Vec<TargetInfo>>;
     fn attach(&mut self, target: TargetToken) -> Result<()>;
+    /// Release presentation capture resources without detaching input or hotkeys.
+    fn stop_capture(&mut self);
     fn inspect(&mut self) -> Result<TargetState>;
     fn request_activation(&mut self) -> Result<bool>;
     fn capture(
@@ -134,37 +136,26 @@ pub trait PlatformBackend: Send {
 }
 mod guarded_input;
 pub use guarded_input::{InputExecutor, InputVerification};
+mod hid_report;
+pub use hid_report::{HidKey, HidKeyboard, scan_to_hid};
 
-#[derive(Debug, Clone, Copy)]
-pub struct KeyboardPacket {
-    pub message: u32,
-    pub flags: u32,
-}
-pub fn keyboard_packet(key: u16, scan: u32, down: bool, alt: bool) -> KeyboardPacket {
-    let system = alt || [0x12, 0xA4, 0xA5].contains(&key);
-    KeyboardPacket {
-        message: match (system, down) {
-            (false, true) => 0x100,
-            (false, false) => 0x101,
-            (true, true) => 0x104,
-            (true, false) => 0x105,
-        },
-        flags: 1
-            | ((scan & 0xff) << 16)
-            | if [0xA3, 0xA5].contains(&key) {
-                1 << 24
-            } else {
-                0
-            }
-            | if down { 0 } else { (1 << 30) | (1 << 31) }
-            | if alt { 1 << 29 } else { 0 },
-    }
-}
-
+#[cfg(windows)]
+mod hid_bridge;
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
-pub use windows::enable_dpi;
+pub use hid_bridge::manage_input_driver;
+#[cfg(windows)]
+pub use windows::{capture_window_preview, enable_dpi};
+#[cfg(not(windows))]
+pub fn capture_window_preview(
+    _target: TargetToken,
+    _deadline: Instant,
+    _stop: &StopToken,
+    _generation: u64,
+) -> Result<Frame> {
+    Err(PlatformError("Window previews require Windows.".into()))
+}
 pub fn backend() -> Box<dyn PlatformBackend> {
     #[cfg(windows)]
     {
@@ -188,6 +179,7 @@ impl PlatformBackend for UnavailableBackend {
     fn attach(&mut self, _: TargetToken) -> Result<()> {
         Err(PlatformError(self.capabilities().reason))
     }
+    fn stop_capture(&mut self) {}
     fn inspect(&mut self) -> Result<TargetState> {
         Err(PlatformError(self.capabilities().reason))
     }

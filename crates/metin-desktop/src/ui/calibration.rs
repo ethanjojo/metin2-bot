@@ -2,85 +2,104 @@ use super::*;
 use widgets::{Icon, button};
 impl MetinApp {
     pub(super) fn calibration_view(&mut self, ui: &mut egui::Ui) {
-        let height = ui.available_height();
-        let side = if ui.available_width() < 950. {
-            250.
-        } else {
-            290.
-        };
-        let canvas_width = (ui.available_width() - side - 24.).max(100.);
-        ui.horizontal_top(|ui| {
-            ui.allocate_ui_with_layout(egui::vec2(side,height),egui::Layout::top_down(egui::Align::Min),|ui| {
-                ui.set_max_width(side);
-                egui::ScrollArea::vertical().id_salt("calibration-controls").show(ui,|ui| {
-                    ui.heading(if self.return_to_safety {"Action capture"} else if self.return_to_buffs { "Buff capture" } else { "Calibration" });
-                    ui.label("Prepare recognition on a frozen game snapshot."); ui.add_space(8.);
-                    if !self.return_to_buffs && !self.return_to_safety {
-                    ui.label("Profile name");
-                    if ui.add(egui::TextEdit::singleline(&mut self.editor.profile.name).hint_text("e.g. Warrior · forest").char_limit(80).desired_width(f32::INFINITY)).on_hover_text("A descriptive name for these saved calibration and buff settings.").changed() {self.runtime.stop();self.editor.record();}
-                    }
-                    self.window_picker(ui);
-                    ui.separator();
-                    if self.return_to_safety {self.safety_capture_controls(ui);}
-                    else if self.return_to_buffs {
-                        self.buff_capture_controls(ui);
-                    } else {
-                        ui.strong("Recognition checklist (4 steps)");
-                        for (number,mode,label,hint) in [
-                            (1,EditMode::World,"Search area","Drag around the game area where Metins may appear. Exclude interface elements below."),
-                            (2,EditMode::Color,"Metin color","Click a representative Metin pixel in the frozen image."),
-                            (3,EditMode::Panel,"Target panel","Draw around the target information panel while it is visible."),
-                            (4,EditMode::Template,"Reference crop","Draw a small, distinctive fixed part inside the target panel. Avoid changing HP or text.")
-                        ] {
-                            let ready=self.calibration_ready(mode);
-                            let mut delete=false;
-                            let response=ui.horizontal(|ui| {
-                                widgets::readiness_mark(ui,ready);
-                                let response=ui.selectable_label(self.editing && self.mode==mode,format!("{number}. {label}"));
-                                crate::ui_controls::help(ui,hint);
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    delete=widgets::small_icon_button(ui,Icon::Trash,ready,&format!("Clear {label}. Undo restores the edit.")).clicked();
-                                });
-                                response
-                            }).inner.on_hover_text(hint);
-                            if response.hovered(){self.hover_mode=Some(mode);}
-                            if response.clicked(){self.edit_area(mode);}
-                            if delete {self.delete_area(mode);}
-                            if mode==EditMode::Color {self.color_control(ui);}
-                        }
-                        ui.separator();
-                        ui.strong("Excluded areas");
-                        if self.editor.profile.masks.is_empty(){ui.small("Optional: hide chat, minimap or other false detections.");}
-                        for i in 0..self.editor.profile.masks.len() {
-                            let mode=EditMode::Mask(Some(i));
-                            let mut delete=false;
-                            let response=ui.horizontal(|ui| {
-                                let response=ui.selectable_label(self.editing && self.mode==mode,format!("Excluded area {}",i+1));
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    delete=widgets::small_icon_button(ui,Icon::Trash,true,&format!("Delete excluded area {}. Undo restores it.",i+1)).clicked();
-                                });
-                                response
-                            }).inner.on_hover_text("Select this excluded rectangle to move or resize it. Use its trash icon to delete it.");
-                            if response.hovered(){self.hover_mode=Some(mode);}
-                            if response.clicked(){self.edit_area(mode);}
-                            if delete {self.delete_area(mode);break;}
-                        }
-                        if button(ui,Icon::Plus,"Draw excluded area",self.editor.profile.masks.len()<30,"Draw an area that target detection should ignore.").clicked(){self.edit_area(EditMode::Mask(None));}
-                    }
-                    ui.add_space(8.);
-                    let ready=if self.return_to_safety {self.calibration_ready(self.mode)} else if self.return_to_buffs {
-                        self.calibration_ready(EditMode::BuffArea) && self.calibration_ready(EditMode::BuffIcon { index: self.selected_skill, inactive: false })
-                    } else {
-                        [EditMode::World,EditMode::Color,EditMode::Panel,EditMode::Template].iter().all(|m|self.calibration_ready(*m))
-                    };
-                    let status=if self.return_to_safety {if ready {"Action capture ready"} else {"Draw the action capture"}} else if self.return_to_buffs { if ready {"Skill recognition ready"} else {"Set the detection area and active icon"} } else if ready {"Recognition areas ready"} else {"Complete the needed areas"};
-                    widgets::badge(ui,status,if ready{widgets::GREEN}else{widgets::AMBER});
-                    ui.small("Full start readiness also checks the window, buffs and numeric settings.");
-                });
-            });
+        if self.editor.is_recalibrating() {
+            self.size_review_view(ui);
+            return;
+        }
+        self.size_change_view(ui);
+        egui::ScrollArea::vertical().id_salt("calibration-controls").show(ui, |ui| {
+            widgets::heading(ui, if self.return_to_safety {"Action capture"} else if self.return_to_buffs {"Buff capture"} else {"Recognition"}, "Select directly over a fresh, frozen game image.");
             ui.separator();
-            ui.allocate_ui_with_layout(egui::vec2(canvas_width,height),egui::Layout::top_down(egui::Align::Min),|ui| {ui.set_width(canvas_width); self.preview(ui);});
+            if self.pending_overlay.is_some() {
+                ui.horizontal_wrapped(|ui| { ui.spinner(); ui.label("Selecting in game…"); if widgets::plain_button(ui,"Cancel capture").clicked() { self.cancel_overlay_capture(); } });
+            }
+            if self.return_to_safety { self.safety_capture_controls(ui); }
+            else if self.return_to_buffs { self.buff_capture_controls(ui); }
+            else {
+                for (number, mode, label, hint) in [
+                    (1,EditMode::World,"Search area","Select the part of the game where targets may appear. A fresh frame is captured automatically."),
+                    (2,EditMode::Color,"Metin color","Pick a representative target pixel directly in the frozen game image."),
+                    (3,EditMode::Template,"Target HP panel","Select one fixed edge or symbol of the target panel. Avoid names, changing HP and the full variable-width panel. The whole connected game client is always searched.")
+                ] {
+                    let ready = self.calibration_ready(mode);
+                    let mut edit=false; let mut delete=false;
+                    ui.horizontal(|ui| {
+                        widgets::readiness_mark(ui, ready);
+                        let response=ui.selectable_label(self.editing && self.mode==mode, format!("{number}. {label}"));
+                        edit|=response.clicked();
+                        crate::ui_controls::help(ui,hint);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            delete=widgets::small_icon_button(ui, Icon::Trash, ready, &format!("Clear {label}. Undo restores it.")).clicked();
+                        edit |= widgets::plain_button(ui,if mode==EditMode::Color {"Pick"}else{"Edit"}).clicked();
+                        });
+                        response
+                    }).inner.on_hover_text(hint);
+                    if edit {self.edit_area(mode);}
+                    if delete {self.delete_area(mode);}
+                    if mode==EditMode::Color {self.color_control(ui);}
+                    if mode==EditMode::Template && let Some(image)=self.editor.template.clone() {
+                        self.reference_thumbnail(ui, &image);
+                        ui.small(format!("Fixed detail · {} × {} px",image.width,image.height));
+                    }
+                }
+                ui.separator(); ui.strong("Excluded areas");
+                for index in 0..self.editor.profile.masks.len() {
+                    let mut remove=false;
+                    ui.horizontal(|ui| {
+                        if ui.selectable_label(self.mode==EditMode::Mask(Some(index)),format!("Excluded area {}",index+1)).clicked() {self.edit_area(EditMode::Mask(Some(index)));}
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui| {remove=widgets::small_icon_button(ui,Icon::Trash,true,"Delete this excluded area. Undo restores it.").clicked();});
+                    });
+                    if remove {self.delete_area(EditMode::Mask(Some(index)));break;}
+                }
+                if button(ui,Icon::Plus,"Draw excluded area",self.editor.profile.masks.len()<30,"Draw an excluded rectangle directly over a fresh game image.").clicked() {self.edit_area(EditMode::Mask(None));}
+                ui.separator();
+                let overlay = ui.vertical(|ui| self.overlay_controls(ui)).response;
+                #[cfg(feature = "ui-smoke")]
+                if self.overlay_controls_fixture {
+                    overlay.scroll_to_me(Some(egui::Align::BOTTOM));
+                }
+                #[cfg(not(feature = "ui-smoke"))]
+                let _ = overlay;
+            }
         });
+    }
+    pub(super) fn overlay_controls(&mut self, ui: &mut egui::Ui) {
+        ui.checkbox(&mut self.run_live, "Game overlay")
+            .on_hover_text("Show read-only annotations directly over the connected game on every tab. Turning this off does not disable recognition or automation safety.");
+        ui.indent("overlay-options", |ui| {
+            ui.add_enabled_ui(self.run_live, |ui| {
+                ui.checkbox(&mut self.show_detections, "Detected targets")
+                    .on_hover_text("Show outlines for recognized targets, including the current and next candidate. This changes presentation only.");
+                ui.checkbox(&mut self.show_regions, "Calibration areas")
+                    .on_hover_text("Show the selected calibration area's outline in Recognition. HP references follow their recognized position.");
+                ui.checkbox(&mut self.show_sizes, "Sizes (px)")
+                    .on_hover_text("Show source-pixel dimensions alongside visible target and calibration outlines.");
+            }).response.on_disabled_hover_text("Enable Game overlay to change its visible elements. Your choices are retained while it is off.");
+        });
+    }
+    fn reference_thumbnail(&mut self, ui: &mut egui::Ui, frame: &metin_platform::Frame) {
+        if self
+            .reference_texture
+            .as_ref()
+            .is_none_or(|(previous, _)| !Arc::ptr_eq(&previous.bgr, &frame.bgr))
+        {
+            let rgb = frame
+                .bgr
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .flat_map(|pixel| [pixel[2], pixel[1], pixel[0]])
+                .collect::<Vec<_>>();
+            let texture = ui.ctx().load_texture(
+                "hp-reference-thumbnail",
+                egui::ColorImage::from_rgb([frame.width as usize, frame.height as usize], &rgb),
+                egui::TextureOptions::LINEAR,
+            );
+            self.reference_texture = Some((frame.clone(), texture));
+        }
+        if let Some((_, texture)) = &self.reference_texture {
+            ui.add(egui::Image::new(texture).max_size(egui::vec2(120., 48.)));
+        }
     }
     fn buff_capture_controls(&mut self, ui: &mut egui::Ui) {
         let index = self.selected_skill;
@@ -96,6 +115,9 @@ impl MetinApp {
         if button(ui, Icon::Back, "Done & back to buffs", true, "Return to this skill's details. Captures are kept as unsaved profile edits; Save applies them.").clicked() {
             self.return_to_buffs = false;
             self.navigate(Tab::Actions);
+            self.actions_page = ActionsPage::Buffs;
+            self.actions_detail = true;
+            self.buff_detail = true;
         }
         for (mode, label) in [
             (EditMode::BuffArea, "Detection area"),
@@ -123,7 +145,7 @@ impl MetinApp {
                     delete = widgets::small_icon_button(ui, Icon::Trash, ready, &format!("Clear {label}. Undo restores it.")).clicked();
                 });
                 response
-            }).inner.on_hover_text("Select this capture tool. Show the desired state in the game and take a fresh Snapshot before drawing.");
+            }).inner.on_hover_text("Select this capture tool. Show the desired state in the game and choose this capture tool before drawing.");
             if response.clicked() {
                 self.edit_area(mode);
             }

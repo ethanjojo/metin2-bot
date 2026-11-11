@@ -1,57 +1,43 @@
 use metin_core::Profile;
 use metin_desktop::storage::ProfileStore;
 #[test]
-fn malformed_window_preferences_are_rejected_before_saving_or_loading() {
-    use metin_desktop::storage::{UISettings, WindowPreference};
-    let dir = tempfile::tempdir().unwrap();
-    for (process, title) in [
-        ("../client.exe", "Server"),
-        ("client.exe", ""),
-        ("", "Server"),
-    ] {
-        let mut settings = UISettings::default();
-        settings.profile_windows.insert(
-            uuid::Uuid::new_v4(),
-            WindowPreference {
-                process_name: process.into(),
-                title: title.into(),
-            },
-        );
-        assert!(settings.save(dir.path()).is_err());
-        assert!(!dir.path().join("ui-settings.json").exists());
-        std::fs::write(
-            dir.path().join("ui-settings.json"),
-            serde_json::to_vec(&settings).unwrap(),
-        )
-        .unwrap();
-        assert!(UISettings::load(dir.path()).is_err());
-        std::fs::remove_file(dir.path().join("ui-settings.json")).unwrap();
-    }
-}
-#[test]
-fn per_profile_window_preferences_roundtrip_and_old_settings_still_load() {
+fn obsolete_profile_window_choices_are_consumed_but_never_saved_again() {
     use metin_desktop::storage::UISettings;
     let dir = tempfile::tempdir().unwrap();
-    let a = uuid::Uuid::new_v4().to_string();
-    let b = uuid::Uuid::new_v4().to_string();
-    let expected = serde_json::json!({"theme":"dark","ui_scale":1.0,"lite_mode":false,"preview_refresh_ms":200,"profile_windows":{
-        (a):{"process_name":"client-a.exe","title":"Server A"},
-        (b):{"process_name":"client-b.exe","title":"Server B"}
-    }});
     let path = dir.path().join("ui-settings.json");
-    std::fs::write(&path, expected.to_string()).unwrap();
+    let obsolete = serde_json::json!({
+        "theme":"dark","ui_scale":1.25,"lite_mode":true,"pin_to_game":false,
+        "preview_refresh_ms":450,"last_mounted":true,
+        "profile_windows":{(uuid::Uuid::new_v4().to_string()):{"process_name":"client.exe","title":"Old window"}}
+    });
+    std::fs::write(&path, obsolete.to_string()).unwrap();
     let settings = UISettings::load(dir.path()).unwrap();
+    assert_eq!(settings.ui_scale, 1.25);
+    assert_eq!(settings.preview_refresh_ms, 450);
+    assert!(settings.lite_mode);
+    assert!(!settings.pin_to_game);
     settings.save(dir.path()).unwrap();
+    let saved: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&std::fs::read(&path).unwrap()).unwrap(),
-        expected
+        saved,
+        serde_json::json!({"ui_scale":1.25,"lite_mode":true,"pin_to_game":false,"preview_refresh_ms":450,"check_updates_on_start":false,"update_channel":"stable"})
     );
+}
+#[test]
+fn old_settings_receive_explicit_defaults_and_unknown_current_fields_are_rejected() {
+    use metin_desktop::storage::UISettings;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ui-settings.json");
     std::fs::write(&path, r#"{"theme":"light","last_mounted":false}"#).unwrap();
     let settings = UISettings::load(dir.path()).unwrap();
+    assert!(settings.pin_to_game);
     settings.save(dir.path()).unwrap();
-    let upgraded: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    assert_eq!(upgraded["profile_windows"], serde_json::json!({}));
+    let saved: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert!(saved.get("profile_windows").is_none());
+    assert!(saved.get("last_mounted").is_none());
+    assert!(saved.get("theme").is_none());
+    std::fs::write(&path, r#"{"theme":"light","ui_scalle":2}"#).unwrap();
+    assert!(UISettings::load(dir.path()).is_err());
 }
 #[test]
 fn incomplete_profiles_selection_and_independent_templates_roundtrip() {
@@ -255,6 +241,8 @@ fn presentation_settings_roundtrip_and_invalid_values_fail_before_write() {
     assert!(read.lite_mode);
     assert_eq!(read.preview_refresh_ms, 1500);
     let original = std::fs::read(dir.path().join("ui-settings.json")).unwrap();
+    let saved: serde_json::Value = serde_json::from_slice(&original).unwrap();
+    assert!(saved.get("theme").is_none());
     settings.preview_refresh_ms = 0;
     assert!(settings.save(dir.path()).is_err());
     assert_eq!(
@@ -270,8 +258,47 @@ fn obsolete_global_mount_hint_is_read_but_never_saved_or_reused() {
     let path = dir.path().join("ui-settings.json");
     std::fs::write(&path, r#"{"theme":"dark","last_mounted":true}"#).unwrap();
     let settings = UISettings::load(dir.path()).unwrap();
-    assert_eq!(settings.theme, "dark");
     settings.save(dir.path()).unwrap();
     let value: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
     assert!(value.get("last_mounted").is_none());
+}
+
+#[test]
+fn retired_theme_values_are_ignored_without_losing_current_settings() {
+    use metin_desktop::storage::UISettings;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ui-settings.json");
+    for theme in [
+        serde_json::json!("light"),
+        serde_json::json!("dark"),
+        serde_json::json!("obsolete-value"),
+        serde_json::json!({"obsolete": [true, 42]}),
+        serde_json::Value::Null,
+    ] {
+        std::fs::write(
+            &path,
+            serde_json::json!({
+                "theme":theme,"ui_scale":1.5,"preview_refresh_ms":5000,
+                "lite_mode":true,"pin_to_game":false
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let settings = UISettings::load(dir.path()).unwrap();
+        assert_eq!(settings.ui_scale, 1.5);
+        assert_eq!(settings.preview_refresh_ms, 5000);
+        assert!(settings.lite_mode);
+        assert!(!settings.pin_to_game);
+        settings.save(dir.path()).unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(
+            saved,
+            serde_json::json!({
+                "ui_scale":1.5,"preview_refresh_ms":5000,"lite_mode":true,"pin_to_game":false,"check_updates_on_start":false,"update_channel":"stable"
+            })
+        );
+        let reloaded = UISettings::load(dir.path()).unwrap();
+        assert_eq!(serde_json::to_value(reloaded).unwrap(), saved);
+    }
 }

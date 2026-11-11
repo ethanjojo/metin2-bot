@@ -2,14 +2,19 @@ use metin_core::Profile;
 use metin_desktop::storage::{ProfileStore, UISettings, import_data};
 
 #[test]
-fn imported_configuration_gets_a_neutral_name_and_keeps_explicit_process_metadata() {
+fn imported_configuration_gets_a_neutral_name_without_a_stale_window_hint() {
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("config.json");
     std::fs::write(&path, r#"{"process_name":"custom-client.exe"}"#).unwrap();
     let mut store = ProfileStore::open(&tmp.path().join("profiles")).unwrap();
     let profile = store.migrate_legacy(&path).unwrap().unwrap();
     assert_eq!(profile.name, "Imported profile");
-    assert_eq!(profile.process_name, "custom-client.exe");
+    assert!(
+        serde_json::to_value(profile)
+            .unwrap()
+            .get("process_name")
+            .is_none()
+    );
 }
 #[test]
 fn corrupt_canonical_settings_do_not_trigger_legacy_migration_or_create_profiles() {
@@ -104,30 +109,28 @@ fn import_preserves_selection_settings_and_originals() {
         store.save(&p, None).unwrap();
         store.select(p.id).unwrap();
     }
-    UISettings {
-        ui_scale: 1.,
-        preview_refresh_ms: 200,
-        lite_mode: false,
-        theme: "dark".into(),
-        profile_windows: [(
-            p.id,
-            metin_desktop::storage::WindowPreference {
-                process_name: "client.exe".into(),
-                title: "Server".into(),
-            },
-        )]
-        .into(),
-    }
-    .save(&source)
-    .unwrap();
+    let old_settings = br#"{"theme":"dark","pin_to_game":true,"ui_scale":1.25,"preview_refresh_ms":450,"lite_mode":true}"#;
+    std::fs::write(source.join("ui-settings.json"), old_settings).unwrap();
     import_data(&source, &destination).unwrap();
     let imported = ProfileStore::open(&destination.join("profiles")).unwrap();
     assert_eq!(imported.selected().unwrap(), Some(p.id));
     assert_eq!(imported.load(p.id).unwrap().0, p);
-    assert_eq!(UISettings::load(&destination).unwrap().theme, "dark");
+    let settings = UISettings::load(&destination).unwrap();
+    assert_eq!(settings.ui_scale, 1.25);
+    assert_eq!(settings.preview_refresh_ms, 450);
+    assert!(settings.lite_mode);
     assert_eq!(
-        UISettings::load(&destination).unwrap().profile_windows,
-        UISettings::load(&source).unwrap().profile_windows
+        UISettings::load(&destination).unwrap().pin_to_game,
+        UISettings::load(&source).unwrap().pin_to_game
+    );
+    settings.save(&destination).unwrap();
+    let saved: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(destination.join("ui-settings.json")).unwrap())
+            .unwrap();
+    assert!(saved.get("theme").is_none());
+    assert_eq!(
+        std::fs::read(source.join("ui-settings.json")).unwrap(),
+        old_settings
     );
     assert!(
         source

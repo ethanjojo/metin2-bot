@@ -1,4 +1,4 @@
-//! Platform-independent, deterministic MetinBot domain logic.
+//! Platform-independent, deterministic Companion domain logic.
 mod configured;
 pub use configured::*;
 mod combat;

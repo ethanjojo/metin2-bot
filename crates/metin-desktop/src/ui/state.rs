@@ -20,14 +20,28 @@ pub(super) struct RunSetupStep {
     pub action: SetupAction,
 }
 impl MetinApp {
-    pub(super) fn undo_profile(&mut self) {
+    pub(super) fn revert_profile(&mut self) {
+        self.cancel_overlay_capture();
         self.runtime.stop();
-        self.gesture = None;
+        self.editor.revert();
+        self.reset_capture_navigation();
+        self.selected_skill = self
+            .selected_skill
+            .min(self.editor.profile.buffs.skills.len().saturating_sub(1));
+        if let Err(error) = self.configure() {
+            self.error = Some(error);
+        }
+    }
+    pub(super) fn undo_profile(&mut self) {
+        self.feedback = None;
+        self.cancel_overlay_capture();
+        self.runtime.stop();
         self.editor.undo();
     }
     pub(super) fn redo_profile(&mut self) {
+        self.feedback = None;
+        self.cancel_overlay_capture();
         self.runtime.stop();
-        self.gesture = None;
         self.editor.redo();
     }
     pub(super) fn delete_selected(&mut self) {
@@ -35,12 +49,14 @@ impl MetinApp {
     }
     pub(super) fn delete_area(&mut self, mode: EditMode) {
         self.runtime.stop();
-        self.gesture = None;
+        let previous_change = self.editor.change_id();
         if let Err(error) = self.editor.delete(mode) {
             self.error = Some(error);
             return;
         }
-        self.hover_mode = None;
+        if self.editor.change_id() != previous_change {
+            self.show_feedback("Removed", true);
+        }
         if let EditMode::Mask(Some(deleted)) = mode
             && let EditMode::Mask(Some(selected)) = self.mode
         {
@@ -81,34 +97,34 @@ impl MetinApp {
         profile: Profile,
         template: Option<metin_platform::Frame>,
     ) {
+        self.feedback = None;
+        self.cancel_size_review();
+        self.size_change = None;
+        self.cancel_overlay_capture();
         self.runtime.stop();
         self.send(Command::Detach);
         self.editor = Editor::new(profile, template);
-        self.target = None;
         self.history_open = false;
-        self.run_mount_editing = false;
-        self.window_search.clear();
-        self.target_list_revision = 0;
-        self.send(Command::RefreshTargets);
-        self.live = false;
-        self.texture_source = None;
-        self.gesture = None;
-        self.binding = None;
+        self.reset_capture_navigation();
         self.units.fill(false);
         self.selected_skill = 0;
+        self.selected_safety = 0;
+        self.visual_detail = false;
+        self.selected_periodic = None;
+        self.icon_textures.clear();
+        if let Err(error) = self.configure() {
+            self.error = Some(error);
+        }
+    }
+    fn reset_capture_navigation(&mut self) {
+        self.binding = None;
         self.return_to_buffs = false;
         self.return_to_safety = false;
-        self.selected_safety = 0;
-        self.selected_periodic = None;
         self.snapshot_score = None;
-        self.preview_snapshot = None;
-        self.snapshot_requested = None;
+        self.reference_texture = None;
         self.mode = EditMode::World;
         self.editing = false;
-        self.viewport.reset();
-        self.detection_cache = None;
         self.click_preview = None;
-        self.icon_textures.clear();
     }
     pub(super) fn calibration_ready(&self, mode: EditMode) -> bool {
         match mode {
@@ -144,6 +160,24 @@ impl MetinApp {
     // The toolbar and Run checklist consume the same validation results. Run
     // groups related calibration errors into one actionable setup step.
     fn readiness_blockers(&self) -> Vec<Blocker> {
+        if let Some(update_view::UpdateHandoff::ReleaseFailed(reason)) = &self.update_handoff {
+            return vec![Blocker {
+                message: reason.clone(),
+                action: SetupAction::Settings,
+            }];
+        }
+        if self.pending_review_end.is_some() {
+            return vec![Blocker {
+                message: "Waiting for the runtime to finish calibration review.".into(),
+                action: SetupAction::Calibration,
+            }];
+        }
+        if self.editor.is_recalibrating() {
+            return vec![Blocker {
+                message: "Confirm or cancel the calibration review before starting.".into(),
+                action: SetupAction::Calibration,
+            }];
+        }
         let mut blockers = Vec::new();
         let mut block = |message: &str, action| {
             blockers.push(Blocker {
@@ -162,24 +196,20 @@ impl MetinApp {
             );
         }
         if self.target.is_none() {
-            block(
-                "Select a game window to connect this profile.",
-                SetupAction::Window,
-            );
+            block("Connect to a game window.", SetupAction::Window);
         }
         if self.editor.profile.name.trim().is_empty() {
             block(
-                "Enter a profile name in Calibration.",
+                "Enter a name in the profile menu.",
                 SetupAction::Calibration,
             );
         }
         for (mode, label) in [
             (EditMode::World, "Set the search area."),
             (EditMode::Color, "Pick the Metin color."),
-            (EditMode::Panel, "Set the target panel area."),
             (
                 EditMode::Template,
-                "Capture a fixed reference crop inside the target panel.",
+                "Capture a fixed detail of the target HP panel.",
             ),
         ] {
             if !self.calibration_ready(mode) {
@@ -210,7 +240,7 @@ impl MetinApp {
         }
         if profile.buffs.enabled && self.declared_mount().is_none() {
             block(
-                "Confirm On foot or Mounted for this game window in Actions > Mount.",
+                "Confirm On foot or Mounted in the bottom bar.",
                 SetupAction::Mount,
             );
         }
@@ -227,7 +257,7 @@ impl MetinApp {
         }
         if !profile.ready() {
             block(
-                "Take a calibrated snapshot and save the profile.",
+                "Finish recognition setup and save the profile.",
                 SetupAction::Calibration,
             );
         }
@@ -268,19 +298,31 @@ impl MetinApp {
     }
     pub(super) fn open_setup(&mut self, action: SetupAction) {
         match action {
-            SetupAction::Window | SetupAction::Calibration => self.navigate(Tab::Calibration),
+            SetupAction::Window => self.open_window_chooser(),
+            SetupAction::Calibration => {
+                self.navigate(Tab::Calibration);
+                if self.editor.profile.name.trim().is_empty() {
+                    self.profile_rename = true;
+                    self.profile_open_requested = true;
+                }
+            }
             SetupAction::Mount => {
                 self.navigate(Tab::Actions);
                 self.actions_page = ActionsPage::Mount;
+                self.actions_detail = true;
             }
             SetupAction::Actions(page) => {
                 self.navigate(Tab::Actions);
                 self.actions_page = page;
+                self.actions_detail = true;
+                self.buff_detail = page == ActionsPage::Buffs;
             }
             SetupAction::Safety => self.navigate(Tab::Safety),
             SetupAction::VisualRules => {
                 self.navigate(Tab::Actions);
                 self.actions_page = ActionsPage::VisualRules;
+                self.actions_detail = true;
+                self.visual_detail = true;
             }
             SetupAction::Settings => self.navigate(Tab::Settings),
         }
@@ -313,18 +355,14 @@ impl MetinApp {
             if tab == Tab::Settings && !self.snapshot.capabilities.automation_ready() {
                 self.settings_page = SettingsPage::Diagnostics;
             }
-            self.gesture = None;
             self.editing = false;
             self.binding = None;
-            self.hover_mode = None;
             self.tab = tab;
         }
     }
     pub(super) fn edit_area(&mut self, mode: EditMode) {
         self.runtime.stop();
-        self.gesture = None;
         self.binding = None;
-        self.live = false;
         self.return_to_buffs = matches!(mode, EditMode::BuffArea | EditMode::BuffIcon { .. });
         self.return_to_safety = matches!(
             mode,
@@ -333,6 +371,7 @@ impl MetinApp {
         self.mode = mode;
         self.editing = true;
         self.tab = Tab::Calibration;
+        self.request_overlay_capture(mode);
     }
     pub(super) fn reorder_skill(&mut self, a: usize, b: usize) {
         if a >= self.editor.profile.buffs.skills.len()
@@ -370,7 +409,6 @@ impl MetinApp {
     }
     fn retire_skill_gesture(&mut self) {
         self.binding = None;
-        self.gesture = None;
         if matches!(self.mode, EditMode::BuffIcon { .. }) {
             self.mode = EditMode::World;
             self.editing = false;

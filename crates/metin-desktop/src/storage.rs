@@ -24,6 +24,10 @@ pub enum StorageError {
     Invalid(String),
 }
 pub type Result<T> = std::result::Result<T, StorageError>;
+mod migration;
+pub use migration::{
+    DataDirectory, migration_protected_paths, prepare_data_directory, prepare_data_directory_at,
+};
 pub const DATA_ENTRIES: [&str; 4] = [
     "profiles",
     "ui-settings.json",
@@ -39,6 +43,19 @@ fn present(path: &Path) -> Result<bool> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error.into()),
     }
+}
+pub(crate) fn resolve_new_path(path: &Path) -> Result<PathBuf> {
+    if present(path)? {
+        return Ok(path.canonicalize()?);
+    }
+    let name = path
+        .file_name()
+        .ok_or_else(|| invalid("Invalid data path."))?;
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    Ok(resolve_new_path(parent)?.join(name))
 }
 fn read_legacy_object(path: &Path) -> Result<serde_json::Map<String, serde_json::Value>> {
     reject_link(path)?;
@@ -138,63 +155,68 @@ fn validate_icons(profile: &Profile) -> Result<()> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(from = "StoredUISettings")]
 pub struct UISettings {
-    pub theme: String,
-    pub profile_windows: std::collections::BTreeMap<Uuid, WindowPreference>,
     pub ui_scale: f32,
     pub preview_refresh_ms: u32,
     pub lite_mode: bool,
+    pub pin_to_game: bool,
+    pub check_updates_on_start: bool,
+    pub update_channel: crate::updates::UpdateChannel,
 }
-/// Read the obsolete global hint once, without making it runtime state.
-/// Serialization always uses UISettings, which has no mount declaration.
+/// Consume obsolete persisted hints only when loading existing user data.
+/// Serialization has one source of truth and never writes these hints again.
 #[derive(Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct StoredUISettings {
-    theme: String,
+    #[serde(rename = "theme")]
+    _obsolete_theme: Option<serde::de::IgnoredAny>,
     #[serde(rename = "last_mounted")]
     _obsolete_mount_hint: Option<bool>,
-    profile_windows: std::collections::BTreeMap<Uuid, WindowPreference>,
+    #[serde(rename = "profile_windows")]
+    _obsolete_profile_windows: Option<serde::de::IgnoredAny>,
     ui_scale: f32,
     preview_refresh_ms: u32,
     lite_mode: bool,
+    pin_to_game: bool,
+    check_updates_on_start: bool,
+    update_channel: crate::updates::UpdateChannel,
 }
 impl Default for StoredUISettings {
     fn default() -> Self {
         let settings = UISettings::default();
         Self {
-            theme: settings.theme,
+            _obsolete_theme: None,
             _obsolete_mount_hint: None,
-            profile_windows: settings.profile_windows,
+            _obsolete_profile_windows: None,
             ui_scale: settings.ui_scale,
             preview_refresh_ms: settings.preview_refresh_ms,
             lite_mode: settings.lite_mode,
+            pin_to_game: settings.pin_to_game,
+            check_updates_on_start: settings.check_updates_on_start,
+            update_channel: settings.update_channel,
         }
     }
 }
 impl From<StoredUISettings> for UISettings {
     fn from(s: StoredUISettings) -> Self {
         Self {
-            theme: s.theme,
-            profile_windows: s.profile_windows,
             ui_scale: s.ui_scale,
             preview_refresh_ms: s.preview_refresh_ms,
             lite_mode: s.lite_mode,
+            pin_to_game: s.pin_to_game,
+            check_updates_on_start: s.check_updates_on_start,
+            update_channel: s.update_channel,
         }
     }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct WindowPreference {
-    pub process_name: String,
-    pub title: String,
 }
 impl Default for UISettings {
     fn default() -> Self {
         Self {
-            theme: "light".into(),
-            profile_windows: Default::default(),
             ui_scale: 1.,
             preview_refresh_ms: 200,
             lite_mode: false,
+            pin_to_game: true,
+            check_updates_on_start: false,
+            update_channel: crate::updates::UpdateChannel::Stable,
         }
     }
 }
@@ -215,20 +237,6 @@ impl UISettings {
             || !(100..=5000).contains(&self.preview_refresh_ms)
         {
             return Err(invalid("Invalid UI scale or preview refresh interval."));
-        }
-        if !["light", "dark"].contains(&self.theme.as_str()) {
-            return Err(invalid("Invalid application theme."));
-        }
-        for preference in self.profile_windows.values() {
-            if preference.process_name.trim().is_empty()
-                || preference.process_name.contains(['/', '\\', '\0'])
-                || preference.title.trim().is_empty()
-                || preference.title.contains('\0')
-            {
-                return Err(invalid(
-                    "Invalid remembered window. Expected a process filename and window title.",
-                ));
-            }
         }
         Ok(())
     }
@@ -330,8 +338,12 @@ impl ProfileStore {
             .read(true)
             .write(true)
             .open(path)?;
-        lock.try_lock_exclusive()
-            .map_err(|_| invalid("Another MetinBot instance is using this profile store."))?;
+        lock.try_lock_exclusive().map_err(|_| {
+            invalid(&format!(
+                "Another {} instance is using this profile store.",
+                crate::PRODUCT_NAME
+            ))
+        })?;
         Ok(Self {
             root: root.canonicalize()?,
             lock,
@@ -355,7 +367,7 @@ impl ProfileStore {
         } else {
             Some(
                 tempfile::Builder::new()
-                    .prefix(".MetinBot-profile-")
+                    .prefix(".Companion-profile-")
                     .tempdir_in(
                         self.root
                             .parent()
@@ -458,9 +470,6 @@ impl ProfileStore {
         } else {
             let mut p = Profile::create("Imported profile");
             p.id = id;
-            if let Some(name) = object.get("process_name") {
-                p.process_name = serde_json::from_value(name.clone())?;
-            }
             if let Some(region) = object.get("region").filter(|r| !r.is_null()) {
                 p.region = Some(serde_json::from_value(region.clone())?);
             }
@@ -477,7 +486,7 @@ impl Drop for ProfileStore {
     }
 }
 
-pub fn default_data_directory() -> Result<PathBuf> {
+fn data_parent_directory() -> Result<PathBuf> {
     #[cfg(windows)]
     let root = std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
@@ -503,7 +512,10 @@ pub fn default_data_directory() -> Result<PathBuf> {
             .ok_or_else(|| invalid("HOME must be absolute."))?
             .join(".local/share")
     };
-    Ok(root.join("MetinBot"))
+    Ok(root)
+}
+pub fn default_data_directory() -> Result<PathBuf> {
+    Ok(data_parent_directory()?.join("Companion"))
 }
 pub fn legacy_data_directory() -> Result<PathBuf> {
     if cfg!(debug_assertions) {
@@ -523,12 +535,22 @@ pub fn has_legacy_data(root: &Path) -> bool {
         .any(|name| fs::symlink_metadata(root.join(name)).is_ok())
 }
 fn copy_tree(source: &Path, destination: &Path) -> Result<()> {
+    copy_tree_except(source, destination, None)
+}
+fn copy_tree_except(source: &Path, destination: &Path, excluded: Option<&Path>) -> Result<()> {
     reject_link(source)?;
+    if Some(source) == excluded {
+        return Ok(());
+    }
     if source.is_dir() {
         fs::create_dir(destination)?;
         for entry in fs::read_dir(source)? {
             let entry = entry?;
-            copy_tree(&entry.path(), &destination.join(entry.file_name()))?;
+            copy_tree_except(
+                &entry.path(),
+                &destination.join(entry.file_name()),
+                excluded,
+            )?;
         }
     } else {
         fs::copy(source, destination)?;
@@ -540,19 +562,6 @@ pub fn import_data(source: &Path, destination: &Path) -> Result<()> {
     validate_data_directory(source)?;
     if present(destination)? {
         reject_link(destination)?;
-    }
-    fn resolve_new_path(path: &Path) -> Result<PathBuf> {
-        if present(path)? {
-            return Ok(path.canonicalize()?);
-        }
-        let name = path
-            .file_name()
-            .ok_or_else(|| invalid("Invalid import destination."))?;
-        let parent = path
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or_else(|| Path::new("."));
-        Ok(resolve_new_path(parent)?.join(name))
     }
     if resolve_new_path(destination)?.starts_with(source.canonicalize()?) {
         return Err(invalid(
@@ -572,7 +581,7 @@ pub fn import_data(source: &Path, destination: &Path) -> Result<()> {
         .ok_or_else(|| invalid("Import destination has no parent."))?;
     fs::create_dir_all(parent)?;
     let stage = tempfile::Builder::new()
-        .prefix(".MetinBot-import-")
+        .prefix(".Companion-import-")
         .tempdir_in(parent)?;
     let mut copied = false;
     for name in DATA_ENTRIES {
@@ -583,9 +592,10 @@ pub fn import_data(source: &Path, destination: &Path) -> Result<()> {
         }
     }
     if !copied {
-        return Err(invalid(
-            "The import folder contains no MetinBot profiles or settings.",
-        ));
+        return Err(invalid(&format!(
+            "The import folder contains no {} profiles or settings.",
+            crate::PRODUCT_NAME
+        )));
     }
     validate_data_directory(stage.path())?;
     {

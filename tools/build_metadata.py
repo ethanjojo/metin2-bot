@@ -42,7 +42,8 @@ class BuildMetadata:
 
     @property
     def artifact_name(self):
-        return f"MetinBotSetup-{self.version}-windows-x64.exe"
+        identity = json.loads((Path(__file__).resolve().parents[1] / "packaging/app-identity.json").read_text(encoding="utf-8"))
+        return f"{identity['product_name']}Setup-{self.version}-windows-x64.exe"
 
     @property
     def prerelease(self):

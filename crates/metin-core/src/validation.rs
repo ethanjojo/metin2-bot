@@ -14,6 +14,7 @@ pub struct NumberRule {
     pub integral: bool,
 }
 pub const NUMBER_RULES: &[NumberRule] = &[
+    rule("buff_active_hold_seconds", 0., 5., 0.1, false),
     rule("puller_presses", 1., 20., 1., true),
     rule("puller_press_gap", 0.1, 5., 0.1, false),
     rule("puller_wait_seconds", 0.2, 30., 0.1, false),

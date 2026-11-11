@@ -1,19 +1,28 @@
+mod action_summary;
 mod actions;
 mod buffs;
 mod calibration;
+mod catalog;
+mod feedback;
 mod forms;
+pub(crate) mod icons;
 mod mount;
+mod overlay;
 mod periodic;
-mod preview;
 mod run;
 mod safety;
+mod select;
 mod settings;
 mod shell;
+mod size_review;
+mod skill_icon;
+pub(crate) mod skin;
 mod state;
-mod widgets;
+mod update_view;
+pub(crate) mod widgets;
 mod window_selection;
 use crate::{
-    editor::{EditMode, Editor, Gesture, Viewport},
+    editor::{EditMode, Editor},
     runtime::{Command, RuntimeHandle, RuntimeSnapshot, SessionKey},
     storage::{ProfileStore, UISettings},
 };
@@ -66,8 +75,6 @@ enum Binding {
     OutOfTarget,
 }
 pub struct MetinApp {
-    #[cfg(target_os = "macos")]
-    native_dock: bool,
     root: PathBuf,
     store: ProfileStore,
     settings: UISettings,
@@ -79,6 +86,10 @@ pub struct MetinApp {
     snapshot: Arc<RuntimeSnapshot>,
     target: Option<TargetToken>,
     window_search: String,
+    profile_search: String,
+    profile_rename: bool,
+    profile_open_requested: bool,
+    window_chooser: window_selection::WindowChooser,
     target_list_revision: u64,
     #[cfg(any(test, feature = "ui-smoke"))]
     window_fixture: Option<window_selection::WindowFixture>,
@@ -89,34 +100,45 @@ pub struct MetinApp {
     editing: bool,
     selected_skill: usize,
     actions_page: ActionsPage,
+    actions_detail: bool,
+    buff_detail: bool,
+    collapsed: bool,
+    expanded_size: egui::Vec2,
+    pinned: bool,
+    overlay: Option<crate::game_overlay::GameOverlay>,
+    pending_overlay: Option<overlay::PendingCapture>,
+    size_change: Option<size_review::SizeChange>,
+    review_context: Option<size_review::ReviewContext>,
+    pending_review_end: Option<size_review::ReviewEnd>,
+    overlay_request_id: u64,
+    overlay_frame_id: u64,
+    overlay_preview: Option<overlay::RecognitionPreview>,
+    window_refresh_at: std::time::Instant,
+    panel_link: Option<crate::game_overlay::ControlPanelLink>,
     settings_page: settings::SettingsPage,
     selected_periodic: Option<uuid::Uuid>,
     selected_safety: usize,
+    visual_detail: bool,
     safety_page: SafetyPage,
     return_to_safety: bool,
-    preview_snapshot: Option<Arc<RuntimeSnapshot>>,
-    preview_updated: std::time::Instant,
     snapshot_score: Option<(uuid::Uuid, f64)>,
     recent_log: Option<String>,
     warnings_only: bool,
     history_open: bool,
     run_live: bool,
-    run_mount_editing: bool,
     return_to_buffs: bool,
     show_detections: bool,
+    show_regions: bool,
     show_sizes: bool,
-    live: bool,
-    snapshot_requested: Option<std::time::Instant>,
-    viewport: Viewport,
-    texture: Option<egui::TextureHandle>,
-    texture_source: Option<metin_platform::Frame>,
-    gesture: Option<Gesture>,
+    reference_texture: Option<(metin_platform::Frame, egui::TextureHandle)>,
     binding: Option<(Binding, egui::Id)>,
     error: Option<String>,
+    feedback: Option<feedback::Feedback>,
+    updates: crate::updates::UpdateService,
+    update_handoff: Option<update_view::UpdateHandoff>,
+    update_fixture: bool,
     units: Vec<bool>,
-    hover_mode: Option<EditMode>,
     icon_textures: std::collections::HashMap<String, egui::TextureHandle>,
-    detection_cache: Option<preview::DetectionCache>,
     click_preview: Option<(
         metin_platform::Frame,
         metin_core::Region,
@@ -128,24 +150,21 @@ pub struct MetinApp {
     smoke_requested: bool,
     #[cfg(feature = "ui-smoke")]
     smoke_frames: u8,
-    #[cfg(test)]
-    canvas_rect: Option<egui::Rect>,
+    #[cfg(feature = "ui-smoke")]
+    overlay_controls_fixture: bool,
+    #[cfg(feature = "ui-smoke")]
+    icon_sheet: bool,
+    #[cfg(feature = "ui-smoke")]
+    profile_menu_fixture: bool,
 }
 impl MetinApp {
     pub fn new(cc: &eframe::CreationContext<'_>, root: PathBuf) -> Result<Self, String> {
         let app = Self::from_context(&cc.egui_ctx, root)?;
-        #[cfg(target_os = "macos")]
-        let app = {
-            let mut app = app;
-            app.native_dock = true;
-            app.apply_theme(&cc.egui_ctx, app.settings.theme == "dark")?;
-            app
-        };
         #[cfg(windows)]
         let app = {
             let mut app = app;
             app.native_window = cc.winit_window().cloned();
-            app.sync_taskbar_icon(&crate::app_icon(app.settings.theme == "dark")?)?;
+            app.sync_taskbar_icon(&crate::app_icon()?)?;
             app
         };
         Ok(app)
@@ -167,13 +186,16 @@ impl MetinApp {
             (Profile::create("New profile"), None)
         };
         let settings = UISettings::load(&root).map_err(|e| e.to_string())?;
+        let pinned = settings.pin_to_game;
         let notify = context.clone();
         let runtime = RuntimeHandle::spawn_with_notify(move || notify.request_repaint());
         let snapshot = runtime.latest()?;
         runtime.send(Command::RefreshTargets)?;
-        let app = Self {
-            #[cfg(target_os = "macos")]
-            native_dock: false,
+        let mut app = Self {
+            updates: crate::updates::UpdateService::new(crate::VERSION)
+                .map_err(|e| e.to_string())?,
+            update_handoff: None,
+            update_fixture: false,
             root,
             store,
             settings,
@@ -185,6 +207,10 @@ impl MetinApp {
             snapshot,
             target: None,
             window_search: String::new(),
+            profile_search: String::new(),
+            profile_rename: false,
+            profile_open_requested: false,
+            window_chooser: window_selection::WindowChooser::default(),
             target_list_revision: 0,
             #[cfg(any(test, feature = "ui-smoke"))]
             window_fixture: None,
@@ -195,34 +221,42 @@ impl MetinApp {
             editing: false,
             selected_skill: 0,
             actions_page: ActionsPage::Buffs,
+            actions_detail: false,
+            buff_detail: false,
+            collapsed: false,
+            expanded_size: egui::vec2(460., 620.),
+            pinned,
+            overlay: None,
+            pending_overlay: None,
+            size_change: None,
+            review_context: None,
+            pending_review_end: None,
+            overlay_request_id: 0,
+            overlay_frame_id: 0,
+            overlay_preview: None,
+            window_refresh_at: std::time::Instant::now(),
+            panel_link: None,
             settings_page: settings::SettingsPage::Detection,
             selected_periodic: None,
             selected_safety: 0,
+            visual_detail: false,
             safety_page: SafetyPage::Schedule,
             return_to_safety: false,
-            preview_snapshot: None,
-            preview_updated: std::time::Instant::now(),
             snapshot_score: None,
             recent_log: None,
             warnings_only: false,
             history_open: false,
             run_live: true,
-            run_mount_editing: false,
             return_to_buffs: false,
             show_detections: true,
+            show_regions: true,
             show_sizes: false,
-            live: false,
-            snapshot_requested: None,
-            viewport: Viewport::default(),
-            texture: None,
-            texture_source: None,
-            gesture: None,
+            reference_texture: None,
             binding: None,
             error: None,
+            feedback: None,
             units: vec![false; 8],
-            hover_mode: None,
             icon_textures: Default::default(),
-            detection_cache: None,
             click_preview: None,
             #[cfg(feature = "ui-smoke")]
             smoke: None,
@@ -230,27 +264,26 @@ impl MetinApp {
             smoke_requested: false,
             #[cfg(feature = "ui-smoke")]
             smoke_frames: 0,
-            #[cfg(test)]
-            canvas_rect: None,
+            #[cfg(feature = "ui-smoke")]
+            overlay_controls_fixture: false,
+            #[cfg(feature = "ui-smoke")]
+            icon_sheet: false,
+            #[cfg(feature = "ui-smoke")]
+            profile_menu_fixture: false,
         };
-        app.apply_theme(context, app.settings.theme == "dark")?;
+        app.apply_appearance(context)?;
         context.set_zoom_factor(app.settings.ui_scale);
+        if app.settings.check_updates_on_start {
+            let _ = app.updates.check(app.settings.update_channel);
+        }
         Ok(app)
     }
-    fn apply_theme(&self, context: &egui::Context, dark: bool) -> Result<(), String> {
-        let icon = crate::app_icon(dark)?;
+    fn apply_appearance(&self, context: &egui::Context) -> Result<(), String> {
+        let icon = crate::app_icon()?;
         #[cfg(windows)]
         self.sync_taskbar_icon(&icon)?;
-        #[cfg(target_os = "macos")]
-        if self.native_dock {
-            crate::dock_icon::set(dark)?;
-        }
-        widgets::theme(context, dark);
-        context.send_viewport_cmd(egui::ViewportCommand::SetTheme(if dark {
-            egui::SystemTheme::Dark
-        } else {
-            egui::SystemTheme::Light
-        }));
+        widgets::theme(context);
+        context.send_viewport_cmd(egui::ViewportCommand::SetTheme(egui::SystemTheme::Dark));
         context.send_viewport_cmd(egui::ViewportCommand::Icon(Some(Arc::new(icon))));
         Ok(())
     }
@@ -264,21 +297,9 @@ impl MetinApp {
         }
         Ok(())
     }
-    fn toggle_theme(&mut self, context: &egui::Context) {
-        let dark = self.settings.theme != "dark";
-        if let Err(error) = self.apply_theme(context, dark) {
-            self.error = Some(error);
-            return;
-        }
-        self.settings.theme = if dark { "dark" } else { "light" }.into();
-        if let Err(error) = self.settings.save(&self.root) {
-            self.error = Some(error.to_string());
-        }
-    }
     pub fn load_fixture(&mut self, path: &std::path::Path) -> Result<(), String> {
         let image = metin_vision::load_image(path).map_err(|e| e.to_string())?;
         self.editor.freeze(image)?;
-        self.live = false;
         self.editor.mark_saved(self.editor.profile.clone());
         Ok(())
     }
@@ -320,8 +341,53 @@ impl MetinApp {
     pub fn prepare_actions_fixture(&mut self, page: Option<ActionsPage>, run: Option<RunFixture>) {
         if let Some(page) = page {
             self.actions_page = page;
+            self.actions_detail = true;
+            self.buff_detail = false;
+            self.visual_detail = page == ActionsPage::VisualRules;
+            if page == ActionsPage::Periodic {
+                self.selected_periodic = self
+                    .editor
+                    .profile
+                    .periodic_actions
+                    .first()
+                    .map(|action| action.id);
+            }
         }
         let Some(run) = run else {
+            let key = self.key();
+            if page == Some(ActionsPage::Buffs)
+                && let Some(fixture) = self.window_fixture.as_mut()
+            {
+                // Explicitly synthetic timers/presence for real native UI screenshots.
+                let mut snapshot = (*fixture.snapshot).clone();
+                snapshot.key = key;
+                snapshot.revision = self.revision;
+                snapshot.frame = self.editor.frozen.clone();
+                snapshot.captured_at = Some(std::time::Instant::now());
+                snapshot.timers = self
+                    .editor
+                    .profile
+                    .buffs
+                    .skills
+                    .iter()
+                    .map(|skill| skill.interval_seconds.map(|interval| interval * 0.65))
+                    .collect();
+                snapshot.buff_presence = self
+                    .editor
+                    .profile
+                    .buffs
+                    .skills
+                    .iter()
+                    .map(|skill| {
+                        if skill.mode == metin_core::BuffMode::Inactive {
+                            metin_core::Presence::Active
+                        } else {
+                            metin_core::Presence::Unknown
+                        }
+                    })
+                    .collect();
+                fixture.snapshot = Arc::new(snapshot);
+            }
             return;
         };
         self.set_window_picker_fixture(WindowPickerFixture::Selected);
@@ -403,11 +469,14 @@ impl MetinApp {
         snapshot.mounted = c.buffs.mounted;
         snapshot.frame = self.editor.frozen.clone();
         snapshot.captured_at = Some(std::time::Instant::now());
+        snapshot.activity = c.activity();
+        snapshot.active_skill = c.active_skill(now);
         snapshot.state = c.state.clone();
         snapshot.reason = c.reason.clone();
         snapshot.running = c.running;
         snapshot.schedule = c.schedule(now);
         snapshot.action_timers = c.action_timers();
+        snapshot.activity_progress = c.activity_progress(now);
         snapshot.attack_remaining = if c.phase == metin_core::Phase::OutOfTarget {
             c.remaining(now)
         } else {
@@ -420,6 +489,12 @@ impl MetinApp {
     #[cfg(feature = "ui-smoke")]
     pub fn prepare_safety_fixture(&mut self, page: SafetyPage) {
         self.safety_page = page;
+    }
+    #[cfg(feature = "ui-smoke")]
+    pub fn prepare_overlay_controls_fixture(&mut self, enabled: bool) {
+        self.tab = Tab::Calibration;
+        self.run_live = enabled;
+        self.overlay_controls_fixture = true;
     }
     #[cfg(feature = "ui-smoke")]
     pub fn prepare_safety_capture_fixture(&mut self) -> Result<(), String> {
@@ -446,6 +521,11 @@ impl MetinApp {
         }
     }
     fn configure(&mut self) -> Result<(), String> {
+        if self.editor.is_recalibrating() {
+            return Err(
+                "Confirm or cancel the calibration review before applying settings.".into(),
+            );
+        }
         let Some(target) = self.target else {
             return Ok(());
         };
@@ -470,6 +550,9 @@ impl MetinApp {
         })
     }
     fn save(&mut self) -> Result<(), String> {
+        if self.editor.is_recalibrating() {
+            return Err("Confirm or cancel the calibration review before saving.".into());
+        }
         let profile = self.profile_for_save();
         let saved = self
             .store
@@ -492,7 +575,6 @@ impl MetinApp {
             .position(|i| *i >= self.selected_skill)
             .unwrap_or(kept.len().saturating_sub(1));
         self.binding = None;
-        self.gesture = None;
         if let EditMode::BuffIcon { index, inactive } = self.mode {
             if let Some(index) = kept.iter().position(|i| *i == index) {
                 self.mode = EditMode::BuffIcon { index, inactive };
@@ -506,9 +588,16 @@ impl MetinApp {
         }
         self.editor.mark_saved(saved);
         self.profiles = self.store.list().map_err(|e| e.to_string())?;
-        self.configure()
+        self.configure()?;
+        self.show_feedback("Saved", false);
+        Ok(())
     }
     fn discard_or_save(&mut self) -> bool {
+        if self.editor.is_recalibrating() {
+            self.error =
+                Some("Confirm or cancel the calibration review before switching profiles.".into());
+            return false;
+        }
         if !self.editor.dirty() {
             return true;
         }
@@ -548,7 +637,7 @@ impl MetinApp {
             }
         }
     }
-    fn sync(&mut self, context: &egui::Context) {
+    fn sync(&mut self, _context: &egui::Context) {
         let snapshot = self.runtime.latest();
         #[cfg(any(test, feature = "ui-smoke"))]
         let snapshot = self
@@ -557,35 +646,27 @@ impl MetinApp {
             .map(|f| f.snapshot.clone())
             .map_or(snapshot, Ok);
         if let Ok(snapshot) = snapshot {
-            if snapshot.running && !self.snapshot.running && snapshot.key == self.key() {
-                self.live = true;
-                self.snapshot_requested = None;
-            }
             self.snapshot = snapshot;
         }
-        self.reconcile_windows();
-        if self.snapshot_requested.is_some_and(|requested| {
-            self.snapshot
-                .captured_at
-                .is_some_and(|captured| captured >= requested)
-        }) && self.snapshot.key == self.key()
-            && let Some(frame) = &self.snapshot.frame
-        {
-            if let Err(error) = self.editor.freeze(frame.clone()) {
-                self.error = Some(error);
-            }
-            self.snapshot_requested = None;
-            self.live = false;
-            self.viewport.reset();
+        #[cfg(feature = "ui-smoke")]
+        if self.smoke.is_some() && self.window_fixture.is_some() && self.snapshot.frame.is_some() {
+            // The explicit static demonstration scene remains available on each
+            // screenshot frame. Production never rewrites source timestamps.
+            let mut snapshot = (*self.snapshot).clone();
+            snapshot.captured_at = Some(std::time::Instant::now());
+            self.snapshot = Arc::new(snapshot);
         }
-        if let Some(requested) = self.snapshot_requested {
-            if requested.elapsed() >= std::time::Duration::from_secs(3) {
-                self.snapshot_requested = None;
-                self.error =
-                    Some("No fresh frame arrived. Check the selected window and try again.".into());
-            } else {
-                context.request_repaint_after(std::time::Duration::from_millis(100));
-            }
+        self.reconcile_windows();
+        self.sync_size_review();
+        if self.pending_review_end.is_some() {
+            _context.request_repaint_after(std::time::Duration::from_millis(40));
+        }
+        if !self.window_chooser.open
+            && self.target.is_some()
+            && self.window_refresh_at.elapsed() >= std::time::Duration::from_secs(2)
+        {
+            self.window_refresh_at = std::time::Instant::now();
+            self.send(Command::RefreshTargets);
         }
     }
     fn declared_mount(&self) -> Option<bool> {
@@ -603,8 +684,9 @@ impl MetinApp {
             self.preview_demand = None;
             return;
         };
-        let enabled =
-            (self.tab == Tab::Run && self.run_live) || (self.tab == Tab::Calibration && self.live);
+        let enabled = (self.run_live || self.editor.is_recalibrating())
+            && !self.window_chooser.open
+            && self.pending_overlay.is_none();
         // A stop retires queued commands. Reassert presentation demand in the
         // new generation even when the visible tab itself did not change.
         let demand = (key, enabled, self.runtime.stop_generation());
@@ -615,32 +697,18 @@ impl MetinApp {
             }
         }
     }
-    fn presentation_snapshot(&mut self) -> Arc<RuntimeSnapshot> {
-        let interval = std::time::Duration::from_millis(
-            if self.settings.lite_mode {
-                self.settings.preview_refresh_ms.max(1000)
-            } else {
-                self.settings.preview_refresh_ms
-            }
-            .into(),
-        );
-        if self
-            .preview_snapshot
-            .as_ref()
-            .is_none_or(|old| old.key != self.snapshot.key)
-            || self.preview_updated.elapsed() >= interval
-        {
-            self.preview_snapshot = Some(self.snapshot.clone());
-            self.preview_updated = std::time::Instant::now();
-        }
-        self.preview_snapshot
-            .as_ref()
-            .expect("preview initialized")
-            .clone()
-    }
 }
 
 impl MetinApp {
+    #[cfg(feature = "ui-smoke")]
+    pub fn prepare_icon_sheet(&mut self) {
+        self.icon_sheet = true;
+    }
+    #[cfg(feature = "ui-smoke")]
+    pub fn prepare_profile_menu_fixture(&mut self) {
+        self.profile_menu_fixture = true;
+    }
+
     pub fn render(&mut self, ui: &mut egui::Ui) {
         #[cfg(feature = "ui-smoke")]
         if let Some((_, started)) = &mut self.smoke {
@@ -690,26 +758,74 @@ impl MetinApp {
                     .request_repaint_after(std::time::Duration::from_millis(30));
             }
         }
+        #[cfg(feature = "ui-smoke")]
+        if self.icon_sheet {
+            egui::CentralPanel::default().show(ui, icons::sheet);
+            return;
+        }
+        skin::background(ui, self.collapsed);
         self.sync(ui.ctx());
+        self.sync_updates(ui.ctx());
+        if !self.window_chooser.open && !self.collapsed {
+            self.expanded_size = ui.ctx().content_rect().size();
+        }
+        self.sync_game_overlay(ui.ctx());
+        if self.window_chooser.open {
+            egui::CentralPanel::default().show(ui, |ui| self.window_chooser_view(ui));
+            self.window_frame(ui);
+            self.sync_preview_demand();
+            if ui.input(|i| i.viewport().close_requested()) {
+                self.runtime.stop();
+                if !self.update_exit_pending() && !self.discard_or_save() {
+                    ui.ctx()
+                        .send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                }
+            }
+            return;
+        }
         let binding_was_active = self.binding.is_some();
         self.capture_binding(ui.ctx());
-        egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui));
-        egui::Panel::top("navigation").show(ui, |ui| self.navigation(ui));
-        egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
-        self.hover_mode = None;
-        #[cfg(test)]
-        {
-            self.canvas_rect = None;
+        egui::Panel::top("toolbar")
+            .frame(egui::Frame::new().inner_margin(egui::Margin {
+                left: 0,
+                right: 0,
+                top: 1,
+                bottom: 0,
+            }))
+            .show(ui, |ui| self.toolbar(ui));
+        if !self.collapsed {
+            egui::Panel::top("navigation").show(ui, |ui| self.navigation(ui));
+            egui::Panel::bottom("status")
+                .frame(
+                    egui::Frame::new()
+                        .fill(ui.visuals().panel_fill)
+                        .inner_margin(egui::Margin {
+                            left: 10,
+                            right: 10,
+                            top: 4,
+                            bottom: 10,
+                        }),
+                )
+                .show(ui, |ui| self.footer(ui));
         }
-        egui::CentralPanel::default().show(ui, |ui| match self.tab {
-            Tab::Run => self.run_view(ui),
-            Tab::Calibration => self.calibration_view(ui),
-            Tab::Actions => self.actions_view(ui),
-            Tab::Safety => self.safety_view(ui),
-            Tab::Settings => self.settings_view(ui),
+        egui::CentralPanel::default().show(ui, |ui| {
+            if !self.collapsed {
+                match self.tab {
+                    Tab::Run => self.run_view(ui),
+                    Tab::Calibration => self.calibration_view(ui),
+                    Tab::Actions => self.actions_view(ui),
+                    Tab::Safety => self.safety_view(ui),
+                    Tab::Settings => self.settings_view(ui),
+                }
+            }
         });
+        self.window_frame(ui);
+        if self.editor.is_recalibrating()
+            && ui.input(|i| i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::F8))
+        {
+            self.cancel_size_review();
+        }
         let history_was_open = self.history_open;
-        self.run_history_dialog(ui.ctx());
         self.sync_preview_demand();
         if !history_was_open && !self.history_open && !binding_was_active && self.binding.is_none()
         {
@@ -724,10 +840,8 @@ impl MetinApp {
                 )
             });
             if input.0 {
-                if self.gesture.is_none() {
-                    self.editing = false;
-                }
-                self.gesture = None;
+                self.cancel_overlay_capture();
+                self.editing = false;
             }
             if input.1 && self.tab == Tab::Calibration && !ui.ctx().egui_wants_keyboard_input() {
                 self.delete_selected();
@@ -744,8 +858,9 @@ impl MetinApp {
             }
         }
         if ui.input(|i| i.viewport().close_requested()) {
+            self.cancel_size_review();
             self.runtime.stop();
-            if !self.discard_or_save() {
+            if !self.update_exit_pending() && !self.discard_or_save() {
                 ui.ctx()
                     .send_viewport_cmd(egui::ViewportCommand::CancelClose);
             }
@@ -753,10 +868,23 @@ impl MetinApp {
     }
 }
 impl eframe::App for MetinApp {
+    #[cfg(feature = "ui-smoke")]
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        if self.smoke.is_some() {
+            // Documentation captures must not inherit the desktop cursor's
+            // hover/tooltips or incidental input. Real sessions are unaffected.
+            raw.events.clear();
+            raw.events.push(egui::Event::PointerGone);
+        }
+    }
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.render(ui);
     }
     fn on_exit(&mut self) {
+        self.updates.cancel();
+        self.cancel_size_review();
+        self.cancel_overlay_capture();
+        self.overlay.take();
         if let Err(error) = self.runtime.shutdown() {
             tracing::error!(%error,"Shutdown failed");
         }

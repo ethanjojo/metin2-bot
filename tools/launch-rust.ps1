@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$ExecutablePath = (Join-Path $PSScriptRoot '../target/release/metinbot.exe'))
+param([string]$ExecutablePath = (Join-Path $PSScriptRoot '../target/release/companion.exe'))
 $ErrorActionPreference = 'Stop'
 if (!(Test-Path -LiteralPath $ExecutablePath -PathType Leaf)) {
     throw 'Rust release executable not found. Build with cargo build --release --locked, or install the Windows prerelease.'

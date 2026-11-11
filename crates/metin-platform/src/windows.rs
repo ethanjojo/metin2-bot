@@ -16,6 +16,21 @@ use windows_sys::Win32::{
 fn os_error(message: &str) -> PlatformError {
     PlatformError(format!("{message}: {}", std::io::Error::last_os_error()))
 }
+fn confirm_input_state(mut read: impl FnMut() -> bool, down: bool) -> Result<()> {
+    // HID delivery acknowledges the class-driver queue before Win32's async
+    // key state necessarily changes. Confirm it before the next action tests
+    // for manual input, otherwise our own release looks like a physical hold.
+    let end = Instant::now() + std::time::Duration::from_millis(200);
+    while read() != down {
+        if Instant::now() >= end {
+            return Err(PlatformError(
+                "Windows did not confirm the virtual HID pressed/released state.".into(),
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    Ok(())
+}
 fn hwnd(token: TargetToken) -> HWND {
     token.handle as HWND
 }
@@ -43,6 +58,79 @@ fn process_identity(pid: u32) -> Result<u64> {
         }
         Ok((u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime))
     }
+}
+fn verify_target(target: TargetToken) -> Result<()> {
+    unsafe {
+        let mut pid = 0;
+        if IsWindow(hwnd(target)) == 0
+            || GetWindowThreadProcessId(hwnd(target), &mut pid) == 0
+            || pid != target.pid
+            || process_identity(pid)? != target.created
+        {
+            return Err(PlatformError(
+                "The original window no longer exists.".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+fn inspect_target(target: TargetToken) -> Result<TargetState> {
+    verify_target(target)?;
+    unsafe {
+        let mut rect: RECT = zeroed();
+        let mut origin = POINT { x: 0, y: 0 };
+        if GetClientRect(hwnd(target), &mut rect) == 0
+            || ClientToScreen(hwnd(target), &mut origin) == 0
+        {
+            return Err(os_error("Cannot inspect client area"));
+        }
+        Ok(TargetState {
+            target,
+            left: origin.x,
+            top: origin.y,
+            width: (rect.right - rect.left).max(0) as u32,
+            height: (rect.bottom - rect.top).max(0) as u32,
+            visible: IsWindowVisible(hwnd(target)) != 0 && IsIconic(hwnd(target)) == 0,
+            foreground: GetForegroundWindow() == hwnd(target),
+        })
+    }
+}
+
+/// Read-only chooser thumbnail source. Uses the same HWND-only WGC implementation
+/// as runtime capture, without creating HID sessions or registering hotkeys.
+pub fn capture_window_preview(
+    target: TargetToken,
+    deadline: Instant,
+    stop: &StopToken,
+    generation: u64,
+) -> Result<Frame> {
+    if stop.cancelled(generation) || Instant::now() >= deadline {
+        return Err(PlatformError("Preview cancelled.".into()));
+    }
+    let before = inspect_target(target)?;
+    if !before.visible || before.width == 0 || before.height == 0 {
+        return Err(PlatformError(
+            "Restore this window to see its preview.".into(),
+        ));
+    }
+    if u64::from(before.width) * u64::from(before.height) > 32_000_000 {
+        return Err(PlatformError(
+            "Preview unavailable for this window size.".into(),
+        ));
+    }
+    let requested = Instant::now();
+    let mut capture = window_capture::WindowCapture::new(target)?;
+    let (pixels, captured_at) = capture.frame(before, requested, deadline, stop, generation)?;
+    if inspect_target(target)? != before
+        || stop.cancelled(generation)
+        || Instant::now() >= deadline
+        || captured_at.elapsed() > window_capture::MAX_FRAME_AGE
+    {
+        return Err(PlatformError(
+            "Window changed while making its preview.".into(),
+        ));
+    }
+    Frame::new(before.width, before.height, pixels)
 }
 fn elevated(pid: u32) -> Result<bool> {
     unsafe {
@@ -78,10 +166,18 @@ pub struct WindowsBackend {
     registration_error: Option<String>,
     pending: HotkeyEvents,
     capture: Option<window_capture::WindowCapture>,
+    input: Option<crate::hid_bridge::Session>,
+    input_error: Option<String>,
 }
 impl WindowsBackend {
     pub fn new() -> Self {
+        let input_error = crate::hid_bridge::Bridge::load()
+            .and_then(|bridge| bridge.manage(0))
+            .err()
+            .map(|error| error.to_string());
         Self {
+            input: None,
+            input_error,
             target: None,
             capture: None,
             frame_id: 0,
@@ -97,20 +193,23 @@ impl WindowsBackend {
         self.target
             .ok_or_else(|| PlatformError("Select a game window.".into()))
     }
-    fn verify(&self, target: TargetToken) -> Result<()> {
-        unsafe {
-            let mut pid = 0;
-            if IsWindow(hwnd(target)) == 0
-                || GetWindowThreadProcessId(hwnd(target), &mut pid) == 0
-                || pid != target.pid
-                || process_identity(pid)? != target.created
-            {
-                return Err(PlatformError(
-                    "The original game window no longer exists.".into(),
-                ));
+    fn input(&mut self) -> Result<&mut crate::hid_bridge::Session> {
+        if self.input.is_none() {
+            match crate::hid_bridge::Bridge::load().and_then(|bridge| bridge.session()) {
+                Ok(input) => {
+                    self.input = Some(input);
+                    self.input_error = None;
+                }
+                Err(error) => {
+                    self.input_error = Some(error.to_string());
+                    return Err(error);
+                }
             }
         }
-        Ok(())
+        Ok(self.input.as_mut().expect("initialized input session"))
+    }
+    fn verify(&self, target: TargetToken) -> Result<()> {
+        verify_target(target)
     }
     fn register(&mut self) -> Result<()> {
         if self.registered {
@@ -151,9 +250,13 @@ impl PlatformBackend for WindowsBackend {
             foreground: true,
             obstruction: true,
             manual_input: true,
-            input: true,
+            input: self.input_error.is_none(),
             emergency_stop: self.registered,
-            reason: self.registration_error.clone().unwrap_or_default(),
+            reason: self
+                .input_error
+                .clone()
+                .or_else(|| self.registration_error.clone())
+                .unwrap_or_default(),
         }
     }
     fn list_targets(&mut self) -> Result<Vec<TargetInfo>> {
@@ -217,26 +320,11 @@ impl PlatformBackend for WindowsBackend {
         Ok(())
     }
     fn inspect(&mut self) -> Result<TargetState> {
-        let target = self.target()?;
-        self.verify(target)?;
-        unsafe {
-            let mut rect: RECT = zeroed();
-            let mut origin = POINT { x: 0, y: 0 };
-            if GetClientRect(hwnd(target), &mut rect) == 0
-                || ClientToScreen(hwnd(target), &mut origin) == 0
-            {
-                return Err(os_error("Cannot inspect client area"));
-            }
-            Ok(TargetState {
-                target,
-                left: origin.x,
-                top: origin.y,
-                width: (rect.right - rect.left).max(0) as u32,
-                height: (rect.bottom - rect.top).max(0) as u32,
-                visible: IsWindowVisible(hwnd(target)) != 0 && IsIconic(hwnd(target)) == 0,
-                foreground: GetForegroundWindow() == hwnd(target),
-            })
-        }
+        inspect_target(self.target()?)
+    }
+    fn stop_capture(&mut self) {
+        // Drop closes both the WGC session and frame pool immediately.
+        self.capture = None;
     }
     fn request_activation(&mut self) -> Result<bool> {
         let target = self.target()?;
@@ -312,9 +400,10 @@ impl PlatformBackend for WindowsBackend {
         self.verify(target)?;
         if elevated(target.pid)? && !elevated(unsafe { GetCurrentProcessId() })? {
             return Err(PlatformError(
-                "The game is elevated. Run MetinBot with the same privileges.".into(),
+                "The game is elevated. Run Companion with the same privileges.".into(),
             ));
         }
+        self.input()?;
         Ok(())
     }
     fn key_held(&self, key: u16) -> bool {
@@ -339,31 +428,15 @@ impl PlatformBackend for WindowsBackend {
         }
     }
     fn move_relative(&mut self, delta: [i32; 2]) -> Result<()> {
-        unsafe {
-            let event = INPUT {
-                r#type: INPUT_MOUSE,
-                Anonymous: INPUT_0 {
-                    mi: MOUSEINPUT {
-                        dx: delta[0],
-                        dy: delta[1],
-                        mouseData: 0,
-                        dwFlags: MOUSEEVENTF_MOVE,
-                        time: 0,
-                        dwExtraInfo: 0,
-                    },
-                },
-            };
-            if SendInput(1, &event, size_of::<INPUT>() as i32) != 1 {
-                return Err(os_error("SendInput cursor movement rejected"));
-            }
+        let state = self.inspect()?;
+        if !state.visible || !state.foreground {
+            return Err(PlatformError(
+                "The game must be visible and in the foreground.".into(),
+            ));
         }
-        Ok(())
+        self.input()?.mouse(delta, None)
     }
-    fn key(&mut self, key: u16, down: bool, alt: bool) -> Result<()> {
-        let target = self.target()?;
-        if let Err(error) = self.verify(target) {
-            return if down { Err(error) } else { Ok(()) };
-        }
+    fn key(&mut self, key: u16, down: bool, _alt: bool) -> Result<()> {
         if down {
             let state = self.inspect()?;
             if !state.visible || !state.foreground {
@@ -372,32 +445,22 @@ impl PlatformBackend for WindowsBackend {
                 ));
             }
         }
-        unsafe {
-            let scan = MapVirtualKeyW(u32::from(key), MAPVK_VK_TO_VSC);
-            if scan == 0 {
-                return Err(PlatformError("Key has no valid scan code.".into()));
-            }
-            let packet = keyboard_packet(key, scan, down, alt);
-            if PostMessageW(
-                hwnd(target),
-                packet.message,
-                usize::from(key),
-                packet.flags as isize,
-            ) == 0
-            {
-                return Err(os_error("PostMessage key rejected"));
-            }
+        // An owned release must work even after target destruction/focus loss.
+        let scan = unsafe { MapVirtualKeyW(u32::from(key), MAPVK_VK_TO_VSC_EX) };
+        if scan == 0 && down {
+            return Err(PlatformError("Key has no valid scan code.".into()));
+        }
+        if !down && self.input.is_none() {
+            return Ok(());
+        }
+        self.input()?.key(key, scan, down)?;
+        confirm_input_state(|| self.key_held(key), down)?;
+        if !down {
+            self.input()?.confirm_key_release(key);
         }
         Ok(())
     }
     fn mouse(&mut self, point: [u32; 2], down: bool) -> Result<()> {
-        let target = self.target()?;
-        if let Err(error) = self.verify(target) {
-            return if down { Err(error) } else { Ok(()) };
-        }
-        if point.iter().any(|v| *v > 32767) {
-            return Err(PlatformError("Mouse coordinates out of range.".into()));
-        }
         if down {
             let state = self.inspect()?;
             if !state.visible
@@ -407,19 +470,22 @@ impl PlatformBackend for WindowsBackend {
             {
                 return Err(PlatformError("Invalid game click target.".into()));
             }
-        }
-        unsafe {
-            if PostMessageW(
-                hwnd(target),
-                if down { WM_LBUTTONDOWN } else { WM_LBUTTONUP },
-                usize::from(down),
-                (point[0] | (point[1] << 16)) as isize,
-            ) == 0
+            let expected = [state.left + point[0] as i32, state.top + point[1] as i32];
+            let actual = self.cursor()?;
+            if actual[0].abs_diff(expected[0]) > 3
+                || actual[1].abs_diff(expected[1]) > 3
+                || !self.point_clear(actual)
             {
-                return Err(os_error("PostMessage mouse rejected"));
+                return Err(PlatformError(
+                    "The cursor is not over the game click target.".into(),
+                ));
             }
         }
-        Ok(())
+        if !down && self.input.is_none() {
+            return Ok(());
+        }
+        self.input()?.mouse([0, 0], Some(down))?;
+        confirm_input_state(|| self.key_held(1), down)
     }
     fn hotkeys(&mut self) -> Result<HotkeyEvents> {
         if let Err(error) = self.pump_hotkeys() {
@@ -459,3 +525,34 @@ pub fn enable_dpi() {
 
 #[path = "window_capture.rs"]
 mod window_capture;
+
+#[cfg(test)]
+mod input_confirmation_tests {
+    use super::confirm_input_state;
+    #[test]
+    fn release_waits_for_win32_after_hid_class_acknowledgement() {
+        let mut reads = 0;
+        confirm_input_state(
+            || {
+                reads += 1;
+                reads < 3
+            },
+            false,
+        )
+        .unwrap();
+        assert_eq!(reads, 3);
+    }
+    #[test]
+    fn press_waits_before_starting_the_hold_duration() {
+        let mut reads = 0;
+        confirm_input_state(
+            || {
+                reads += 1;
+                reads >= 3
+            },
+            true,
+        )
+        .unwrap();
+        assert_eq!(reads, 3);
+    }
+}

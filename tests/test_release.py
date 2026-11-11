@@ -36,18 +36,21 @@ class ReleaseTests(unittest.TestCase):
         root=Path(__file__).resolve().parent.parent
         with tempfile.TemporaryDirectory(dir=root/'tests') as folder:
             directory=Path(folder);(directory/'tools').mkdir()
+            (directory/'packaging').mkdir()
+            shutil.copyfile(root/'packaging/app-identity.json', directory/'packaging/app-identity.json')
             script=directory/'tools'/'publish_release.ps1'
             shutil.copyfile(root/'tools/publish_release.ps1',script)
             release=directory/'dist/release';release.mkdir(parents=True)
-            name='MetinBotSetup-0.1.0-dev.1-windows-x64.exe'
+            name='CompanionSetup-0.1.0-dev.1-windows-x64.exe'
             (release/name).write_bytes(b'test installer')
             digest=hashlib.sha256(b'test installer').hexdigest()
-            zip_name = 'MetinBot-0.1.0-dev.1-windows-x64.zip'
-            (release/zip_name).write_bytes(b'test zip')
-            zip_digest = hashlib.sha256(b'test zip').hexdigest()
-            (release/'SHA256SUMS.txt').write_text(f'{digest}  {name}\n{zip_digest}  {zip_name}\n')
-            for case in ('new','draft','published','mismatch'):
+            (release/'SHA256SUMS.txt').write_text(f'{digest}  {name}\n')
+            for case in ('new','draft','published','mismatch','extra'):
                 with self.subTest(case=case):
+                    checksum = f'{digest}  {name}\n'
+                    if case == 'extra':
+                        checksum += f'{"a" * 64}  Companion-0.1.0-dev.1-windows-x64.zip\n'
+                    (release/'SHA256SUMS.txt').write_text(checksum)
                     environment=dict(os.environ)
                     environment['PSMODULEPATH']=str(Path(environment['SYSTEMROOT'])/'System32/WindowsPowerShell/v1.0/Modules')
                     result=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(root/'tests/verify_publish.ps1'),'-ScriptPath',str(script),'-Case',case],env=environment,capture_output=True,text=True,timeout=20)

@@ -46,21 +46,17 @@ pub fn run(report: &Path) -> Result<(), String> {
             Ok(())
         })(),
     );
-    for dark in [false, true] {
+    {
         let context = egui::Context::default();
-        context.set_visuals(if dark {
-            egui::Visuals::dark()
-        } else {
-            egui::Visuals::light()
-        });
+        crate::ui::widgets::theme(&context);
         let mut output = context.run_ui(egui::RawInput::default(), |root| {
             egui::CentralPanel::default().show(root, |ui| {
-                ui.label("MetinBot Žluťoučký kůň");
+                ui.label(format!("{} Žluťoučký kůň", crate::PRODUCT_NAME));
                 let _ = ui.button("Start");
             });
         });
         check(
-            if dark { "dark_theme" } else { "light_theme" },
+            "metin_theme",
             if output.shapes.is_empty() {
                 Err("GUI produced no shapes.".into())
             } else {

@@ -1,6 +1,6 @@
 //! Fixture-only detection benchmark; no screen capture or game input.
 use metin_core::Profile;
-use metin_vision::{detect_candidates, load_image, panel_score};
+use metin_vision::{detect_candidates, load_image, panel_match};
 use std::{hint::black_box, path::Path, time::Instant};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/parity");
@@ -16,7 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for iteration in 0..110 {
                 let start = Instant::now();
                 black_box(detect_candidates(&frame, &p)?);
-                black_box(panel_score(&frame, &template, p.panel.region.unwrap())?);
+                black_box(panel_match(&frame, &template)?);
                 if iteration >= 10 {
                     samples.push(start.elapsed().as_secs_f64() * 1000.);
                 }

@@ -37,6 +37,8 @@ jobs:
           rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
           if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain failed.' }
           ./tools/prepare-rust-native.ps1
+          ./tools/build-input-bridge.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Input bridge build failed.' }
       - name: Release identity and stable acceptance
         id: identity
         shell: pwsh
@@ -67,12 +69,14 @@ jobs:
           cargo clean -p metin-desktop
           cargo test --workspace --all-targets --all-features --locked
           if ($LASTEXITCODE -ne 0) { throw 'Rust tests failed.' }
-      - name: Package Rust installer and ZIP
+      - name: Package Rust Windows installer
         shell: pwsh
         env:
           BUILD_VERSION: ${{ steps.identity.outputs.version }}
         run: |
           $compiler = ./tools/prepare_compiler.ps1
+          python tools/verify-update-restart.py --compiler $compiler --output build/update-restart-acceptance
+          if ($LASTEXITCODE -ne 0) { throw 'Installer restart argument acceptance failed.' }
           $crt = ./tools/find-msvc-crt.ps1
           ./tools/package-rust-windows.ps1 -Version $env:BUILD_VERSION -BuildNumber $env:GITHUB_RUN_NUMBER -CompilerPath $compiler -CrtDirectory $crt -OutputDirectory dist/release
       - name: Hosted install, upgrade, self-test and uninstall
@@ -81,14 +85,13 @@ jobs:
           INSTALLER_NAME: ${{ steps.identity.outputs.artifact }}
           BUILD_VERSION: ${{ steps.identity.outputs.version }}
         run: |
-          ./tools/verify_installer.ps1 -InstallerPath (Join-Path dist/release $env:INSTALLER_NAME) -BundleDirectory dist/release/MetinBot -Version $env:BUILD_VERSION -CommitSha $env:GITHUB_SHA
+          ./tools/verify_installer.ps1 -InstallerPath (Join-Path dist/release $env:INSTALLER_NAME) -BundleDirectory dist/release/Companion -Version $env:BUILD_VERSION -CommitSha $env:GITHUB_SHA
       - name: Upload verified release artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: windows-rust-release
           path: |
             dist/release/*.exe
-            dist/release/*.zip
             dist/release/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
@@ -99,7 +102,10 @@ jobs:
           name: windows-rust-reports
           path: |
             build/selftest-installed.json
-            build/installer.log
+            build/data-migration-installed.json
+            build/update-restart-acceptance/result.json
+            build/installer*.log
+            build/input-driver-*.json
   release:
     needs: build
     if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))

@@ -1,4 +1,4 @@
-use crate::{Frame, Result, decode_png, panel_score, validate_template};
+use crate::{Frame, Result, decode_png, region_template_score, validate_template};
 use metin_core::{Region, SafetyRule};
 use uuid::Uuid;
 pub struct SafetyDetector {
@@ -24,7 +24,9 @@ impl SafetyDetector {
     pub fn observe(&self, frame: &Frame) -> Result<Vec<(Uuid, f64)>> {
         self.references
             .iter()
-            .map(|(id, region, template)| Ok((*id, panel_score(frame, template, *region)?)))
+            .map(|(id, region, template)| {
+                Ok((*id, region_template_score(frame, template, *region)?))
+            })
             .collect()
     }
 }

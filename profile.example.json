@@ -1,12 +1,10 @@
 {
   "id": "8591a09f-25dc-4ca4-b858-cafe68231dfc",
   "name": "Main profile",
-  "process_name": "game-client.exe",
   "region": null,
   "masks": [],
   "color": null,
   "panel": {
-    "region": null,
     "threshold": 0.88,
     "stable_frames": 3
   },
@@ -58,7 +56,11 @@
         "reference": null,
         "threshold": 0.92,
         "duration_seconds": 3.0,
-        "reaction": { "notify": true, "pause": true, "execute": false },
+        "reaction": {
+          "notify": true,
+          "pause": true,
+          "execute": false
+        },
         "execution": {
           "input": {
             "kind": "click",

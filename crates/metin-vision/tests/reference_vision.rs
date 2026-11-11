@@ -21,7 +21,8 @@ fn all_reference_image_calls_and_buff_observations_match() {
             }
             "panel" => {
                 let region: Region = serde_json::from_value(call["region"].clone()).unwrap();
-                let actual = panel_score(&frame, &image(&call["template"]), region).unwrap();
+                let actual =
+                    region_template_score(&frame, &image(&call["template"]), region).unwrap();
                 assert!(
                     (actual - call["expected"].as_f64().unwrap()).abs() <= 1e-5,
                     "call {i}: {actual}"

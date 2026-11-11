@@ -40,8 +40,9 @@ pub fn numeric(ui: &mut egui::Ui, label: &str, name: &str, value: &mut f64) -> b
         .iter()
         .find(|r| r.name == name)
         .expect("known domain rule");
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let hint = match name {
+            "buff_active_hold_seconds"=>"Keep the last confirmed Active state through brief image differences. Only a real match renews this time. Confirmed inactive overrides it; stale or invalid captures clear it. Set 0 to disable.",
             "puller_presses"=>"Number of item-key presses per sequence. Remaining presses are cancelled on pause or target end.",
             "puller_press_gap"=>"Wait after releasing the item key before the next press in this sequence.",
             "puller_wait_seconds"=>"Additional settling time after a completed sequence, before the repeat interval starts.",
@@ -98,10 +99,10 @@ pub fn numeric(ui: &mut egui::Ui, label: &str, name: &str, value: &mut f64) -> b
                 "Edit this value by dragging or typing. The profile's numeric limits are enforced."
             }
         };
-        ui.label(label).on_hover_text(hint);
+        let label_width=(ui.available_width()-102.).max(80.);
+        ui.allocate_ui_with_layout(egui::vec2(label_width,26.),egui::Layout::left_to_right(egui::Align::Center),|ui| {ui.set_min_width(label_width);ui.add(egui::Label::new(label).wrap()).on_hover_text(hint);});
         help(ui, hint);
-        ui.add_space((ui.available_width() - 90.).max(0.));
-        ui.add(
+        ui.add_sized([70.,26.],
             egui::DragValue::new(value)
                 .range(rule.low..=rule.high)
                 .speed(rule.step)
@@ -127,12 +128,11 @@ pub fn help(ui: &mut egui::Ui, hint: &str) -> egui::Response {
     });
     let p = ui.painter();
     let center = response.rect.center();
-    let stroke = egui::Stroke::new(1.3, ui.visuals().weak_text_color());
-    p.circle_stroke(center, 6.5, stroke);
-    p.circle_filled(center + egui::vec2(0., -3.), 0.9, stroke.color);
-    p.line_segment(
-        [center + egui::vec2(0., -0.5), center + egui::vec2(0., 4.)],
-        stroke,
+    crate::ui::icons::paint(
+        p,
+        center,
+        crate::ui::icons::Icon::Info,
+        ui.visuals().weak_text_color(),
     );
     if response.has_focus() {
         response.clone().show_tooltip_text(hint);

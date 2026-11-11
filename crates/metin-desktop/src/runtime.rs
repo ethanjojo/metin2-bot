@@ -1,9 +1,11 @@
 //! Single owner of the live controller, timers and input executor.
 use metin_core::{
-    ActionKind, Candidate, Controller, Profile, RunEvent, ScheduleSnapshot, Statistics,
+    ActionKind, ActivityKind, Candidate, Controller, Profile, RunEvent, ScheduleSnapshot,
+    Statistics,
 };
 use metin_platform::{
-    CapabilityReport, Frame, InputExecutor, PlatformBackend, StopToken, TargetInfo, TargetToken,
+    CapabilityReport, Frame, InputExecutor, PlatformBackend, StopToken, TargetInfo, TargetState,
+    TargetToken,
 };
 use metin_vision::{BuffDetector, CandidateTracker};
 use std::{
@@ -46,6 +48,11 @@ pub enum Command {
     Snapshot {
         key: SessionKey,
     },
+    CalibrationReview {
+        key: SessionKey,
+        revision: u64,
+        active: bool,
+    },
     Arm {
         key: SessionKey,
     },
@@ -54,7 +61,7 @@ pub enum Command {
         mounted: bool,
         revision: u64,
     },
-    ResetStatistics {
+    ResetSession {
         key: SessionKey,
     },
     ClearHistory {
@@ -69,14 +76,22 @@ pub enum Command {
 pub struct RuntimeSnapshot {
     pub key: Option<SessionKey>,
     pub revision: u64,
+    /// Worker-owned start gate for the current session's calibration draft review.
+    pub calibration_review: bool,
     pub frame: Option<Frame>,
+    pub geometry: Option<TargetState>,
+    /// Set only after all owned input releases succeeded in a stopped generation.
+    pub released_generation: Option<u64>,
     pub frame_id: u64,
     pub captured_at: Option<Instant>,
     pub candidates: Vec<Candidate>,
     pub selected_target: Option<[u32; 2]>,
     pub next_target: Option<[u32; 2]>,
     pub panel_score: f64,
+    pub panel_match: Option<metin_vision::TemplateMatch>,
     pub state: String,
+    pub activity: ActivityKind,
+    pub active_skill: Option<usize>,
     pub reason: String,
     pub running: bool,
     pub arming: bool,
@@ -87,6 +102,8 @@ pub struct RuntimeSnapshot {
     pub events: Vec<RunEvent>,
     pub action_timers: Vec<metin_core::ActionTimer>,
     pub attack_remaining: Option<f64>,
+    pub activity_progress: Option<metin_core::ActivityProgress>,
+    pub buff_presence: Vec<metin_core::Presence>,
     pub safety_scores: Vec<(Uuid, f64)>,
     pub recoveries: u32,
     pub notification_status: String,
@@ -99,14 +116,20 @@ impl Default for RuntimeSnapshot {
         Self {
             key: None,
             revision: 0,
+            calibration_review: false,
             frame: None,
+            geometry: None,
+            released_generation: None,
             frame_id: 0,
             captured_at: None,
             candidates: vec![],
             selected_target: None,
             next_target: None,
             panel_score: 0.,
+            panel_match: None,
             state: "Stopped".into(),
+            activity: ActivityKind::Stopped,
+            active_skill: None,
             reason: "Select a profile and game window.".into(),
             running: false,
             arming: false,
@@ -117,6 +140,8 @@ impl Default for RuntimeSnapshot {
             events: vec![],
             action_timers: vec![],
             attack_remaining: None,
+            activity_progress: None,
+            buff_presence: Vec::new(),
             safety_scores: vec![],
             recoveries: 0,
             notification_status: "No notifications sent.".into(),
@@ -126,10 +151,34 @@ impl Default for RuntimeSnapshot {
         }
     }
 }
+impl RuntimeSnapshot {
+    fn update_activity(
+        &mut self,
+        controller: Option<&Controller>,
+        arming: bool,
+        failed: bool,
+        now: f64,
+    ) {
+        self.activity = if failed {
+            ActivityKind::Error
+        } else if arming {
+            ActivityKind::Starting
+        } else {
+            controller.map_or(ActivityKind::Stopped, Controller::activity)
+        };
+        self.active_skill = if arming || failed {
+            None
+        } else {
+            controller.and_then(|c| c.active_skill(now))
+        };
+    }
+}
 struct Envelope {
     generation: u64,
     command: Command,
 }
+
+const CALIBRATION_REVIEW_REASON: &str = "Finish or cancel the calibration review before starting.";
 
 fn start_controller(controller: &mut Controller, now: f64) -> Result<(), String> {
     let clock = controller
@@ -211,6 +260,14 @@ impl RuntimeHandle {
         }
     }
     pub fn send(&self, command: Command) -> Result<(), String> {
+        if let Command::ResetSession { key } = &command {
+            if self.latest()?.key != Some(*key) {
+                return Err("The session reset belongs to an obsolete game/profile.".into());
+            }
+            // Interrupt blocking holds before queueing the atomic reset. A full
+            // queue still leaves input cancelled without claiming a data reset.
+            self.stop.stop();
+        }
         self.sender
             .try_send(Envelope {
                 generation: self.stop.generation(),
@@ -261,6 +318,7 @@ struct Attached {
     buffs: BuffDetector,
     revision: u64,
     preview: bool,
+    calibration_review: bool,
     snapshot_requested: bool,
 }
 impl Attached {
@@ -289,6 +347,7 @@ impl Attached {
             template,
             revision,
             preview: false,
+            calibration_review: false,
             snapshot_requested: false,
         })
     }
@@ -302,6 +361,24 @@ fn clear_session_snapshot(snapshot: &mut RuntimeSnapshot) {
         ..Default::default()
     };
 }
+
+/// Stopped calibration must retain raw pixels even when saved references need
+/// repair. Only vision results use this policy; platform/input errors stay strict.
+fn recognition_for_capture<T: Default>(
+    result: metin_vision::Result<T>,
+    allow_repair: bool,
+    diagnostics: &mut Vec<String>,
+) -> Result<T, String> {
+    match result {
+        Ok(value) => Ok(value),
+        Err(error) if allow_repair => {
+            diagnostics.push(error.to_string());
+            Ok(T::default())
+        }
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 fn run(
     mut backend: Box<dyn PlatformBackend>,
     receiver: mpsc::Receiver<Envelope>,
@@ -329,12 +406,16 @@ fn run(
         notify();
     };
     while !shutdown.load(Ordering::SeqCst) {
+        // Any attempted command/input invalidates the prior acknowledgement;
+        // the stopped path below renews it only after a successful release.
+        snapshot.released_generation = None;
         let now = origin.elapsed().as_secs_f64();
         let mut generation = stop.generation();
         if observed_generation != generation {
             observed_generation = generation;
             armed = None;
             if let Some(a) = &mut attached {
+                a.snapshot_requested = false;
                 a.controller.pause(now, "Paused (F8 / Pause).");
             }
             if let Err(e) = executor.release(backend.as_mut()) {
@@ -343,14 +424,22 @@ fn run(
             next_sample = Instant::now();
         }
         match receiver.recv_timeout(Duration::from_millis(20)) {
-            Ok(envelope) if envelope.generation == stop.generation() => {
+            Ok(envelope)
+                if envelope.generation == stop.generation()
+                    || matches!(&envelope.command, Command::CalibrationReview { .. }) =>
+            {
+                // Review controls change no game input and are guarded by the
+                // session/revision below. Preserve their FIFO order across Stop,
+                // especially End review queued immediately before Save cancels input.
+                let current_generation = stop.generation();
                 // Retire cancellation received while the channel was asleep
                 // before applying a valid command from the new generation.
-                if generation != envelope.generation {
-                    generation = envelope.generation;
+                if generation != current_generation {
+                    generation = current_generation;
                     observed_generation = generation;
                     armed = None;
                     if let Some(a) = &mut attached {
+                        a.snapshot_requested = false;
                         a.controller.pause(now, "Paused (F8 / Pause).");
                     }
                     if let Err(error) = executor.release(backend.as_mut()) {
@@ -362,8 +451,9 @@ fn run(
                     Command::Arm { key }
                     | Command::SetPreview { key, .. }
                     | Command::Snapshot { key }
+                    | Command::CalibrationReview { key, .. }
                     | Command::DeclareMount { key, .. }
-                    | Command::ResetStatistics { key }
+                    | Command::ResetSession { key }
                     | Command::ClearHistory { key }
                     | Command::ResetSkillTimer { key, .. } => Some(*key),
                     _ => None,
@@ -376,7 +466,7 @@ fn run(
                     match envelope.command {
                         Command::TestNotification { sound, system } => {
                             notifications.send(crate::notifications::Notice {
-                                title: "MetinBot notification test".into(),
+                                title: format!("{} notification test", crate::PRODUCT_NAME),
                                 body: "Local notification test; no game input is sent.".into(),
                                 sound,
                                 system,
@@ -387,6 +477,7 @@ fn run(
                             snapshot.targets_revision += 1;
                         }
                         Command::Connect { key, revision } => {
+                            snapshot.buff_presence.clear();
                             armed = None;
                             if attached.as_ref().is_some_and(|a| a.key == key) {
                                 executor
@@ -398,6 +489,7 @@ fn run(
                                     "Game window connected; configuration changes apply on Save.",
                                 );
                                 a.revision = revision;
+                                a.calibration_review = false;
                             } else {
                                 // Retire the old character before any fallible attachment.
                                 attached = None;
@@ -433,8 +525,30 @@ fn run(
                                 .snapshot_requested = true;
                             next_sample = Instant::now();
                         }
+                        Command::CalibrationReview {
+                            revision, active, ..
+                        } => {
+                            let a = attached.as_mut().expect("validated session");
+                            if a.revision != revision {
+                                return Ok(());
+                            }
+                            let was_active = a.calibration_review;
+                            a.calibration_review = active;
+                            if active {
+                                armed = None;
+                                focus_since = None;
+                                a.controller.pause(now, CALIBRATION_REVIEW_REASON);
+                                executor
+                                    .release(backend.as_mut())
+                                    .map_err(|error| error.to_string())?;
+                            } else if was_active {
+                                a.controller
+                                    .pause(now, "Calibration review closed; press Start or F7.");
+                            }
+                        }
                         Command::Detach => {
                             armed = None;
+                            backend.stop_capture();
                             executor
                                 .release(backend.as_mut())
                                 .map_err(|e| e.to_string())?;
@@ -449,11 +563,18 @@ fn run(
                             target,
                             revision,
                         } => {
+                            snapshot.buff_presence.clear();
                             profile.validate().map_err(|e| e.to_string())?;
                             let key = SessionKey {
                                 profile_id: profile.id,
                                 target,
                             };
+                            if attached
+                                .as_ref()
+                                .is_some_and(|a| a.key == key && a.calibration_review)
+                            {
+                                return Err(CALIBRATION_REVIEW_REASON.into());
+                            }
                             armed = None;
                             executor
                                 .release(backend.as_mut())
@@ -461,6 +582,9 @@ fn run(
                             let previous = attached.take();
                             snapshot.key = None;
                             snapshot.frame = None;
+                            snapshot.geometry = None;
+                            snapshot.captured_at = None;
+                            snapshot.panel_match = None;
                             snapshot.running = false;
                             if previous.as_ref().is_none_or(|old| old.key != key) {
                                 backend.attach(target).map_err(|e| e.to_string())?;
@@ -499,6 +623,9 @@ fn run(
                                 .as_ref()
                                 .filter(|a| a.key == key)
                                 .ok_or("The game/profile selection changed.")?;
+                            if a.calibration_review {
+                                return Err(CALIBRATION_REVIEW_REASON.into());
+                            }
                             if !a.controller.profile.ready() {
                                 return Err("Complete the calibration before starting.".into());
                             }
@@ -533,14 +660,19 @@ fn run(
                             a.controller.buffs.mounted = Some(mounted);
                             a.revision = revision;
                         }
-                        Command::ResetStatistics { key } => {
-                            attached
+                        Command::ResetSession { key } => {
+                            let a = attached
                                 .as_mut()
                                 .filter(|a| a.key == key)
-                                .ok_or("Stale statistics request.")?
-                                .controller
-                                .session
-                                .reset();
+                                .ok_or("Stale session reset request.")?;
+                            armed = None;
+                            executor
+                                .release(backend.as_mut())
+                                .map_err(|error| error.to_string())?;
+                            a.controller.reset_session(now);
+                            a.snapshot_requested = false;
+                            snapshot.buff_presence.clear();
+                            snapshot.activity_progress = None;
                         }
                         Command::ClearHistory { key } => {
                             attached
@@ -565,8 +697,10 @@ fn run(
                     Ok(())
                 })();
                 if let Err(error) = result {
+                    backend.stop_capture();
                     snapshot.arming = armed.is_some();
                     snapshot.state = "Error".into();
+                    snapshot.update_activity(None, false, true, now);
                     snapshot.reason = error.clone();
                     if let Some(a) = &mut attached {
                         a.controller.pause(now, error);
@@ -592,6 +726,9 @@ fn run(
                         .map_err(|e| e.to_string())?;
                 }
                 let state = backend.inspect().map_err(|e| e.to_string())?;
+                if snapshot.geometry.is_some_and(|captured| captured != state) {
+                    snapshot.geometry = None;
+                }
                 if state.foreground {
                     focus_since.get_or_insert(Instant::now());
                 } else {
@@ -604,7 +741,7 @@ fn run(
                     );
                     armed = None;
                 }
-                if events.toggle && !events.stop && state.foreground {
+                if events.toggle && !events.stop && state.foreground && !a.calibration_review {
                     armed = None;
                     if a.controller.running {
                         a.controller.pause(now, "Paused (F7).");
@@ -618,30 +755,25 @@ fn run(
                     }
                     next_sample = Instant::now();
                 }
-                if let Some(since) = armed {
-                    if since.elapsed() >= Duration::from_secs(12) {
-                        armed = None;
-                        a.controller.pause(now,"The game did not reach stable focus within 12 s. Activate it and press F7.");
-                    } else if since.elapsed() >= Duration::from_secs(3)
-                        && focus_since
-                            .is_some_and(|focus| focus.elapsed() >= Duration::from_millis(500))
-                    {
-                        start_controller(&mut a.controller, now)?;
-                        a.tracker.reset();
-                        a.buffs.reset();
-                        armed = None;
-                        next_sample = Instant::now();
-                    }
+                if let Some(since) = armed
+                    && since.elapsed() >= Duration::from_secs(12)
+                {
+                    armed = None;
+                    a.controller.pause(now,"The game did not reach stable focus within 12 s. Activate it and press F7.");
                 }
                 if !a.controller.running {
                     executor
                         .release(backend.as_mut())
                         .map_err(|e| e.to_string())?;
+                    if armed.is_none() {
+                        snapshot.released_generation = Some(generation);
+                    }
                 }
                 executor
                     .poll_attack(backend.as_mut(), &stop, generation)
                     .map_err(|e| e.to_string())?;
-                if !a.controller.running && !a.preview && !a.snapshot_requested {
+                if !a.controller.running && armed.is_none() && !a.preview && !a.snapshot_requested {
+                    backend.stop_capture();
                     return Ok(());
                 }
                 if Instant::now() < next_sample {
@@ -660,49 +792,108 @@ fn run(
                 next_sample = Instant::now()
                     + Duration::from_secs_f64(a.controller.profile.timing.sample_interval);
                 a.snapshot_requested = false;
-                let captured = backend
-                    .capture(Instant::now() + capture_budget, &stop, generation)
-                    .map_err(|e| e.to_string())?;
+                let captured =
+                    match backend.capture(Instant::now() + capture_budget, &stop, generation) {
+                        Ok(captured) => captured,
+                        // WGC can reject a frame when activation changes focus. No
+                        // input has started while armed; wait for a fresh stable
+                        // capture within the existing arming timeout. Running/HID
+                        // failures never use this retry path.
+                        Err(error) if armed.is_some() && !a.controller.running => {
+                            snapshot.geometry = None;
+                            focus_since = None;
+                            tracing::debug!(%error, "Retrying capture while arming");
+                            return Ok(());
+                        }
+                        Err(error) => return Err(error.to_string()),
+                    };
+                if captured.captured_at.elapsed() > Duration::from_millis(500) {
+                    snapshot.geometry = None;
+                    if armed.is_some() && !a.controller.running {
+                        focus_since = None;
+                        return Ok(());
+                    }
+                    return Err("The game frame is stale. Waiting for a fresh capture is required before input.".into());
+                }
                 executor
                     .poll_attack(backend.as_mut(), &stop, generation)
                     .map_err(|e| e.to_string())?;
                 let now = captured.captured_at.duration_since(origin).as_secs_f64();
+                if armed.is_some_and(|since| since.elapsed() >= Duration::from_secs(3))
+                    && focus_since
+                        .is_some_and(|since| since.elapsed() >= Duration::from_millis(500))
+                    && captured.geometry.foreground
+                    && captured.geometry == backend.inspect().map_err(|e| e.to_string())?
+                {
+                    if a.controller.profile.frame_size
+                        != Some([captured.frame.width, captured.frame.height])
+                    {
+                        return Err(
+                            "The game dimensions changed. Recalibrate before resuming.".into()
+                        );
+                    }
+                    start_controller(&mut a.controller, origin.elapsed().as_secs_f64())?;
+                    a.tracker.reset();
+                    a.buffs.reset();
+                    armed = None;
+                    snapshot.released_generation = None;
+                }
                 let p = &a.controller.profile;
                 if a.controller.running
                     && p.frame_size != Some([captured.frame.width, captured.frame.height])
                 {
                     return Err("The game dimensions changed. Recalibrate before resuming.".into());
                 }
-                let candidates = metin_vision::detect_candidates(&captured.frame, p)
-                    .map_err(|e| e.to_string())?;
-                executor
-                    .poll_attack(backend.as_mut(), &stop, generation)
-                    .map_err(|e| e.to_string())?;
-                let score = if let (Some(template), Some(region)) = (&a.template, p.panel.region) {
-                    metin_vision::panel_score(&captured.frame, template, region)
-                        .map_err(|e| e.to_string())?
-                } else {
-                    0.
-                };
+                let allow_repair = !a.controller.running && armed.is_none();
+                let mut recognition_diagnostics = Vec::new();
+                let panel_match = recognition_for_capture(
+                    a.template
+                        .as_ref()
+                        .map(|template| metin_vision::panel_match(&captured.frame, template))
+                        .transpose(),
+                    allow_repair,
+                    &mut recognition_diagnostics,
+                )?;
+                let score = panel_match.map_or(0., |found| found.score);
+                let candidates = recognition_for_capture(
+                    metin_vision::detect_candidates_excluding(
+                        &captured.frame,
+                        p,
+                        panel_match
+                            .as_ref()
+                            .filter(|found| found.score >= p.panel.threshold),
+                    ),
+                    allow_repair,
+                    &mut recognition_diagnostics,
+                )?;
                 executor
                     .poll_attack(backend.as_mut(), &stop, generation)
                     .map_err(|e| e.to_string())?;
                 let stable = a.tracker.update(candidates.clone(), now);
-                let states = a
-                    .buffs
-                    .observe(&captured.frame, now)
-                    .map_err(|e| e.to_string())?;
+                let states = recognition_for_capture(
+                    a.buffs.observe(&captured.frame, now),
+                    allow_repair,
+                    &mut recognition_diagnostics,
+                )?;
                 executor
                     .poll_attack(backend.as_mut(), &stop, generation)
                     .map_err(|e| e.to_string())?;
-                let safety_scores = a
-                    .safety
-                    .observe(&captured.frame)
-                    .map_err(|e| e.to_string())?;
+                let safety_scores = recognition_for_capture(
+                    a.safety.observe(&captured.frame),
+                    allow_repair,
+                    &mut recognition_diagnostics,
+                )?;
+                if !recognition_diagnostics.is_empty() {
+                    a.controller.reason = format!(
+                        "Recognition needs repair: {}",
+                        recognition_diagnostics.join("; ")
+                    );
+                }
                 executor
                     .poll_attack(backend.as_mut(), &stop, generation)
                     .map_err(|e| e.to_string())?;
-                let observation = metin_core::Observation {
+                snapshot.buff_presence = states.clone();
+                let mut observation = metin_core::Observation {
                     ready: p.ready(),
                     candidates: stable,
                     panel_present: score >= p.panel.threshold,
@@ -712,9 +903,32 @@ fn run(
                 };
                 a.controller.tick(origin.elapsed().as_secs_f64());
                 if a.controller.running
-                    && backend.inspect().map_err(|e| e.to_string())? != captured.geometry
+                    && captured.captured_at.elapsed() > Duration::from_millis(500)
+                {
+                    return Err("The game frame became stale during recognition. Resume with a fresh capture.".into());
+                }
+                if a.controller.running
+                    && (!captured.geometry.foreground
+                        || backend.inspect().map_err(|e| e.to_string())? != captured.geometry)
                 {
                     return Err("Window geometry or focus changed after capture.".into());
+                }
+                if a.controller.running {
+                    // WGC also sees client pixels behind the control panel or
+                    // another window. Choose new targets only at clear screen
+                    // points; the final input guard still checks again before
+                    // mouse-down and protects already selected targets.
+                    observation.candidates.retain(|candidate| {
+                        let x = captured
+                            .geometry
+                            .left
+                            .checked_add(candidate.point[0] as i32);
+                        let y = captured.geometry.top.checked_add(candidate.point[1] as i32);
+                        match (x, y) {
+                            (Some(x), Some(y)) => backend.point_clear([x, y]),
+                            _ => false,
+                        }
+                    });
                 }
                 if let Some(action) = a
                     .controller
@@ -771,14 +985,20 @@ fn run(
                 snapshot.selected_target = a.controller.selected_target();
                 snapshot.next_target = a.controller.next_preview_target(&observation.candidates);
                 snapshot.frame = Some(captured.frame);
+                snapshot.geometry = Some(captured.geometry);
                 snapshot.frame_id = captured.id;
                 snapshot.captured_at = Some(captured.captured_at);
                 snapshot.candidates = candidates;
                 snapshot.panel_score = score;
+                snapshot.panel_match = panel_match;
                 snapshot.safety_scores = safety_scores;
                 Ok(())
             })();
+            let failed = result.is_err();
             if let Err(error) = result {
+                backend.stop_capture();
+                snapshot.geometry = None;
+                snapshot.released_generation = None;
                 a.controller
                     .pause_on_runtime_error(origin.elapsed().as_secs_f64(), error);
                 armed = None;
@@ -786,10 +1006,20 @@ fn run(
             }
             snapshot.key = Some(a.key);
             snapshot.revision = a.revision;
+            snapshot.calibration_review = a.calibration_review;
             snapshot.running = a.controller.running;
+            snapshot.update_activity(
+                Some(&a.controller),
+                armed.is_some(),
+                failed,
+                origin.elapsed().as_secs_f64(),
+            );
             snapshot.mounted = a.controller.buffs.mounted;
             snapshot.statistics = a.controller.session.snapshot();
             snapshot.action_timers = a.controller.action_timers();
+            snapshot.activity_progress = a
+                .controller
+                .activity_progress(origin.elapsed().as_secs_f64());
             snapshot.attack_remaining = if a.controller.phase == metin_core::Phase::OutOfTarget {
                 a.controller.remaining(origin.elapsed().as_secs_f64())
             } else {
@@ -804,7 +1034,7 @@ fn run(
                         && (a.controller.profile.safety.sound
                             || a.controller.profile.safety.system_notification)
                         && let Err(error) = notifications.send(crate::notifications::Notice {
-                            title: format!("MetinBot: {}", event.activity),
+                            title: format!("{}: {}", crate::PRODUCT_NAME, event.activity),
                             body: event.message.clone(),
                             sound: a.controller.profile.safety.sound,
                             system: a.controller.profile.safety.system_notification,
@@ -839,6 +1069,31 @@ fn run(
             snapshot.next_target = None;
         }
         snapshot.arming = armed.is_some();
+        if let Some(started) = armed {
+            snapshot.update_activity(None, true, false, now);
+            let elapsed = started.elapsed().as_secs_f64();
+            snapshot.activity_progress = Some(metin_core::ActivityProgress {
+                label: if elapsed < 3. {
+                    "Starting"
+                } else {
+                    "Waiting for game focus"
+                }
+                .into(),
+                elapsed_seconds: elapsed,
+                remaining_seconds: (elapsed < 3.).then_some((3. - elapsed).max(0.)),
+                total_seconds: (elapsed < 3.).then_some(3.),
+            });
+        }
+        if snapshot.geometry.is_none()
+            || snapshot
+                .captured_at
+                .is_none_or(|at| at.elapsed() > Duration::from_millis(500))
+        {
+            snapshot.buff_presence.clear();
+            if let Some(a) = &mut attached {
+                a.buffs.reset();
+            }
+        }
         snapshot.notification_status = notifications.status();
         snapshot.capabilities = backend.capabilities();
         if snapshot.key != last_published.key
@@ -854,9 +1109,12 @@ fn run(
             last_publish_time = Instant::now();
         }
     }
-    if let Err(error) = executor.release(backend.as_mut()) {
+    let released = executor.release(backend.as_mut());
+    backend.stop_capture();
+    if let Err(error) = released {
         snapshot.arming = false;
         snapshot.state = "Release error".into();
+        snapshot.update_activity(None, false, true, origin.elapsed().as_secs_f64());
         snapshot.reason = error.to_string();
         snapshot.running = false;
         publish(&snapshot);
@@ -868,6 +1126,70 @@ fn run(
 #[cfg(test)]
 mod schedule_tests {
     use super::*;
+    #[test]
+    fn presentation_clears_active_skill_for_arming_errors_and_detachment() {
+        let mut profile = Profile::create("Presentation");
+        profile.buffs.enabled = false;
+        let mut controller = Controller::new(profile);
+        controller.start(0.).unwrap();
+        controller.phase = metin_core::Phase::Scheduled;
+        let mut snapshot = RuntimeSnapshot::default();
+        snapshot.update_activity(Some(&controller), false, false, 0.);
+        assert_eq!(snapshot.activity, metin_core::ActivityKind::Periodic);
+        snapshot.active_skill = Some(3);
+        snapshot.update_activity(Some(&controller), true, false, 0.);
+        assert_eq!(snapshot.activity, metin_core::ActivityKind::Starting);
+        assert_eq!(snapshot.active_skill, None);
+        snapshot.active_skill = Some(3);
+        snapshot.update_activity(Some(&controller), false, true, 0.);
+        assert_eq!(snapshot.activity, metin_core::ActivityKind::Error);
+        assert_eq!(snapshot.active_skill, None);
+        snapshot.update_activity(None, false, false, 0.);
+        assert_eq!(snapshot.activity, metin_core::ActivityKind::Stopped);
+        assert_eq!(snapshot.active_skill, None);
+        controller.pause(1., "Stopped");
+        snapshot.update_activity(Some(&controller), false, false, 1.);
+        assert_eq!(snapshot.activity, metin_core::ActivityKind::Paused);
+    }
+    #[test]
+    fn full_reset_queue_still_cancels_input_but_never_reports_a_completed_reset() {
+        let (sender, _receiver) = mpsc::sync_channel(0);
+        let key = SessionKey {
+            profile_id: Uuid::new_v4(),
+            target: TargetToken {
+                handle: 7,
+                pid: 8,
+                created: 9,
+            },
+        };
+        let mut snapshot = RuntimeSnapshot {
+            key: Some(key),
+            ..Default::default()
+        };
+        snapshot.statistics.completed = 4;
+        snapshot.schedule.break_ends_in = Some(6.);
+        let runtime = RuntimeHandle {
+            sender,
+            stop: StopToken::default(),
+            shutdown_flag: Arc::new(AtomicBool::new(false)),
+            latest: Arc::new(Mutex::new(Arc::new(snapshot.clone()))),
+            thread: Mutex::new(None),
+        };
+        let wrong = SessionKey {
+            profile_id: Uuid::new_v4(),
+            ..key
+        };
+        assert!(runtime.send(Command::ResetSession { key: wrong }).is_err());
+        assert_eq!(runtime.stop_generation(), 0);
+        assert!(
+            runtime
+                .send(Command::ResetSession { key })
+                .unwrap_err()
+                .contains("queue is full")
+        );
+        assert_eq!(runtime.stop_generation(), 1);
+        assert!(*runtime.latest().unwrap() == snapshot);
+    }
     #[test]
     fn clock_time_uses_next_occurrence_and_rejects_invalid_time() {
         use chrono::TimeZone;

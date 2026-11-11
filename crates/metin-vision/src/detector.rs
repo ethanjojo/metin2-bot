@@ -2,7 +2,18 @@ use crate::{Frame, Result, mat, validate_template};
 use metin_core::{Candidate, Profile, Region};
 use opencv::{core, imgproc, prelude::*};
 
+/// Detect targets using only the explicit user masks.
 pub fn detect_candidates(image: &Frame, profile: &Profile) -> Result<Vec<Candidate>> {
+    detect_candidates_excluding(image, profile, None)
+}
+
+/// Also exclude the actual confirmed fixed-detail match, when the caller has one.
+/// The caller applies the HP similarity threshold before passing that match.
+pub fn detect_candidates_excluding(
+    image: &Frame,
+    profile: &Profile,
+    matched_detail: Option<&TemplateMatch>,
+) -> Result<Vec<Candidate>> {
     let (Some(c), Some(region)) = (&profile.color, profile.region) else {
         return Ok(vec![]);
     };
@@ -20,8 +31,8 @@ pub fn detect_candidates(image: &Frame, profile: &Profile) -> Result<Vec<Candida
         .iter()
         .map(|r| r.pixels(image.width, image.height))
         .collect();
-    if let Some(r) = profile.panel.region {
-        masks.push(r.pixels(image.width, image.height));
+    if let Some(found) = matched_detail {
+        masks.push(found.bounds());
     }
     let data = hsv.data_bytes()?;
     let pixels = selected.data_bytes_mut()?;
@@ -141,7 +152,35 @@ pub fn detect_candidates(image: &Frame, profile: &Profile) -> Result<Vec<Candida
 fn pixels_at(m: &core::Mat, y: u32, x: u32) -> Result<u8> {
     Ok(*m.at_2d::<u8>(y as i32, x as i32)?)
 }
-pub fn template_score(image: &Frame, template: &Frame, grayscale: bool) -> Result<f64> {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TemplateMatch {
+    pub score: f64,
+    /// Top-left pixel in the connected client frame.
+    pub position: [u32; 2],
+    pub width: u32,
+    pub height: u32,
+}
+impl TemplateMatch {
+    pub fn bounds(self) -> [u32; 4] {
+        [
+            self.position[0],
+            self.position[1],
+            self.position[0] + self.width - 1,
+            self.position[1] + self.height - 1,
+        ]
+    }
+    pub fn region(self, frame_width: u32, frame_height: u32) -> Region {
+        let [left, top, right, bottom] = self.bounds();
+        Region {
+            left: f64::from(left) / f64::from(frame_width),
+            top: f64::from(top) / f64::from(frame_height),
+            right: f64::from(right) / f64::from(frame_width),
+            bottom: f64::from(bottom) / f64::from(frame_height),
+        }
+    }
+}
+
+fn match_template(image: &Frame, template: &Frame, grayscale: bool) -> Result<TemplateMatch> {
     if template.width > image.width || template.height > image.height {
         return Err(crate::VisionError::Invalid(
             "Template is larger than search region.".into(),
@@ -164,17 +203,37 @@ pub fn template_score(image: &Frame, template: &Frame, grayscale: bool) -> Resul
         &core::no_array(),
     )?;
     let mut max = 0.;
+    let mut position = core::Point::default();
     core::min_max_loc(
         &matches,
         None,
         Some(&mut max),
         None,
-        None,
+        Some(&mut position),
         &core::no_array(),
     )?;
-    Ok(max)
+    Ok(TemplateMatch {
+        score: max,
+        position: [position.x as u32, position.y as u32],
+        width: template.width,
+        height: template.height,
+    })
 }
-pub fn panel_score(image: &Frame, template: &Frame, region: Region) -> Result<f64> {
+
+pub fn template_score(image: &Frame, template: &Frame, grayscale: bool) -> Result<f64> {
+    Ok(match_template(image, template, grayscale)?.score)
+}
+
+/// Find an HP detail anywhere in the complete connected game-client frame.
+/// Callers supply the captured client, never a desktop or monitor screenshot.
+pub fn panel_match(image: &Frame, template: &Frame) -> Result<TemplateMatch> {
     validate_template(template)?;
-    template_score(&crate::crop(image, region)?, template, true)
+    match_template(image, template, true)
+}
+
+/// Score a fixed reference inside an explicit region, used by visual safety rules.
+pub fn region_template_score(image: &Frame, template: &Frame, region: Region) -> Result<f64> {
+    validate_template(template)?;
+    let area = crate::crop(image, region)?;
+    Ok(match_template(&area, template, true)?.score)
 }

@@ -1,0 +1,4400 @@
+{
+  "size": [
+    512,
+    512
+  ],
+  "regions": {
+    "icon/items/44bdf9d28903f2ff2b1c0557fb27eaf23b312a4a80c281d733e6694166de611c": {
+      "rect": [
+        267,
+        134,
+        32,
+        32
+      ],
+      "rgba_sha256": "c08760ee4454736a1b0845ffc4284ca8688c521680750430602faf2704dade5e",
+      "source_atlas": "icons-items-1",
+      "source_rect": [
+        938,
+        502,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-items/44bdf9d28903f2ff2b1c0557fb27eaf23b312a4a80c281d733e6694166de611c.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/1-0": {
+      "rect": [
+        303,
+        134,
+        32,
+        32
+      ],
+      "rgba_sha256": "9682100929cd4315464c1502fc2067bf282bf71a5706bea89e48fc7ad103de58",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        2,
+        2,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/1-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/106-0": {
+      "rect": [
+        339,
+        134,
+        32,
+        32
+      ],
+      "rgba_sha256": "84aa5b3dd4ccd83c514d4381be9326e455df61720cb89587e51c6631e2d07bd1",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        110,
+        2,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/106-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/107-0": {
+      "rect": [
+        375,
+        134,
+        32,
+        32
+      ],
+      "rgba_sha256": "bf065bcf289d03a078ea0034aafa10d7dc08eb810b1aefec9f548c61bc706108",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        218,
+        2,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/107-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/108-0": {
+      "rect": [
+        411,
+        134,
+        32,
+        32
+      ],
+      "rgba_sha256": "ed07d6de84c99eabe6faaa15eb2f95d1e3ca756bbba3f852ffb5eb2462f0c3f9",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        326,
+        2,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/108-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/109-0": {
+      "rect": [
+        447,
+        134,
+        32,
+        32
+      ],
+      "rgba_sha256": "60a53051b0d958711b407e48ffcca17757ae5cccce369d58b68917194f6b6c97",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        434,
+        2,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/109-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/110-0": {
+      "rect": [
+        2,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "1c7b4966b85860fea8dc0a7316a10f5f6b63e3a3c2470cb19e444945d627ab8f",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        542,
+        2,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/110-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/111-0": {
+      "rect": [
+        38,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "6a32c9ea0d0172fe7e0b6e5e02da82ca9ac25094ea47177ac26cc2da527bbedb",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        650,
+        2,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/111-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/130-0": {
+      "rect": [
+        74,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "d885c5b9364557687c75fad34577bd4b24391bbc7b2b226a056c1f1cb31bc6fa",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        74,
+        38,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/130-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/16-0": {
+      "rect": [
+        110,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "960c8dbd0fc2ef2d9f4b5521d775d746f7ab3f950d167bc8b4de33f9975ac917",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        578,
+        38,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/16-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/17-0": {
+      "rect": [
+        146,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "a3355b58c9862f1b0722c52ebc4a5464aa032d0a64751e9b7816df6df24a999f",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        686,
+        38,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/17-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/18-0": {
+      "rect": [
+        182,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "ff4a9e7f8b19cdb8e49e7733b0259919f7631df0c0d37a0b05f22641804523cf",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        794,
+        38,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/18-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/19-0": {
+      "rect": [
+        218,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "910c2198bc03d28e1be8e4fd3108ece904e9ab9f5ab95e3e0ed873bd6e1d26d3",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        902,
+        38,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/19-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/2-0": {
+      "rect": [
+        254,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "e7d4c3a2281ee1a13654159162bcea4ac3d37c4571edeb36790f20ad019eb69a",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        2,
+        74,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/2-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/20-0": {
+      "rect": [
+        290,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "879244f52c67acf4ee8f0bb341ad57642f6b599bc6c0d25aa35f2f7a1f2cd305",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        110,
+        74,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/20-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/3-0": {
+      "rect": [
+        326,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "48b74b83309db9f618587f4410bd7310913575e05df6581a8b797d7fc4a22e9e",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        218,
+        74,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/3-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/31-0": {
+      "rect": [
+        362,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "c0b25e79d55e43498a5de952d199c09fc40f665265953b13b3890654dc105342",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        326,
+        74,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/31-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/32-0": {
+      "rect": [
+        398,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "2cf928570aacc39d2425a24d87c8ef2e129699db0eacee092c2cec53c81e7d3a",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        434,
+        74,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/32-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/33-0": {
+      "rect": [
+        434,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "d7254aac4db28381b969f6d97aa4755614a59ebed01ee2aa137c0a7221033627",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        542,
+        74,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/33-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/34-0": {
+      "rect": [
+        470,
+        181,
+        32,
+        32
+      ],
+      "rgba_sha256": "82ffdcedf4dc51d532841f4b3ed8bc14cab40656bedaa436939a8a784860e2f6",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        650,
+        74,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/34-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/35-0": {
+      "rect": [
+        2,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "5ab4f5de5e617c172fd18eac734595e441622a7dfed860dd76d7cdc6d3f1231e",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        758,
+        74,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/35-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/4-0": {
+      "rect": [
+        38,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "aa0c48aeed099efdc511bc7dfc03f78c26dbc2a6571e88173c303825dcf77e11",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        866,
+        74,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/4-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/46-0": {
+      "rect": [
+        74,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "5b4ac3f65f9b5890141c22c279e74e01bbf598bf88a37531edc276d33a9fd655",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        974,
+        74,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/46-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/47-0": {
+      "rect": [
+        110,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "8b6c55b690f681b4385add6e602687f81c619aa92aa6d570b1dd2339b1d01cf6",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        74,
+        110,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/47-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/48-0": {
+      "rect": [
+        146,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "6d3108dddc8eac75875c8873a4d10a276e1ee599c0ce28c2a89014d079ba4e4a",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        182,
+        110,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/48-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/49-0": {
+      "rect": [
+        182,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "cd01ace9c7b1363e7f1ee25dc883e554f0647a8f5fe94d62457bbe79a15e838d",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        290,
+        110,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/49-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/5-0": {
+      "rect": [
+        218,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "bace19c1ae0fcd7786b89918c69e003b156515afa03b8a697ca6fff8d55af293",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        398,
+        110,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/5-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/50-0": {
+      "rect": [
+        254,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "ca910f37fa4a67235c0d76e93132bc6c25254c29a23319c971bc81398a223a62",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        506,
+        110,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/50-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/61-0": {
+      "rect": [
+        290,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "90ede1b80e54ae6a5a69b9884c2862dc939a693b6e2215e9b8f33c3d35286d99",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        614,
+        110,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/61-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/62-0": {
+      "rect": [
+        326,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "fffb8ce4554fd89be869a36d11c7c5d06ec740bb63860ccc5a8e54e2f16f53e6",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        722,
+        110,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/62-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/63-0": {
+      "rect": [
+        362,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "46fea4b825aedb7a608fb7b41f73b9861fe67d05f139b32293df9b596e4db107",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        830,
+        110,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/63-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/64-0": {
+      "rect": [
+        398,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "ed7df6062b16084e7e136dff5465bc365518430a7ed3d2c07d442edb17f7de35",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        938,
+        110,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/64-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/65-0": {
+      "rect": [
+        434,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "5a863011bd544641f1d7e5ffee533719de131cec2d043bc495aa051843deb064",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        38,
+        146,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/65-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/66-0": {
+      "rect": [
+        470,
+        217,
+        32,
+        32
+      ],
+      "rgba_sha256": "020579f3515c39cf1d855b483a7ed73661162fd67602bd17a44cca1fe8a171df",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        146,
+        146,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/66-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/76-0": {
+      "rect": [
+        2,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "bcaa7119aefa6a35e95bf4f03641a86a597d1b97cae9f9ff84a77161ab1ca660",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        254,
+        146,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/76-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/77-0": {
+      "rect": [
+        38,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "a21eeb227f70d5688e4722a790411eca627b1ce56d1e739b4eacd9d7076a859f",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        362,
+        146,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/77-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/78-0": {
+      "rect": [
+        74,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "2e4f17f3bfef013d7e9dc58793ac5e783b6e53701a846def2804633030c9b464",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        470,
+        146,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/78-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/79-0": {
+      "rect": [
+        110,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "d09d53074cf4f33040d73cf01264cbcbef530ea57f10978541c9dac8dab3e34b",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        578,
+        146,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/79-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/80-0": {
+      "rect": [
+        146,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "9226cb3fec523ca5943bb974e76b99009ee13b6ed99d9a976e48e229aaa655ff",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        686,
+        146,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/80-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/81-0": {
+      "rect": [
+        182,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "b450ee9e3b616c89a9733f0438dc3f8e3c4d587d819a6347e3f351b6e4ef16c1",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        794,
+        146,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/81-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/91-0": {
+      "rect": [
+        218,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "56de878d6fbdcf286dcf98f084591b00f43015afcad8f0ecb5e4127fcf1f4e92",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        902,
+        146,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/91-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/92-0": {
+      "rect": [
+        254,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "8c07ca9d92a5a6c3b8fea8091af782dcb5f0f3a51f6681d34667baafd654e82a",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        2,
+        182,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/92-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/93-0": {
+      "rect": [
+        290,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "4ca9b01705901a9dce2ded505ffb58d7792ea0ab99bb48c27466693e809066f4",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        110,
+        182,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/93-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/94-0": {
+      "rect": [
+        326,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "cf9330e80bd93b095028d3d1792fd1c16845cb2f4f9dfc89bf4a9352950d104b",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        218,
+        182,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/94-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/95-0": {
+      "rect": [
+        362,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "36cb722a3760547e89651b3f7a0906b8676d4babec32d5bcfbc2fdd97a17cc54",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        326,
+        182,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/95-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/skills/96-0": {
+      "rect": [
+        398,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "2499b946a46c4232bc5ff1fadf6c101d3679aca7dbb168017e469312b2cde9ea",
+      "source_atlas": "icons-skills-0",
+      "source_rect": [
+        434,
+        182,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-skills/96-0.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/utility/guild/notice": {
+      "rect": [
+        414,
+        386,
+        3,
+        10
+      ],
+      "rgba_sha256": "7cc1e843c4af96ce3a431a84625226e3fedb75be99d7891ee0cc9292726a8835",
+      "source_atlas": "icons-utility-0",
+      "source_rect": [
+        979,
+        117,
+        3,
+        10
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-guild/notice.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            3,
+            10
+          ]
+        }
+      ]
+    },
+    "icon/utility/guild/refresh1": {
+      "rect": [
+        432,
+        361,
+        20,
+        18
+      ],
+      "rgba_sha256": "8684221c4be577734f1fa5c401d1f20ad200924c23b4d3f4f67ad31ffae27017",
+      "source_atlas": "icons-utility-0",
+      "source_rect": [
+        666,
+        117,
+        20,
+        18
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-guild/refresh1.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            20,
+            18
+          ]
+        }
+      ]
+    },
+    "icon/utility/party/time": {
+      "rect": [
+        398,
+        386,
+        12,
+        12
+      ],
+      "rgba_sha256": "ed80698c58fc9cc561acf47ba5992f882c0e004d9a58266ec29e3f54f2f26120",
+      "source_atlas": "icons-utility-0",
+      "source_rect": [
+        963,
+        117,
+        12,
+        12
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-party/time.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            12,
+            12
+          ]
+        }
+      ]
+    },
+    "icon/utility/quickbar/mouseattack1": {
+      "rect": [
+        434,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "b8ab23cc0c78bedb9684c68a622f2f6213118b8d1931e3a78aadd910a0d91f09",
+      "source_atlas": "icons-utility-0",
+      "source_rect": [
+        110,
+        81,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-quickbar/mouseattack1.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/utility/quickbar/mouseauto1": {
+      "rect": [
+        470,
+        253,
+        32,
+        32
+      ],
+      "rgba_sha256": "26cb7ab66f24fa06d14d19b765073a732e38c1bec79d3a2ab0c71c736ac147ed",
+      "source_atlas": "icons-utility-0",
+      "source_rect": [
+        218,
+        81,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-quickbar/mouseauto1.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/utility/quickbar/mousecamera1": {
+      "rect": [
+        2,
+        289,
+        32,
+        32
+      ],
+      "rgba_sha256": "422235866b7620a28706422c03f3237b5ef6f78e3ab6756608b1daa86bf0bb9b",
+      "source_atlas": "icons-utility-0",
+      "source_rect": [
+        326,
+        81,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-quickbar/mousecamera1.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/utility/quickbar/mouseskill1": {
+      "rect": [
+        38,
+        289,
+        32,
+        32
+      ],
+      "rgba_sha256": "32fbbb0814068e12a4f0754c93d1eb523222fb0371377d8c724259c4611c329f",
+      "source_atlas": "icons-utility-0",
+      "source_rect": [
+        434,
+        81,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-quickbar/mouseskill1.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "icon/utility/quickbar/system1": {
+      "rect": [
+        74,
+        289,
+        32,
+        32
+      ],
+      "rgba_sha256": "4c01140e94e1927ff640f1997a049da55b9fb4b75ab5f9f7a500980acb5c7a06",
+      "source_atlas": "icons-utility-0",
+      "source_rect": [
+        542,
+        81,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-quickbar/system1.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "pattern/board_base": {
+      "rect": [
+        2,
+        2,
+        128,
+        128
+      ],
+      "rgba_sha256": "72483ea327681d16cb5c8f5041666b92c65531e736fdaa317e58a3c69ebf9eed",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        702,
+        2,
+        128,
+        128
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/board_base.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            128,
+            128
+          ]
+        }
+      ]
+    },
+    "pattern/board_corner_leftbottom": {
+      "rect": [
+        110,
+        289,
+        32,
+        32
+      ],
+      "rgba_sha256": "741da2edf61c153204e41112b0e0801ba62c05a900823e6fd35fc2b3347210f7",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        574,
+        427,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/board_corner_leftbottom.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "pattern/board_corner_lefttop": {
+      "rect": [
+        146,
+        289,
+        32,
+        32
+      ],
+      "rgba_sha256": "797b19ac9535c4fc5d87df1b02a49d086568140360bf708e00e14ae8eb7c0824",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        610,
+        427,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/board_corner_lefttop.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "pattern/board_corner_rightbottom": {
+      "rect": [
+        182,
+        289,
+        32,
+        32
+      ],
+      "rgba_sha256": "09bd9cffde3ab3a11814c54703aa84e783662a38390aba0ec28038093518aafc",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        646,
+        427,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/board_corner_rightbottom.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "pattern/board_corner_righttop": {
+      "rect": [
+        218,
+        289,
+        32,
+        32
+      ],
+      "rgba_sha256": "686e6a4037e01b43913c59d3d9a92f3dc382bbfc66801269ea2fdf03c0e04f14",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        682,
+        427,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/board_corner_righttop.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "pattern/board_line_bottom": {
+      "rect": [
+        254,
+        289,
+        128,
+        32
+      ],
+      "rgba_sha256": "5faff5113ab521566ac88558058527f880d84e0a1ee3fe4181beccb9f1f722e1",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        106,
+        427,
+        128,
+        32
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/board_line_bottom.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            128,
+            32
+          ]
+        }
+      ]
+    },
+    "pattern/board_line_left": {
+      "rect": [
+        134,
+        2,
+        32,
+        128
+      ],
+      "rgba_sha256": "c2c4ab972161535160d0d17f2c698171e66e802d43ce81d0b71a8e4aaa51a507",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        834,
+        2,
+        32,
+        128
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/board_line_left.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            128
+          ]
+        }
+      ]
+    },
+    "pattern/board_line_right": {
+      "rect": [
+        170,
+        2,
+        32,
+        128
+      ],
+      "rgba_sha256": "555afc17dffa6ee843a8593ce3958c856b9dd71bd096892cd079cc133f518b66",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        870,
+        2,
+        32,
+        128
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/board_line_right.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            128
+          ]
+        }
+      ]
+    },
+    "pattern/board_line_top": {
+      "rect": [
+        2,
+        325,
+        128,
+        32
+      ],
+      "rgba_sha256": "daa2cf56e6abb8fb1e6a37163fb582083d06e625b7e368e750551cfed56542e3",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        238,
+        427,
+        128,
+        32
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/board_line_top.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            128,
+            32
+          ]
+        }
+      ]
+    },
+    "pattern/gauge_blue": {
+      "rect": [
+        421,
+        386,
+        16,
+        8
+      ],
+      "rgba_sha256": "8271a1997c1baf394b848ff01b2ecd845ef1b8c9333ad695dfdbdf7134a54611",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        164,
+        757,
+        16,
+        8
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/gauge_blue.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            8
+          ]
+        }
+      ]
+    },
+    "pattern/gauge_slot_center": {
+      "rect": [
+        441,
+        386,
+        16,
+        8
+      ],
+      "rgba_sha256": "6fe9d2c7075443f52817045d2d1dcf2ee20a5f12ca7018f370582c43dc3f0cd9",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        244,
+        757,
+        16,
+        8
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/gauge_slot_center.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            8
+          ]
+        }
+      ]
+    },
+    "pattern/gauge_slot_left": {
+      "rect": [
+        461,
+        386,
+        16,
+        8
+      ],
+      "rgba_sha256": "09c46bebf243535eba6ff13416ab4029fe86228b3547b0da939ca85008083669",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        264,
+        757,
+        16,
+        8
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/gauge_slot_left.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            8
+          ]
+        }
+      ]
+    },
+    "pattern/gauge_slot_right": {
+      "rect": [
+        481,
+        386,
+        16,
+        8
+      ],
+      "rgba_sha256": "1fc5481ac799e9dfac6003e535ba68eed2203c68a3fb65478ab857ae4eb7f904",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        284,
+        757,
+        16,
+        8
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/gauge_slot_right.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            8
+          ]
+        }
+      ]
+    },
+    "pattern/horsestate/00": {
+      "rect": [
+        134,
+        325,
+        32,
+        32
+      ],
+      "rgba_sha256": "093a91241949c9fd860c86bdbf9f7e3f66daf381650e57da8cd043d2452bf6d9",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        826,
+        427,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/horsestate/00.dds",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "pattern/horsestate/13": {
+      "rect": [
+        170,
+        325,
+        32,
+        32
+      ],
+      "rgba_sha256": "60c1546c0b498eb1858bef1bf698366fde8e974be7e66487c294c152b02273b0",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        970,
+        427,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/horsestate/13.dds",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "pattern/horsestate/33": {
+      "rect": [
+        206,
+        325,
+        32,
+        32
+      ],
+      "rgba_sha256": "cb3fb16a86c022363817484ba06e9938ff5ae96da2ecde0dc79c11260b2648f3",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        254,
+        467,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/horsestate/33.dds",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "pattern/scrollbar_bottom": {
+      "rect": [
+        2,
+        406,
+        16,
+        4
+      ],
+      "rgba_sha256": "e88ec8d61ba0878ab3e89ac68fb14088116d556624c7376765810d24edd82ab5",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        141,
+        772,
+        16,
+        4
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/scrollbar_bottom.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            4
+          ]
+        }
+      ]
+    },
+    "pattern/scrollbar_middle": {
+      "rect": [
+        22,
+        406,
+        16,
+        4
+      ],
+      "rgba_sha256": "c8234035a4470f18b23fe04cc67f44abef46f79481826f0cd1b67ce67c86668c",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        161,
+        772,
+        16,
+        4
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/scrollbar_middle.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            4
+          ]
+        }
+      ]
+    },
+    "pattern/scrollbar_top": {
+      "rect": [
+        42,
+        406,
+        16,
+        4
+      ],
+      "rgba_sha256": "72ba1c6d284952800f74897d112e0fe3860e71e3914cef244ad293153e84e5e8",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        181,
+        772,
+        16,
+        4
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/scrollbar_top.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            4
+          ]
+        }
+      ]
+    },
+    "pattern/thinboard_corner_leftbottom": {
+      "rect": [
+        456,
+        361,
+        16,
+        16
+      ],
+      "rgba_sha256": "0538fa07d62495c78d1589183a0c02b6f5bda6265f36230e504ea762d35a7f82",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        97,
+        704,
+        16,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/thinboard_corner_leftbottom.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      ]
+    },
+    "pattern/thinboard_corner_lefttop": {
+      "rect": [
+        476,
+        361,
+        16,
+        16
+      ],
+      "rgba_sha256": "3b9be0869fb413e5600358b1c4e2991848198e9c95e5f0c86a0acb4e3b8361e0",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        117,
+        704,
+        16,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/thinboard_corner_lefttop.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      ]
+    },
+    "pattern/thinboard_corner_rightbottom": {
+      "rect": [
+        2,
+        386,
+        16,
+        16
+      ],
+      "rgba_sha256": "23b7943d1e5bdb1470552f81a1c1697ed24017fa75ebdea0a1e73b18b9163a0a",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        137,
+        704,
+        16,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/thinboard_corner_rightbottom.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      ]
+    },
+    "pattern/thinboard_corner_righttop": {
+      "rect": [
+        22,
+        386,
+        16,
+        16
+      ],
+      "rgba_sha256": "d4435460228d418ebf35791579ac9312c7d4b5a1245dcab475e3e721abc04af8",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        157,
+        704,
+        16,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/thinboard_corner_righttop.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      ]
+    },
+    "pattern/thinboard_line_bottom": {
+      "rect": [
+        42,
+        386,
+        16,
+        16
+      ],
+      "rgba_sha256": "b5dd699c97fce3c0a87757bd5f0bd81d09af24cc15ba44598ff5d90f23c8f418",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        177,
+        704,
+        16,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/thinboard_line_bottom.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      ]
+    },
+    "pattern/thinboard_line_left": {
+      "rect": [
+        62,
+        386,
+        16,
+        16
+      ],
+      "rgba_sha256": "dc81fdc87390939fb35df60c340779c5a4685f400251f429ecbb08596b62ec92",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        197,
+        704,
+        16,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/thinboard_line_left.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      ]
+    },
+    "pattern/thinboard_line_right": {
+      "rect": [
+        82,
+        386,
+        16,
+        16
+      ],
+      "rgba_sha256": "627521d6e714a68b9b24b32ef60721acbbc0c9fe69db94b9e659d8ff2d833e08",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        217,
+        704,
+        16,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/thinboard_line_right.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      ]
+    },
+    "pattern/thinboard_line_top": {
+      "rect": [
+        102,
+        386,
+        16,
+        16
+      ],
+      "rgba_sha256": "fb9ddfa90f32b45ed2b8426ba8c3522b7dae6181d44ecbf57bcb2b43d85949b5",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        237,
+        704,
+        16,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/thinboard_line_top.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      ]
+    },
+    "pattern/titlebar_center": {
+      "rect": [
+        242,
+        325,
+        32,
+        32
+      ],
+      "rgba_sha256": "5d889a61fda8df60e7686e8592fa24b73adf29d9d80324759113a4c8cea6cee3",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        470,
+        467,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/titlebar_center.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "pattern/titlebar_left": {
+      "rect": [
+        278,
+        325,
+        32,
+        32
+      ],
+      "rgba_sha256": "db0cb787f673a5e31a8909d4ec37404655d1c5e2ca25f8b5cebf589831a7bd14",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        506,
+        467,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/titlebar_left.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "pattern/titlebar_right": {
+      "rect": [
+        314,
+        325,
+        32,
+        32
+      ],
+      "rgba_sha256": "33f0374ae70bc2fb1733383cbc6c9ab8886ef5082ca02728bbe29a6e775b37de",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        542,
+        467,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/pattern/titlebar_right.tga",
+          "crop_xywh_px": [
+            0,
+            0,
+            32,
+            32
+          ]
+        }
+      ]
+    },
+    "public/big_button_01": {
+      "rect": [
+        96,
+        134,
+        53,
+        39
+      ],
+      "rgba_sha256": "eb15f491350cf213c92f92b616db19a92d92271334032fb1f86ef37ccd4d29b5",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        372,
+        298,
+        53,
+        39
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            180,
+            31,
+            53,
+            39
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/big_button_01.sub"
+        }
+      ]
+    },
+    "public/big_button_02": {
+      "rect": [
+        153,
+        134,
+        53,
+        39
+      ],
+      "rgba_sha256": "312c1aaacf35fde347fbe5199f8660c4181d3f160fdeb1336bbf7caa3c73fffd",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        429,
+        298,
+        53,
+        39
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            0,
+            142,
+            53,
+            39
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/big_button_02.sub"
+        }
+      ]
+    },
+    "public/big_button_03": {
+      "rect": [
+        210,
+        134,
+        53,
+        39
+      ],
+      "rgba_sha256": "71020ee3bb789a0ca83144d215746f965be692d302fa22e124221ce6c6e67420",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        486,
+        298,
+        53,
+        39
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            53,
+            142,
+            53,
+            39
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/big_button_03.sub"
+        }
+      ]
+    },
+    "public/check_image": {
+      "rect": [
+        122,
+        386,
+        24,
+        16
+      ],
+      "rgba_sha256": "0e0cd54f43e0a170eca62323b0f86c082a98b7e5acea3c636e65d8d373d88752",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        49,
+        704,
+        24,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            220,
+            106,
+            24,
+            16
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/check_image.sub"
+        }
+      ]
+    },
+    "public/close_button_01": {
+      "rect": [
+        284,
+        386,
+        15,
+        15
+      ],
+      "rgba_sha256": "9e2bb80edfbf71722ec7b7f6802ae3d0bea85d00c874604aec15e33b3ccd9428",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        829,
+        704,
+        15,
+        15
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            25,
+            425,
+            15,
+            15
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/close_button_01.sub"
+        }
+      ]
+    },
+    "public/close_button_02": {
+      "rect": [
+        303,
+        386,
+        15,
+        15
+      ],
+      "rgba_sha256": "1dcd10947e3701a1a97f01e4417a47fefc452e6f109b7dd3502d38fdf32c179f",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        848,
+        704,
+        15,
+        15
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            40,
+            425,
+            15,
+            15
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/close_button_02.sub"
+        }
+      ]
+    },
+    "public/close_button_03": {
+      "rect": [
+        322,
+        386,
+        15,
+        15
+      ],
+      "rgba_sha256": "ef2e3d366c93cd3d0285cc570d6e5e350c1bba31ca40ebe6900407063440b02c",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        867,
+        704,
+        15,
+        15
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            55,
+            425,
+            15,
+            15
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/close_button_03.sub"
+        }
+      ]
+    },
+    "public/large_button_01": {
+      "rect": [
+        386,
+        325,
+        88,
+        21
+      ],
+      "rgba_sha256": "51fb668f95a2d7f0f3cc7973abf3e34e88e09fb263ee2647b2667a034cf2fe63",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        922,
+        575,
+        88,
+        21
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            155,
+            0,
+            88,
+            21
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/large_button_01.sub"
+        }
+      ]
+    },
+    "public/large_button_02": {
+      "rect": [
+        2,
+        361,
+        88,
+        21
+      ],
+      "rgba_sha256": "14ea3444067db0c01d218d40d8104938b9b51f3932de48e1601480981e8d98f4",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        2,
+        610,
+        88,
+        21
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            106,
+            142,
+            88,
+            21
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/large_button_02.sub"
+        }
+      ]
+    },
+    "public/large_button_03": {
+      "rect": [
+        94,
+        361,
+        88,
+        21
+      ],
+      "rgba_sha256": "c8d46edbff9c03e95d7cfd12c7ca8754c4a3f89ba6cd253f639a412242508f21",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        94,
+        610,
+        88,
+        21
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            0,
+            181,
+            88,
+            21
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/large_button_03.sub"
+        }
+      ]
+    },
+    "public/minimize_button_01": {
+      "rect": [
+        341,
+        386,
+        15,
+        15
+      ],
+      "rgba_sha256": "fb10f8885655671fe58aab57e96b0b55d84d4f3d1bcb1942b9b9bb00d246e5e6",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        886,
+        704,
+        15,
+        15
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            70,
+            425,
+            15,
+            15
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/minimize_button_01.sub"
+        }
+      ]
+    },
+    "public/minimize_button_02": {
+      "rect": [
+        360,
+        386,
+        15,
+        15
+      ],
+      "rgba_sha256": "e91b1bb96c144f40a87171a6c3da12b309d3a311c7f9bacd53b1cb6193186414",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        905,
+        704,
+        15,
+        15
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            85,
+            425,
+            15,
+            15
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/minimize_button_02.sub"
+        }
+      ]
+    },
+    "public/minimize_button_03": {
+      "rect": [
+        379,
+        386,
+        15,
+        15
+      ],
+      "rgba_sha256": "4ffb25e2a3133176066d07b85451b162f810e2242ae010224bef350d11742ac3",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        924,
+        704,
+        15,
+        15
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            100,
+            425,
+            15,
+            15
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/minimize_button_03.sub"
+        }
+      ]
+    },
+    "public/scrollbar_down_button_01": {
+      "rect": [
+        150,
+        386,
+        15,
+        16
+      ],
+      "rgba_sha256": "10a8b22f9fcfc3d5baaa52c1e32588e520e8375e0ca65b2a9ac9183c5bbdbf51",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        277,
+        704,
+        15,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            157,
+            380,
+            15,
+            16
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/scrollbar_down_button_01.sub"
+        }
+      ]
+    },
+    "public/scrollbar_down_button_02": {
+      "rect": [
+        169,
+        386,
+        15,
+        16
+      ],
+      "rgba_sha256": "3a8fc41da991a7f6e12baa0b35be496de0a76d8c064479007796c55fcca97b5c",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        296,
+        704,
+        15,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            172,
+            380,
+            15,
+            16
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/scrollbar_down_button_02.sub"
+        }
+      ]
+    },
+    "public/scrollbar_down_button_03": {
+      "rect": [
+        188,
+        386,
+        15,
+        16
+      ],
+      "rgba_sha256": "2c08175899d41c34ee90bf86a3e1e4c0d0075934150b776a2daef5a4210e87ce",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        315,
+        704,
+        15,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            187,
+            380,
+            15,
+            16
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/scrollbar_down_button_03.sub"
+        }
+      ]
+    },
+    "public/scrollbar_up_button_01": {
+      "rect": [
+        207,
+        386,
+        15,
+        16
+      ],
+      "rgba_sha256": "3c56b41601f737357d1acca958df64059bfc78c4cacbca6ca4695f402396ad21",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        334,
+        704,
+        15,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            202,
+            380,
+            15,
+            16
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/scrollbar_up_button_01.sub"
+        }
+      ]
+    },
+    "public/scrollbar_up_button_02": {
+      "rect": [
+        226,
+        386,
+        15,
+        16
+      ],
+      "rgba_sha256": "f0a8cccdc878538619c60be8b82405592f946e67d0c0bdb3caf72c11b30c6c92",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        353,
+        704,
+        15,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            217,
+            380,
+            15,
+            16
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/scrollbar_up_button_02.sub"
+        }
+      ]
+    },
+    "public/scrollbar_up_button_03": {
+      "rect": [
+        245,
+        386,
+        15,
+        16
+      ],
+      "rgba_sha256": "e950ae32e13ffad2b31c5eb1aa46f686ea7803a780ca71685943e9bc318956b5",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        372,
+        704,
+        15,
+        16
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            232,
+            380,
+            15,
+            16
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/scrollbar_up_button_03.sub"
+        }
+      ]
+    },
+    "public/slot_base": {
+      "rect": [
+        350,
+        325,
+        32,
+        32
+      ],
+      "rgba_sha256": "0847eaa75ee3897193943aea32698d9c9b66036051650383584efe30bb30f53b",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        578,
+        467,
+        32,
+        32
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public.dds",
+          "crop_xywh_px": [
+            0,
+            348,
+            32,
+            32
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/public/slot_base.sub"
+        }
+      ]
+    },
+    "published/native-character/faces/assassin_m": {
+      "rect": [
+        206,
+        2,
+        43,
+        43
+      ],
+      "rgba_sha256": "f7dfdb198a6558baeb96850cacd287577ece813d78b2f0448779e599702b14be",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        383,
+        194,
+        43,
+        43
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-character/faces/assassin_m.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            43,
+            43
+          ]
+        }
+      ]
+    },
+    "published/native-character/faces/assassin_w": {
+      "rect": [
+        253,
+        2,
+        43,
+        43
+      ],
+      "rgba_sha256": "e428e746c1c93269e10ecfba15c38e78e587c1a5d7cc9010f2164720297e13c0",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        430,
+        194,
+        43,
+        43
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-character/faces/assassin_w.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            43,
+            43
+          ]
+        }
+      ]
+    },
+    "published/native-character/faces/shaman_m": {
+      "rect": [
+        300,
+        2,
+        43,
+        43
+      ],
+      "rgba_sha256": "64180e8b9d6e920de4433e3a0cb0b983523439c3a59b07bfdd400b5f5944aa13",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        477,
+        194,
+        43,
+        43
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-character/faces/shaman_m.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            43,
+            43
+          ]
+        }
+      ]
+    },
+    "published/native-character/faces/shaman_w": {
+      "rect": [
+        347,
+        2,
+        43,
+        43
+      ],
+      "rgba_sha256": "f93685ff493ed5c515741ddd67ba6cbb1ba9d8edecc2c2d57829094d63a2daf4",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        524,
+        194,
+        43,
+        43
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-character/faces/shaman_w.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            43,
+            43
+          ]
+        }
+      ]
+    },
+    "published/native-character/faces/sura_m": {
+      "rect": [
+        394,
+        2,
+        43,
+        43
+      ],
+      "rgba_sha256": "994fc48f9ab03d042ae77cf61d1deba5defe8ccc58a7d9c1fc10bfac92d037e5",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        571,
+        194,
+        43,
+        43
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-character/faces/sura_m.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            43,
+            43
+          ]
+        }
+      ]
+    },
+    "published/native-character/faces/sura_w": {
+      "rect": [
+        441,
+        2,
+        43,
+        43
+      ],
+      "rgba_sha256": "651c7eb19edd779d754371ab0ad812790469145e0be616dccd05f28e62842fb3",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        618,
+        194,
+        43,
+        43
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-character/faces/sura_w.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            43,
+            43
+          ]
+        }
+      ]
+    },
+    "published/native-character/faces/warrior_m": {
+      "rect": [
+        2,
+        134,
+        43,
+        43
+      ],
+      "rgba_sha256": "8c91ead801888942148019695a85f7b0dc126e6298841bfe0e74e92ff89e5425",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        665,
+        194,
+        43,
+        43
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-character/faces/warrior_m.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            43,
+            43
+          ]
+        }
+      ]
+    },
+    "published/native-character/faces/warrior_w": {
+      "rect": [
+        49,
+        134,
+        43,
+        43
+      ],
+      "rgba_sha256": "1557bdf0c6a0b72aac0ba2c0ce007ea6fa4374b146011923a24fc57ca455f71c",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        712,
+        194,
+        43,
+        43
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-character/faces/warrior_w.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            43,
+            43
+          ]
+        }
+      ]
+    },
+    "published/native-inventory/moneyIcon": {
+      "rect": [
+        264,
+        386,
+        16,
+        16
+      ],
+      "rgba_sha256": "2dda4c9b24b9f39a7333535e455c19b8af3331d9bcddf5a8639aebffaf928bcd",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        257,
+        704,
+        16,
+        16
+      ],
+      "sources": [
+        {
+          "file": "apps/client/public/assets/native-inventory/moneyIcon.png",
+          "crop_xywh_px": [
+            0,
+            0,
+            16,
+            16
+          ]
+        }
+      ]
+    },
+    "windows/tab_button_large_01": {
+      "rect": [
+        186,
+        361,
+        78,
+        19
+      ],
+      "rgba_sha256": "841f16bdc0dd2deb10ba92bebff5487cb40cd4f112293ec7ca45dd7617831837",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        472,
+        635,
+        78,
+        19
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/windows.dds",
+          "crop_xywh_px": [
+            227,
+            116,
+            78,
+            19
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/game/windows/tab_button_large_01.sub"
+        }
+      ]
+    },
+    "windows/tab_button_large_02": {
+      "rect": [
+        268,
+        361,
+        78,
+        19
+      ],
+      "rgba_sha256": "80e2bf8da5f45195927514d43f2e1782466d4f31d4143acf4f3e7da0aed31bcf",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        554,
+        635,
+        78,
+        19
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/windows.dds",
+          "crop_xywh_px": [
+            305,
+            116,
+            78,
+            19
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/game/windows/tab_button_large_02.sub"
+        }
+      ]
+    },
+    "windows/tab_button_large_03": {
+      "rect": [
+        350,
+        361,
+        78,
+        19
+      ],
+      "rgba_sha256": "caf17972bc602c302f1853b0e59a64d3f0076c14783234a85b37ef58d84e1854",
+      "source_atlas": "widgets-0",
+      "source_rect": [
+        636,
+        635,
+        78,
+        19
+      ],
+      "sources": [
+        {
+          "file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/windows.dds",
+          "crop_xywh_px": [
+            383,
+            116,
+            78,
+            19
+          ],
+          "descriptor_file": "data/local-cz-2015/unpacked/ETC/d%3A/ymir work/ui/game/windows/tab_button_large_03.sub"
+        }
+      ]
+    }
+  },
+  "styles": {
+    "board": {
+      "renderer": "nine_patch",
+      "parts": {
+        "top_left": "pattern/board_corner_lefttop",
+        "top": "pattern/board_line_top",
+        "top_right": "pattern/board_corner_righttop",
+        "left": "pattern/board_line_left",
+        "right": "pattern/board_line_right",
+        "bottom_left": "pattern/board_corner_leftbottom",
+        "bottom": "pattern/board_line_bottom",
+        "bottom_right": "pattern/board_corner_rightbottom",
+        "center": "pattern/board_base"
+      },
+      "borders_ltrb_px": [
+        32,
+        32,
+        32,
+        32
+      ],
+      "minimum_size_px": [
+        64,
+        64
+      ],
+      "edge_mode": "tile",
+      "center_mode": "tile",
+      "center_rgba8": null,
+      "source": "ui.py:Board"
+    },
+    "thinboard": {
+      "renderer": "nine_patch",
+      "parts": {
+        "top_left": "pattern/thinboard_corner_lefttop",
+        "top": "pattern/thinboard_line_top",
+        "top_right": "pattern/thinboard_corner_righttop",
+        "left": "pattern/thinboard_line_left",
+        "right": "pattern/thinboard_line_right",
+        "bottom_left": "pattern/thinboard_corner_leftbottom",
+        "bottom": "pattern/thinboard_line_bottom",
+        "bottom_right": "pattern/thinboard_corner_rightbottom"
+      },
+      "borders_ltrb_px": [
+        16,
+        16,
+        16,
+        16
+      ],
+      "minimum_size_px": [
+        32,
+        32
+      ],
+      "edge_mode": "tile",
+      "center_mode": "solid",
+      "center_rgba8": [
+        0,
+        0,
+        0,
+        130
+      ],
+      "source": "ui.py:ThinBoard"
+    },
+    "titlebar": {
+      "renderer": "three_patch_horizontal",
+      "parts": {
+        "left": "pattern/titlebar_left",
+        "center": "pattern/titlebar_center",
+        "right": "pattern/titlebar_right"
+      },
+      "cap_widths_px": [
+        32,
+        32
+      ],
+      "minimum_width_px": 64,
+      "logical_height_px": 23,
+      "paint_height_px": 32,
+      "center_mode": "tile",
+      "clip_paint_to_logical_bounds": false,
+      "note": "The original TGA is 32 px tall; the native widget logical height is smaller. Preserve this paint overflow."
+    },
+    "button_large": {
+      "renderer": "state_image",
+      "states": {
+        "normal": "public/large_button_01",
+        "hovered": "public/large_button_02",
+        "pressed": "public/large_button_03"
+      },
+      "size_px": [
+        88,
+        21
+      ],
+      "resize": "fixed",
+      "text_style": "text_button",
+      "state_priority": [
+        "pressed",
+        "hovered",
+        "normal"
+      ],
+      "disabled_visual": null,
+      "disabled_note": "No disabled image is invented. Keep normal art and suppress interaction, or supply an explicit application skin override."
+    },
+    "button_big": {
+      "renderer": "state_image",
+      "states": {
+        "normal": "public/big_button_01",
+        "hovered": "public/big_button_02",
+        "pressed": "public/big_button_03"
+      },
+      "size_px": [
+        53,
+        39
+      ],
+      "resize": "fixed",
+      "text_style": "text_button",
+      "state_priority": [
+        "pressed",
+        "hovered",
+        "normal"
+      ],
+      "disabled_visual": null,
+      "disabled_note": "No disabled image is invented. Keep normal art and suppress interaction, or supply an explicit application skin override."
+    },
+    "close_button": {
+      "renderer": "state_image",
+      "states": {
+        "normal": "public/close_button_01",
+        "hovered": "public/close_button_02",
+        "pressed": "public/close_button_03"
+      },
+      "size_px": [
+        15,
+        15
+      ],
+      "resize": "fixed",
+      "text_style": "text_button",
+      "state_priority": [
+        "pressed",
+        "hovered",
+        "normal"
+      ],
+      "disabled_visual": null,
+      "disabled_note": "No disabled image is invented. Keep normal art and suppress interaction, or supply an explicit application skin override."
+    },
+    "minimize_button": {
+      "renderer": "state_image",
+      "states": {
+        "normal": "public/minimize_button_01",
+        "hovered": "public/minimize_button_02",
+        "pressed": "public/minimize_button_03"
+      },
+      "size_px": [
+        15,
+        15
+      ],
+      "resize": "fixed",
+      "text_style": "text_button",
+      "state_priority": [
+        "pressed",
+        "hovered",
+        "normal"
+      ],
+      "disabled_visual": null,
+      "disabled_note": "No disabled image is invented. Keep normal art and suppress interaction, or supply an explicit application skin override."
+    },
+    "tab_large": {
+      "renderer": "state_image",
+      "states": {
+        "normal": "windows/tab_button_large_01",
+        "hovered": "windows/tab_button_large_02",
+        "pressed": "windows/tab_button_large_03"
+      },
+      "size_px": [
+        78,
+        19
+      ],
+      "resize": "fixed",
+      "text_style": "text_button",
+      "state_priority": [
+        "pressed",
+        "hovered",
+        "normal"
+      ],
+      "disabled_visual": null,
+      "disabled_note": "No disabled image is invented. Keep normal art and suppress interaction, or supply an explicit application skin override."
+    },
+    "gauge_blue": {
+      "renderer": "gauge",
+      "parts": {
+        "left": "pattern/gauge_slot_left",
+        "center": "pattern/gauge_slot_center",
+        "right": "pattern/gauge_slot_right"
+      },
+      "fill_region": "pattern/gauge_blue",
+      "cap_widths_px": [
+        16,
+        16
+      ],
+      "minimum_width_px": 48,
+      "logical_height_px": 7,
+      "paint_height_px": 8,
+      "track_center_mode": "tile",
+      "fill_mode": "tile_then_clip",
+      "fill_insets_ltrb_px": [
+        12,
+        0,
+        12,
+        0
+      ],
+      "fill_origin": "left",
+      "fraction_formula": "max <= 0 ? 0 : clamp(value / max, 0, 1)",
+      "fraction_origin": "portable clamped range; source ui.py only applies an upper clamp",
+      "empty_fill": "draw_nothing"
+    },
+    "bevel_panel": {
+      "renderer": "bevel_rect",
+      "fill_rgba8": [
+        0,
+        0,
+        0,
+        255
+      ],
+      "top_left_rgba8": [
+        51,
+        51,
+        51,
+        255
+      ],
+      "bottom_right_rgba8": [
+        179,
+        179,
+        179,
+        255
+      ],
+      "stroke_width_px": 1,
+      "source": "ui.py:ComboBox.OnRender / ListBoxWithBoard.OnRender",
+      "draw_order": [
+        "fill",
+        "top_and_left_border",
+        "bottom_and_right_border"
+      ]
+    },
+    "listbox": {
+      "renderer": "list",
+      "text_style": "text_line",
+      "row_height_px": 17,
+      "row_text_offset_px": [
+        0,
+        3
+      ],
+      "text_align": "center",
+      "background_style": null,
+      "clip_rows": true,
+      "hover_rgba8": [
+        255,
+        255,
+        255,
+        51
+      ],
+      "selected_rgba8": [
+        0,
+        0,
+        128,
+        77
+      ],
+      "highlight_insets_ltrb_px": [
+        2,
+        1,
+        1,
+        -1
+      ],
+      "highlight_height_px": 17,
+      "scrollbar_style": "scrollbar",
+      "hover_excludes_final_bottom_pixel": true
+    },
+    "scrollbar": {
+      "renderer": "scrollbar",
+      "axis": "vertical",
+      "width_px": 17,
+      "up_style": "scroll_up",
+      "down_style": "scroll_down",
+      "button_height_px": 17,
+      "thumb_parts": {
+        "top": "pattern/scrollbar_top",
+        "center": "pattern/scrollbar_middle",
+        "bottom": "pattern/scrollbar_bottom"
+      },
+      "thumb_cap_heights_px": [
+        4,
+        4
+      ],
+      "thumb_min_height_px": 12,
+      "thumb_paint_width_px": 16,
+      "thumb_logical_width_px": 10,
+      "thumb_x_px": 5,
+      "track_style": "bevel_panel",
+      "track_insets_ltrb_px": [
+        0,
+        17,
+        2,
+        19
+      ],
+      "travel_insets_top_bottom_px": [
+        20,
+        21
+      ],
+      "step_fraction": 0.2,
+      "position_range": [
+        0,
+        1
+      ],
+      "thumb_height_rule": "max(12, floor((height - 34) * visible_fraction))",
+      "thumb_height_limit": "Clamp to height minus travel insets; if no positive travel exists, render a fixed thumb and disable movement.",
+      "thumb_center_mode": "tile",
+      "minimum_height_px": 53,
+      "paint_overflow_note": "Source thumb paint is 16 px wide at x=5 inside a 17 px logical scrollbar; do not silently stretch to 10 px."
+    },
+    "scroll_up": {
+      "renderer": "state_image",
+      "states": {
+        "normal": "public/scrollbar_up_button_01",
+        "hovered": "public/scrollbar_up_button_02",
+        "pressed": "public/scrollbar_up_button_03"
+      },
+      "size_px": [
+        15,
+        16
+      ],
+      "resize": "fixed",
+      "text_style": "text_button",
+      "state_priority": [
+        "pressed",
+        "hovered",
+        "normal"
+      ],
+      "disabled_visual": null,
+      "disabled_note": "No disabled image is invented. Keep normal art and suppress interaction, or supply an explicit application skin override."
+    },
+    "scroll_down": {
+      "renderer": "state_image",
+      "states": {
+        "normal": "public/scrollbar_down_button_01",
+        "hovered": "public/scrollbar_down_button_02",
+        "pressed": "public/scrollbar_down_button_03"
+      },
+      "size_px": [
+        15,
+        16
+      ],
+      "resize": "fixed",
+      "text_style": "text_button",
+      "state_priority": [
+        "pressed",
+        "hovered",
+        "normal"
+      ],
+      "disabled_visual": null,
+      "disabled_note": "No disabled image is invented. Keep normal art and suppress interaction, or supply an explicit application skin override."
+    }
+  },
+  "icons": {
+    "item/70038": {
+      "label": "Puller",
+      "region": "icon/items/44bdf9d28903f2ff2b1c0557fb27eaf23b312a4a80c281d733e6694166de611c",
+      "category": "items/consumables",
+      "kind": "item",
+      "label_origin": "application_english_ui",
+      "source": {
+        "vnum": 70038,
+        "type": 3,
+        "subtype": 10,
+        "range_length": 0
+      },
+      "occupied_cells": [
+        1,
+        1
+      ],
+      "source_label": "Plášť statečnosti",
+      "source_label_origin": "original_czech_item_catalog"
+    },
+    "portraits/assassin_m": {
+      "label": "Ninja (Male)",
+      "region": "published/native-character/faces/assassin_m",
+      "category": "portraits",
+      "kind": "portrait",
+      "label_origin": "application_english_ui",
+      "source_label": "assassin m",
+      "source_label_origin": "export_filename"
+    },
+    "portraits/assassin_w": {
+      "label": "Ninja (Female)",
+      "region": "published/native-character/faces/assassin_w",
+      "category": "portraits",
+      "kind": "portrait",
+      "label_origin": "application_english_ui",
+      "source_label": "assassin w",
+      "source_label_origin": "export_filename"
+    },
+    "portraits/shaman_m": {
+      "label": "Shaman (Male)",
+      "region": "published/native-character/faces/shaman_m",
+      "category": "portraits",
+      "kind": "portrait",
+      "label_origin": "application_english_ui",
+      "source_label": "shaman m",
+      "source_label_origin": "export_filename"
+    },
+    "portraits/shaman_w": {
+      "label": "Shaman (Female)",
+      "region": "published/native-character/faces/shaman_w",
+      "category": "portraits",
+      "kind": "portrait",
+      "label_origin": "application_english_ui",
+      "source_label": "shaman w",
+      "source_label_origin": "export_filename"
+    },
+    "portraits/sura_m": {
+      "label": "Sura (Male)",
+      "region": "published/native-character/faces/sura_m",
+      "category": "portraits",
+      "kind": "portrait",
+      "label_origin": "application_english_ui",
+      "source_label": "sura m",
+      "source_label_origin": "export_filename"
+    },
+    "portraits/sura_w": {
+      "label": "Sura (Female)",
+      "region": "published/native-character/faces/sura_w",
+      "category": "portraits",
+      "kind": "portrait",
+      "label_origin": "application_english_ui",
+      "source_label": "sura w",
+      "source_label_origin": "export_filename"
+    },
+    "portraits/warrior_m": {
+      "label": "Warrior (Male)",
+      "region": "published/native-character/faces/warrior_m",
+      "category": "portraits",
+      "kind": "portrait",
+      "label_origin": "application_english_ui",
+      "source_label": "warrior m",
+      "source_label_origin": "export_filename"
+    },
+    "portraits/warrior_w": {
+      "label": "Warrior (Female)",
+      "region": "published/native-character/faces/warrior_w",
+      "category": "portraits",
+      "kind": "portrait",
+      "label_origin": "application_english_ui",
+      "source_label": "warrior w",
+      "source_label_origin": "export_filename"
+    },
+    "skill/1": {
+      "label": "Three-Way Cut",
+      "region": "icon/skills/1-0",
+      "category": "skills/warrior",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 1,
+        "class_id": "WARRIOR",
+        "source_token": "samyeon"
+      },
+      "source_label": "Trojcestný střih",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/106": {
+      "label": "Lightning Throw",
+      "region": "icon/skills/106-0",
+      "category": "skills/shaman",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 106,
+        "class_id": "SHAMAN",
+        "source_token": "noejeon"
+      },
+      "source_label": "Bleskový vrh",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/107": {
+      "label": "Summon Lightning",
+      "region": "icon/skills/107-0",
+      "category": "skills/shaman",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 107,
+        "class_id": "SHAMAN",
+        "source_token": "byeorak"
+      },
+      "source_label": "Zaříkat blesk",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/108": {
+      "label": "Lightning Claw",
+      "region": "icon/skills/108-0",
+      "category": "skills/shaman",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 108,
+        "class_id": "SHAMAN",
+        "source_token": "pokroe"
+      },
+      "source_label": "Bleskový dráp",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/109": {
+      "label": "Cure",
+      "region": "icon/skills/109-0",
+      "category": "skills/shaman",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 109,
+        "class_id": "SHAMAN",
+        "source_token": "jeongeop"
+      },
+      "source_label": "Ošetřit",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/110": {
+      "label": "Swiftness",
+      "region": "icon/skills/110-0",
+      "category": "skills/shaman",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 110,
+        "class_id": "SHAMAN",
+        "source_token": "kwaesok"
+      },
+      "source_label": "Běžet",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/111": {
+      "label": "Attack Up",
+      "region": "icon/skills/111-0",
+      "category": "skills/shaman",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 111,
+        "class_id": "SHAMAN",
+        "source_token": "jeungryeok"
+      },
+      "source_label": "Útok+",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/130": {
+      "label": "Horse Riding",
+      "region": "icon/skills/130-0",
+      "category": "skills/support",
+      "kind": "skill",
+      "label_origin": "application_english_ui",
+      "source": {
+        "skill_id": 130,
+        "class_id": "SUPPORT",
+        "source_token": "riding"
+      },
+      "source_label": "Jezdit na koni",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/16": {
+      "label": "Spirit Strike (W)",
+      "region": "icon/skills/16-0",
+      "category": "skills/warrior",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 16,
+        "class_id": "WARRIOR",
+        "source_token": "gigongcham"
+      },
+      "source_label": "Průraz",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/17": {
+      "label": "Bash",
+      "region": "icon/skills/17-0",
+      "category": "skills/warrior",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 17,
+        "class_id": "WARRIOR",
+        "source_token": "gyeoksan"
+      },
+      "source_label": "Prudká rána",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/18": {
+      "label": "Stump",
+      "region": "icon/skills/18-0",
+      "category": "skills/warrior",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 18,
+        "class_id": "WARRIOR",
+        "source_token": "daejin"
+      },
+      "source_label": "Dupnutí",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/19": {
+      "label": "Strong Body",
+      "region": "icon/skills/19-0",
+      "category": "skills/warrior",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 19,
+        "class_id": "WARRIOR",
+        "source_token": "cheongeun"
+      },
+      "source_label": "Silné tělo",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/2": {
+      "label": "Sword Spin",
+      "region": "icon/skills/2-0",
+      "category": "skills/warrior",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 2,
+        "class_id": "WARRIOR",
+        "source_token": "palbang"
+      },
+      "source_label": "Smršť meče",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/20": {
+      "label": "Sword Strike",
+      "region": "icon/skills/20-0",
+      "category": "skills/warrior",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 20,
+        "class_id": "WARRIOR",
+        "source_token": "geompung"
+      },
+      "source_label": "Rána mečem",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/3": {
+      "label": "Berserk",
+      "region": "icon/skills/3-0",
+      "category": "skills/warrior",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 3,
+        "class_id": "WARRIOR",
+        "source_token": "jeongwi"
+      },
+      "source_label": "Bojové zuření",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/31": {
+      "label": "Ambush",
+      "region": "icon/skills/31-0",
+      "category": "skills/assassin",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 31,
+        "class_id": "ASSASSIN",
+        "source_token": "amseup"
+      },
+      "source_label": "Léčka",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/32": {
+      "label": "Fast Attack",
+      "region": "icon/skills/32-0",
+      "category": "skills/assassin",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 32,
+        "class_id": "ASSASSIN",
+        "source_token": "gungsin"
+      },
+      "source_label": "Bleskový útok",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/33": {
+      "label": "Rolling Dagger",
+      "region": "icon/skills/33-0",
+      "category": "skills/assassin",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 33,
+        "class_id": "ASSASSIN",
+        "source_token": "charyun"
+      },
+      "source_label": "Víření kordů",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/34": {
+      "label": "Stealth",
+      "region": "icon/skills/34-0",
+      "category": "skills/assassin",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 34,
+        "class_id": "ASSASSIN",
+        "source_token": "eunhyeong"
+      },
+      "source_label": "Zamaskování",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/35": {
+      "label": "Poisonous Cloud",
+      "region": "icon/skills/35-0",
+      "category": "skills/assassin",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 35,
+        "class_id": "ASSASSIN",
+        "source_token": "sangong"
+      },
+      "source_label": "Jedovatý oblak",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/4": {
+      "label": "Aura of the Sword",
+      "region": "icon/skills/4-0",
+      "category": "skills/warrior",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 4,
+        "class_id": "WARRIOR",
+        "source_token": "geomgyeong"
+      },
+      "source_label": "Aura meče",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/46": {
+      "label": "Repetitive Shot",
+      "region": "icon/skills/46-0",
+      "category": "skills/assassin",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 46,
+        "class_id": "ASSASSIN",
+        "source_token": "yeonsa"
+      },
+      "source_label": "Opakované výstřely",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/47": {
+      "label": "Arrow Shower",
+      "region": "icon/skills/47-0",
+      "category": "skills/assassin",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 47,
+        "class_id": "ASSASSIN",
+        "source_token": "gwangyeok"
+      },
+      "source_label": "Smršť šípů",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/48": {
+      "label": "Fire Arrow",
+      "region": "icon/skills/48-0",
+      "category": "skills/assassin",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 48,
+        "class_id": "ASSASSIN",
+        "source_token": "hwajo"
+      },
+      "source_label": "Ohnivý šíp",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/49": {
+      "label": "Feather Walk",
+      "region": "icon/skills/49-0",
+      "category": "skills/assassin",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 49,
+        "class_id": "ASSASSIN",
+        "source_token": "gyeonggong"
+      },
+      "source_label": "Našlapování polehoučku",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/5": {
+      "label": "Dash",
+      "region": "icon/skills/5-0",
+      "category": "skills/warrior",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 5,
+        "class_id": "WARRIOR",
+        "source_token": "tanhwan"
+      },
+      "source_label": "Pádit",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/50": {
+      "label": "Poison Arrow",
+      "region": "icon/skills/50-0",
+      "category": "skills/assassin",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 50,
+        "class_id": "ASSASSIN",
+        "source_token": "gigung"
+      },
+      "source_label": "Otrávený šíp",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/61": {
+      "label": "Finger Strike",
+      "region": "icon/skills/61-0",
+      "category": "skills/sura",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 61,
+        "class_id": "SURA",
+        "source_token": "swaeryeong"
+      },
+      "source_label": "Rána prstem",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/62": {
+      "label": "Dragon Swirl",
+      "region": "icon/skills/62-0",
+      "category": "skills/sura",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 62,
+        "class_id": "SURA",
+        "source_token": "yonggwon"
+      },
+      "source_label": "Dračí vír",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/63": {
+      "label": "Enchanted Blade",
+      "region": "icon/skills/63-0",
+      "category": "skills/sura",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 63,
+        "class_id": "SURA",
+        "source_token": "gwigeom"
+      },
+      "source_label": "Začarovaná čepel",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/64": {
+      "label": "Fear",
+      "region": "icon/skills/64-0",
+      "category": "skills/sura",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 64,
+        "class_id": "SURA",
+        "source_token": "gongpo"
+      },
+      "source_label": "Strach",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/65": {
+      "label": "Enchanted Armour",
+      "region": "icon/skills/65-0",
+      "category": "skills/sura",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 65,
+        "class_id": "SURA",
+        "source_token": "jumagap"
+      },
+      "source_label": "Začarované brnění",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/66": {
+      "label": "Dispel",
+      "region": "icon/skills/66-0",
+      "category": "skills/sura",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 66,
+        "class_id": "SURA",
+        "source_token": "pabeop"
+      },
+      "source_label": "Zrušit kouzlo",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/76": {
+      "label": "Dark Strike",
+      "region": "icon/skills/76-0",
+      "category": "skills/sura",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 76,
+        "class_id": "SURA",
+        "source_token": "maryeong"
+      },
+      "source_label": "Temná rána",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/77": {
+      "label": "Flame Strike",
+      "region": "icon/skills/77-0",
+      "category": "skills/sura",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 77,
+        "class_id": "SURA",
+        "source_token": "hwayeom"
+      },
+      "source_label": "Rána plameny",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/78": {
+      "label": "Flame Spirit",
+      "region": "icon/skills/78-0",
+      "category": "skills/sura",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 78,
+        "class_id": "SURA",
+        "source_token": "muyeong"
+      },
+      "source_label": "Duch plamene",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/79": {
+      "label": "Dark Protection",
+      "region": "icon/skills/79-0",
+      "category": "skills/sura",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 79,
+        "class_id": "SURA",
+        "source_token": "heuksin"
+      },
+      "source_label": "Temná ochrana",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/80": {
+      "label": "Spirit Strike (S)",
+      "region": "icon/skills/80-0",
+      "category": "skills/sura",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 80,
+        "class_id": "SURA",
+        "source_token": "tusok"
+      },
+      "source_label": "Rána ducha",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/81": {
+      "label": "Dark Orb",
+      "region": "icon/skills/81-0",
+      "category": "skills/sura",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 81,
+        "class_id": "SURA",
+        "source_token": "geomhwan"
+      },
+      "source_label": "Tmavý kámen",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/91": {
+      "label": "Flying Talisman",
+      "region": "icon/skills/91-0",
+      "category": "skills/shaman",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 91,
+        "class_id": "SHAMAN",
+        "source_token": "bipabu"
+      },
+      "source_label": "Létající talisman",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/92": {
+      "label": "Shooting Dragon",
+      "region": "icon/skills/92-0",
+      "category": "skills/shaman",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 92,
+        "class_id": "SHAMAN",
+        "source_token": "yongpa"
+      },
+      "source_label": "Střílení na draky",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/93": {
+      "label": "Dragon's Roar",
+      "region": "icon/skills/93-0",
+      "category": "skills/shaman",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 93,
+        "class_id": "SHAMAN",
+        "source_token": "paeryong"
+      },
+      "source_label": "Řev draků",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/94": {
+      "label": "Blessing",
+      "region": "icon/skills/94-0",
+      "category": "skills/shaman",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 94,
+        "class_id": "SHAMAN",
+        "source_token": "hosin"
+      },
+      "source_label": "Požehnání",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/95": {
+      "label": "Reflect",
+      "region": "icon/skills/95-0",
+      "category": "skills/shaman",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 95,
+        "class_id": "SHAMAN",
+        "source_token": "boho"
+      },
+      "source_label": "Zrcadlit",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "skill/96": {
+      "label": "Dragon's Strength",
+      "region": "icon/skills/96-0",
+      "category": "skills/shaman",
+      "kind": "skill",
+      "label_origin": "official_english_gameforge_wiki",
+      "source": {
+        "skill_id": 96,
+        "class_id": "SHAMAN",
+        "source_token": "gicheon"
+      },
+      "source_label": "Pomoc draka",
+      "source_label_origin": "original_czech_skill_catalog"
+    },
+    "utility/common/check": {
+      "label": "Confirm",
+      "region": "public/check_image",
+      "category": "utility/common",
+      "kind": "utility",
+      "label_origin": "application_english_ui",
+      "source_label": "Potvrzení",
+      "source_label_origin": "export_description"
+    },
+    "utility/common/money": {
+      "label": "Yang",
+      "region": "published/native-inventory/moneyIcon",
+      "category": "utility/common",
+      "kind": "utility",
+      "label_origin": "export_description"
+    },
+    "utility/guild/notice": {
+      "label": "notice",
+      "region": "icon/utility/guild/notice",
+      "category": "utility/guild",
+      "kind": "utility",
+      "label_origin": "export_filename",
+      "source": {
+        "published_asset": "/assets/native-guild/notice.png"
+      }
+    },
+    "utility/guild/refresh1": {
+      "label": "refresh1",
+      "region": "icon/utility/guild/refresh1",
+      "category": "utility/guild",
+      "kind": "utility",
+      "label_origin": "export_filename",
+      "source": {
+        "published_asset": "/assets/native-guild/refresh1.png"
+      }
+    },
+    "utility/party/time": {
+      "label": "time",
+      "region": "icon/utility/party/time",
+      "category": "utility/party",
+      "kind": "utility",
+      "label_origin": "export_filename",
+      "source": {
+        "published_asset": "/assets/native-party/time.png"
+      }
+    },
+    "utility/quickbar/mouseattack1": {
+      "label": "mouseattack1",
+      "region": "icon/utility/quickbar/mouseattack1",
+      "category": "utility/quickbar",
+      "kind": "utility",
+      "label_origin": "export_filename",
+      "source": {
+        "published_asset": "/assets/native-quickbar/mouseattack1.png"
+      }
+    },
+    "utility/quickbar/mouseauto1": {
+      "label": "mouseauto1",
+      "region": "icon/utility/quickbar/mouseauto1",
+      "category": "utility/quickbar",
+      "kind": "utility",
+      "label_origin": "export_filename",
+      "source": {
+        "published_asset": "/assets/native-quickbar/mouseauto1.png"
+      }
+    },
+    "utility/quickbar/mousecamera1": {
+      "label": "mousecamera1",
+      "region": "icon/utility/quickbar/mousecamera1",
+      "category": "utility/quickbar",
+      "kind": "utility",
+      "label_origin": "export_filename",
+      "source": {
+        "published_asset": "/assets/native-quickbar/mousecamera1.png"
+      }
+    },
+    "utility/quickbar/mouseskill1": {
+      "label": "mouseskill1",
+      "region": "icon/utility/quickbar/mouseskill1",
+      "category": "utility/quickbar",
+      "kind": "utility",
+      "label_origin": "export_filename",
+      "source": {
+        "published_asset": "/assets/native-quickbar/mouseskill1.png"
+      }
+    },
+    "utility/quickbar/system1": {
+      "label": "system1",
+      "region": "icon/utility/quickbar/system1",
+      "category": "utility/quickbar",
+      "kind": "utility",
+      "label_origin": "export_filename",
+      "source": {
+        "published_asset": "/assets/native-quickbar/system1.png"
+      }
+    }
+  },
+  "source_atlases": {
+    "icons-items-1": {
+      "file": "textures/icons-items-1.png",
+      "size_px": [
+        1024,
+        1024
+      ],
+      "sha256": "61f0f3d9fcd31f6e8750369180bf7d73384ef1b1b8e59ea702686a9740cdafda",
+      "format": "rgba8",
+      "filter": "nearest",
+      "alpha": "straight",
+      "gutter_px": 2
+    },
+    "icons-skills-0": {
+      "file": "textures/icons-skills-0.png",
+      "size_px": [
+        1024,
+        1024
+      ],
+      "sha256": "906b9b9bad07f29e93515a03c8f1a6e2d641ae3bca06e62afa619d4cbbad9af1",
+      "format": "rgba8",
+      "filter": "nearest",
+      "alpha": "straight",
+      "gutter_px": 2
+    },
+    "icons-utility-0": {
+      "file": "textures/icons-utility-0.png",
+      "size_px": [
+        1024,
+        1024
+      ],
+      "sha256": "c85b60a15bb7d253b253348bf4ffd066af8cfeefa722c5735d952ef5a8d94f3c",
+      "format": "rgba8",
+      "filter": "nearest",
+      "alpha": "straight",
+      "gutter_px": 2
+    },
+    "widgets-0": {
+      "file": "textures/widgets-0.png",
+      "size_px": [
+        1024,
+        1024
+      ],
+      "sha256": "646d0198e8f988908794e33d098cfeefa52f6ddbfea09e42e26948aa56fce730",
+      "format": "rgba8",
+      "filter": "nearest",
+      "alpha": "straight",
+      "gutter_px": 2
+    }
+  },
+  "source_manifest_sha256": "e7ec2e2b90d106bac59e21d34c6a71130858da37fdb361249dd44bd35bd685b9",
+  "source_catalog_sha256": "91090c0f321f87b41a9b67364b05926562ec3e19b6f4c5130350f87e587cb992",
+  "source_identity": {
+    "art": "Selected local CZ 2015 client asset set",
+    "widget_reference": "ui.py from the local original-client reference source",
+    "source_match_limit": "Art and hashes are exact; portable egui layout recipes are reconstructed from available widget sources, not a claim of pixel-exact full native runtime parity.",
+    "ownership": "Original game art and font designs retain their existing ownership; this export does not grant a new asset license.",
+    "pixel_policy": "Original decoded RGBA pixels only. No generated substitute art, resampling or color changes in asset regions. Exact duplicate pixels share atlas storage."
+  },
+  "application_variants": "Wide buttons preserve native-height end caps and tile their center. Disabled sprites are dimmed by the application. One fixed Metin appearance; original RGBA artwork remains unchanged. Unknown mounting adds a question mark as text. Class skill art uses only original base grade images and is presentation-only."
+}

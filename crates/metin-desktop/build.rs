@@ -27,10 +27,10 @@ fn main() {
                 .all(|c| c.is_ascii_alphanumeric() || c == b'.'),
         "invalid application id"
     );
-    println!("cargo:rustc-env=METINBOT_APP_ID={}", identity.app_id);
-    println!("cargo:rustc-env=METINBOT_PUBLISHER={}", identity.publisher);
+    println!("cargo:rustc-env=COMPANION_APP_ID={}", identity.app_id);
+    println!("cargo:rustc-env=COMPANION_PUBLISHER={}", identity.publisher);
     println!(
-        "cargo:rustc-env=METINBOT_PRODUCT_NAME={}",
+        "cargo:rustc-env=COMPANION_PRODUCT_NAME={}",
         identity.product_name
     );
     for value in [
@@ -56,11 +56,11 @@ fn main() {
         let reference = String::from_utf8_lossy(&reference.stdout);
         println!("cargo:rerun-if-changed=../../.git/{}", reference.trim());
     }
-    println!("cargo:rerun-if-env-changed=METINBOT_BUILD_VERSION");
-    println!("cargo:rerun-if-env-changed=METINBOT_BUILD_NUMBER");
+    println!("cargo:rerun-if-env-changed=COMPANION_BUILD_VERSION");
+    println!("cargo:rerun-if-env-changed=COMPANION_BUILD_NUMBER");
     println!("cargo:rerun-if-changed=../../.git/index");
     let base = fs::read_to_string(root.join("VERSION")).expect("VERSION file");
-    let version = env::var("METINBOT_BUILD_VERSION").unwrap_or_else(|_| base.trim().into());
+    let version = env::var("COMPANION_BUILD_VERSION").unwrap_or_else(|_| base.trim().into());
     let parsed = semver::Version::parse(&version).expect("valid release SemVer");
     let base = semver::Version::parse(base.trim()).expect("valid base version");
     assert_eq!(
@@ -73,7 +73,7 @@ fn main() {
         (base.major, base.minor, base.patch),
         "release version must match VERSION core"
     );
-    let build_number: u16 = env::var("METINBOT_BUILD_NUMBER")
+    let build_number: u16 = env::var("COMPANION_BUILD_NUMBER")
         .unwrap_or_else(|_| "0".into())
         .parse()
         .expect("Windows build number 0..65535");
@@ -87,7 +87,7 @@ fn main() {
         "{}.{}.{}.{}",
         parsed.major, parsed.minor, parsed.patch, build_number
     );
-    println!("cargo:rustc-env=METINBOT_VERSION={}", version.trim());
+    println!("cargo:rustc-env=COMPANION_VERSION={}", version.trim());
     let sha = {
         Command::new("git")
             .args(["rev-parse", "HEAD"])
@@ -98,7 +98,7 @@ fn main() {
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
     }
     .unwrap_or_else(|| "unknown".into());
-    println!("cargo:rustc-env=METINBOT_COMMIT={sha}");
+    println!("cargo:rustc-env=COMPANION_COMMIT={sha}");
     let dirty = Command::new("git")
         .args(["status", "--porcelain"])
         .current_dir(&root)
@@ -106,15 +106,15 @@ fn main() {
         .ok()
         .filter(|o| o.status.success())
         .is_some_and(|o| !o.stdout.is_empty());
-    println!("cargo:rustc-env=METINBOT_DIRTY={dirty}");
+    println!("cargo:rustc-env=COMPANION_DIRTY={dirty}");
     println!(
-        "cargo:rustc-env=METINBOT_TARGET={}",
+        "cargo:rustc-env=COMPANION_TARGET={}",
         env::var("TARGET").expect("target")
     );
     #[cfg(windows)]
     {
-        println!("cargo:rerun-if-changed=../../packaging/metinbot.manifest");
-        println!("cargo:rerun-if-changed=../../packaging/icons/metinbot.ico");
+        println!("cargo:rerun-if-changed=../../packaging/companion.manifest");
+        println!("cargo:rerun-if-changed=../../packaging/icons/companion.ico");
         let mut resources = winresource::WindowsResource::new();
         resources
             .set("ProductName", &identity.product_name)
@@ -139,13 +139,13 @@ fn main() {
         resources.set_version_info(winresource::VersionInfo::FILEVERSION, packed);
         resources.set_version_info(winresource::VersionInfo::PRODUCTVERSION, packed);
         resources.set_icon(
-            root.join("packaging/icons/metinbot.ico")
+            root.join("packaging/icons/companion.ico")
                 .to_str()
                 .expect("icon path"),
         );
         if env::var("PROFILE").as_deref() == Ok("release") {
             resources.set_manifest_file(
-                root.join("packaging/metinbot.manifest")
+                root.join("packaging/companion.manifest")
                     .to_str()
                     .expect("manifest UTF-8 path"),
             );

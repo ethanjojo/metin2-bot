@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Version>2.1.0</Version>
+    <AssemblyVersion>2.1.0.0</AssemblyVersion>
+    <AssemblyName>HIDMaestro.Core</AssemblyName>
+    <RootNamespace>HIDMaestro</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <NoWarn>CA1416</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(InputSdkSource)**/*.cs" Exclude="$(InputSdkSource)Internal/DriverDeploy.cs;$(InputSdkSource)obj/**/*.cs;$(InputSdkSource)bin/**/*.cs" />
+    <Compile Include="$(InputSdkCache)generated/DriverDeploy.cs" />
+    <Compile Include="$(InputSdkCache)generated/CatalogKernels.g.cs" />
+    <Compile Include="BridgeAccess.cs" />
+    <Reference Include="Microsoft.Windows.SDK.NET"><HintPath>$(InputSdkCache)release/HIDMaestroTest/Microsoft.Windows.SDK.NET.dll</HintPath></Reference>
+    <Reference Include="WinRT.Runtime"><HintPath>$(InputSdkCache)release/HIDMaestroTest/WinRT.Runtime.dll</HintPath></Reference>
+  </ItemGroup>
+  <Import Project="$(InputSdkCache)resources.props" />
+</Project>

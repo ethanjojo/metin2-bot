@@ -19,8 +19,8 @@ impl Region {
             "Region coordinates must be finite and within 0–1.",
         )?;
         require(
-            self.right - self.left >= 0.001 && self.bottom - self.top >= 0.001,
-            "Region must have positive dimensions of at least 0.1%.",
+            self.right > self.left && self.bottom > self.top,
+            "Region must have positive dimensions.",
         )
     }
     /// Inclusive pixel endpoints use round-to-nearest with ties to even.

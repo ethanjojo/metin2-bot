@@ -21,8 +21,11 @@ pub struct BuffCycle {
     pub config: BuffConfig,
     pub mounted: Option<bool>,
     pub wait_until: f64,
+    wait_started: f64,
     pub active: bool,
     pub pending: Option<BuffStep>,
+    // Acknowledgement moves the owned step here for its animation wait.
+    waiting_step: Option<BuffStep>,
     pub skipped: Vec<String>,
     due: HashMap<usize, f64>,
     paused_remaining: Option<HashMap<usize, f64>>,
@@ -34,8 +37,10 @@ impl BuffCycle {
             config,
             mounted: None,
             wait_until: 0.,
+            wait_started: 0.,
             active: false,
             pending: None,
+            waiting_step: None,
             skipped: vec![],
             due: HashMap::new(),
             paused_remaining: None,
@@ -64,6 +69,7 @@ impl BuffCycle {
         );
         self.steps.clear();
         self.pending = None;
+        self.waiting_step = None;
         self.active = false;
     }
     pub fn skill_remaining(&self, now: f64, paused: bool) -> Vec<Option<f64>> {
@@ -108,6 +114,35 @@ impl BuffCycle {
         }
         Ok(())
     }
+    pub fn reset_timers(&mut self, now: f64) {
+        self.pause(now);
+        for (index, skill) in self.config.skills.iter().enumerate() {
+            if skill.mode == BuffMode::Refresh {
+                self.due.insert(index, now);
+                self.paused_remaining
+                    .get_or_insert_default()
+                    .insert(index, 0.);
+            }
+        }
+        self.wait_until = now;
+        self.wait_started = now;
+    }
+    pub fn wait_started(&self) -> f64 {
+        self.wait_started
+    }
+    pub fn active_skill(&self, now: f64) -> Option<usize> {
+        if !self.active || !now.is_finite() {
+            return None;
+        }
+        self.pending
+            .as_ref()
+            .or_else(|| {
+                (now < self.wait_until)
+                    .then_some(self.waiting_step.as_ref())
+                    .flatten()
+            })
+            .and_then(|step| step.skill_index)
+    }
     fn indices(&self, now: f64, states: &[Presence], attempted: &HashSet<usize>) -> Vec<usize> {
         self.config
             .skills
@@ -132,6 +167,7 @@ impl BuffCycle {
         self.skipped.clear();
         self.steps.clear();
         self.pending = None;
+        self.waiting_step = None;
         self.active = true;
         self.wait_until = now;
         let indices = self.indices(now, states, attempted);
@@ -197,6 +233,7 @@ impl BuffCycle {
         if self.pending.is_some() || now < self.wait_until {
             return None;
         }
+        self.waiting_step = None;
         while let Some(step) = self.steps.front() {
             if let Some(i) = step.skill_index
                 && self.config.skills[i].mode == BuffMode::Inactive
@@ -239,6 +276,8 @@ impl BuffCycle {
             }
         }
         self.wait_until = now + step.wait_seconds;
+        self.wait_started = now;
+        self.waiting_step = Some(step);
         Ok(())
     }
 }

@@ -6,6 +6,7 @@ pub struct BuffDetector {
     max_gap: f64,
     last: Option<f64>,
     absent: Vec<u32>,
+    last_active: Vec<Option<f64>>,
     active: Vec<Option<Frame>>,
     inactive: Vec<Option<Frame>>,
 }
@@ -37,6 +38,7 @@ impl BuffDetector {
             max_gap: 1.0_f64.max(interval * 1.5),
             last: None,
             absent: vec![0; n],
+            last_active: vec![None; n],
             active,
             inactive,
         })
@@ -44,27 +46,32 @@ impl BuffDetector {
     pub fn reset(&mut self) {
         self.last = None;
         self.absent.fill(0);
+        self.last_active.fill(None);
     }
     pub fn observe(&mut self, image: &Frame, now: f64) -> Result<Vec<Presence>> {
+        if !now.is_finite() {
+            self.reset();
+            return Ok(vec![Presence::Unknown; self.active.len()]);
+        }
         if !self
             .last
             .is_some_and(|last| now > last && now - last <= self.max_gap)
         {
-            self.absent.fill(0);
+            self.reset();
         }
         self.last = Some(now);
         let unknown = vec![Presence::Unknown; self.active.len()];
         let Some(region) = self.config.icon_region else {
-            self.absent.fill(0);
+            self.reset();
             return Ok(unknown);
         };
         if [image.width, image.height] != self.size {
-            self.absent.fill(0);
+            self.reset();
             return Ok(unknown);
         }
         let area = crop(image, region)?;
         if stddev(&area.bgr) < 5. {
-            self.absent.fill(0);
+            self.reset();
             return Ok(unknown);
         }
         let score = |template: &Option<Frame>| -> Result<Option<f64>> {
@@ -91,16 +98,25 @@ impl BuffDetector {
             };
             if !absent {
                 self.absent[i] = 0;
+            } else {
+                self.absent[i] = self.absent[i].saturating_add(1);
             }
+            let confirmed_absent = self.absent[i] >= 3;
+            let held = self.last_active[i]
+                .is_some_and(|last| now - last < self.config.skills[i].active_hold_seconds);
             if active {
+                self.last_active[i] = Some(now);
                 states.push(Presence::Active);
-            } else if absent {
-                self.absent[i] += 1;
-                states.push(if self.absent[i] >= 3 {
-                    Presence::Absent
-                } else {
-                    Presence::Unknown
-                });
+            } else if confirmed_absent && self.inactive[i].is_some() {
+                // Positive inactive evidence overrides the hold; mere failure to
+                // find the active appearance must wait for its hold to expire.
+                self.last_active[i] = None;
+                states.push(Presence::Absent);
+            } else if held {
+                states.push(Presence::Active);
+            } else if confirmed_absent {
+                self.last_active[i] = None;
+                states.push(Presence::Absent);
             } else {
                 states.push(Presence::Unknown);
             }

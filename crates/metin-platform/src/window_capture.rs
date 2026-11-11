@@ -3,13 +3,19 @@
 use crate::{PlatformError, Result, StopToken, TargetState, TargetToken};
 use std::{
     mem::size_of,
+    sync::OnceLock,
     time::{Duration, Instant},
 };
 use windows::{
+    Foundation::Metadata::ApiInformation,
     Graphics::{
-        Capture::{Direct3D11CaptureFramePool, GraphicsCaptureItem, GraphicsCaptureSession},
+        Capture::{
+            Direct3D11CaptureFramePool, GraphicsCaptureAccess, GraphicsCaptureAccessKind,
+            GraphicsCaptureItem, GraphicsCaptureSession,
+        },
         DirectX::{Direct3D11::IDirect3DDevice, DirectXPixelFormat},
     },
+    Security::Authorization::AppCapabilityAccess::AppCapabilityAccessStatus,
     Win32::{
         Foundation::{HMODULE, HWND, RECT},
         Graphics::{
@@ -31,6 +37,57 @@ use windows::{
 };
 
 pub(super) const MAX_FRAME_AGE: Duration = Duration::from_millis(250);
+
+#[derive(Debug)]
+enum BorderlessAccess {
+    Unsupported,
+    Requested(AppCapabilityAccessStatus),
+    Unavailable(String),
+}
+
+// Runtime capture and chooser previews share the same documented permission
+// request. A preview grid must never repeat a system consent prompt per tile.
+static BORDERLESS_ACCESS: OnceLock<BorderlessAccess> = OnceLock::new();
+
+fn request_borderless_access() -> BorderlessAccess {
+    let present = ApiInformation::IsPropertyPresent(
+        &"Windows.Graphics.Capture.GraphicsCaptureSession".into(),
+        &"IsBorderRequired".into(),
+    );
+    match present {
+        Ok(false) => BorderlessAccess::Unsupported,
+        Err(error) => BorderlessAccess::Unavailable(error.to_string()),
+        Ok(true) => {
+            match GraphicsCaptureAccess::RequestAccessAsync(GraphicsCaptureAccessKind::Borderless)
+                .and_then(|request| request.join())
+            {
+                Ok(access) => BorderlessAccess::Requested(access),
+                Err(error) => BorderlessAccess::Unavailable(error.to_string()),
+            }
+        }
+    }
+}
+
+fn configure_capture_border(session: &GraphicsCaptureSession) {
+    let access = BORDERLESS_ACCESS.get_or_init(|| {
+        let access = request_borderless_access();
+        match &access {
+            BorderlessAccess::Unsupported => tracing::info!("This Windows version requires a capture border."),
+            BorderlessAccess::Requested(status) if *status == AppCapabilityAccessStatus::Allowed => tracing::info!("Windows allowed borderless window capture."),
+            BorderlessAccess::Requested(status) => tracing::warn!(status = status.0, "Windows may retain the capture border because borderless access was not granted."),
+            BorderlessAccess::Unavailable(error) => tracing::warn!(%error, "Windows borderless capture access could not be requested; system capture policy remains authoritative."),
+        }
+        access
+    });
+    if matches!(access, BorderlessAccess::Unsupported) {
+        return;
+    }
+    // Windows ignores this preference when the user or system requires the
+    // indicator. Never modify registry/privacy policy or substitute capture.
+    if let Err(error) = session.SetIsBorderRequired(false) {
+        tracing::warn!(%error, "Windows retained the capture border. Window capture remains available.");
+    }
+}
 
 fn error(e: windows::core::Error) -> PlatformError {
     PlatformError(format!(
@@ -160,6 +217,7 @@ impl WindowCapture {
         .map_err(error)?;
         let session = pool.CreateCaptureSession(&item).map_err(error)?;
         session.SetIsCursorCaptureEnabled(false).map_err(error)?;
+        configure_capture_border(&session);
         session.StartCapture().map_err(error)?;
         Ok(Self {
             target,
@@ -408,6 +466,103 @@ fn source_instant(ticks: i64, (now, current): (Instant, i64)) -> Result<Instant>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    #[ignore = "briefly shows a nonactivating owned window for actual Windows borderless capture QA"]
+    fn owned_window_capture_requests_borderless_and_keeps_fresh_capture_working() {
+        use windows_sys::Win32::{
+            Graphics::Gdi::{
+                FillRect, GetDC, GetStockObject, ReleaseDC, UpdateWindow, WHITE_BRUSH,
+            },
+            System::Threading::GetCurrentProcessId,
+            UI::WindowsAndMessaging::{
+                CreateWindowExW, DestroyWindow, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW, WS_POPUP,
+                WS_VISIBLE,
+            },
+        };
+        struct OwnedWindow(windows_sys::Win32::Foundation::HWND);
+        impl Drop for OwnedWindow {
+            fn drop(&mut self) {
+                unsafe {
+                    DestroyWindow(self.0);
+                }
+            }
+        }
+        unsafe {
+            let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+            let title: Vec<u16> = "Companion capture border fixture\0"
+                .encode_utf16()
+                .collect();
+            let window = OwnedWindow(CreateWindowExW(
+                WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+                class.as_ptr(),
+                title.as_ptr(),
+                WS_POPUP | WS_VISIBLE,
+                32,
+                32,
+                240,
+                180,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            ));
+            assert!(!window.0.is_null(), "create owned capture fixture");
+            UpdateWindow(window.0);
+            let dc = GetDC(window.0);
+            assert!(!dc.is_null());
+            let bounds = windows_sys::Win32::Foundation::RECT {
+                left: 0,
+                top: 0,
+                right: 240,
+                bottom: 180,
+            };
+            assert_ne!(FillRect(dc, &bounds, GetStockObject(WHITE_BRUSH) as _), 0);
+            ReleaseDC(window.0, dc);
+            let pid = GetCurrentProcessId();
+            let target = TargetToken {
+                handle: window.0 as usize,
+                pid,
+                created: super::super::process_identity(pid).unwrap(),
+            };
+            let geometry = super::super::inspect_target(target).unwrap();
+            let mut capture = WindowCapture::new(target).unwrap();
+            let access = BORDERLESS_ACCESS
+                .get()
+                .expect("capability checked once for this process");
+            eprintln!("Borderless capability result: {access:?}");
+            if !matches!(access, BorderlessAccess::Unsupported) {
+                assert!(
+                    !capture.session.IsBorderRequired().unwrap(),
+                    "session requests no border; Windows policy still controls actual visibility"
+                );
+            }
+            let stop = StopToken::default();
+            let requested = Instant::now();
+            let (pixels, time) = capture
+                .frame(
+                    geometry,
+                    requested,
+                    requested + Duration::from_secs(2),
+                    &stop,
+                    stop.generation(),
+                )
+                .unwrap();
+            assert_eq!((geometry.width, geometry.height), (240, 180));
+            assert_eq!(pixels.len(), 240 * 180 * 3);
+            assert!(pixels.iter().any(|pixel| *pixel > 0));
+            assert!(time >= requested);
+            // Session and frame pool close before destroying the source window.
+            drop(capture);
+            // Every new session receives the preference, even after the one-time
+            // permission request has already been cached by a different capture.
+            let recreated = WindowCapture::new(target).unwrap();
+            if !matches!(access, BorderlessAccess::Unsupported) {
+                assert!(!recreated.session.IsBorderRequired().unwrap());
+            }
+            drop(recreated);
+        }
+    }
+
     #[test]
     fn source_time_preserves_age_instead_of_restamping_queued_pixels() {
         let now = Instant::now();

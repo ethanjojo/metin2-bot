@@ -991,14 +991,14 @@
           "frame": "f2b75de8da4e5280bebcb3099a13d63c9010d60081a542c8f156665cc8a41548.png",
           "now": 0.25,
           "expected": [
-            "unknown"
+            "active"
           ]
         },
         {
           "frame": "f2b75de8da4e5280bebcb3099a13d63c9010d60081a542c8f156665cc8a41548.png",
           "now": 0.5,
           "expected": [
-            "unknown"
+            "active"
           ]
         },
         {
@@ -1209,7 +1209,7 @@
           "frame": "f2b75de8da4e5280bebcb3099a13d63c9010d60081a542c8f156665cc8a41548.png",
           "now": 1,
           "expected": [
-            "unknown"
+            "active"
           ]
         }
       ]

@@ -3,21 +3,35 @@ use metin_desktop::runtime::SessionKey;
 use metin_desktop::runtime::{Command, RuntimeHandle};
 use metin_platform::*;
 use std::{
-    sync::{Arc, Mutex},
+    sync::{Arc, Barrier, Mutex},
     time::{Duration, Instant},
 };
 #[derive(Default)]
 struct Controls {
     hotkey_polls: usize,
+    hotkey_barrier: Option<Arc<Barrier>>,
     toggle: bool,
     stop: bool,
     fail_key: bool,
+    fail_release: bool,
     lose_focus: bool,
     fail_capture: bool,
+    stale_capture: bool,
+    focus_change_during_capture: bool,
     fail_attach: bool,
     captures: usize,
+    capture_active: bool,
     capture_limits: Vec<Duration>,
     calls: Vec<(u16, bool)>,
+    colored_candidates: bool,
+    hp_detail: Option<[u32; 2]>,
+    target_origin: [i32; 2],
+    target_size: Option<[u32; 2]>,
+    cursor: [i32; 2],
+    obscure_nearest: bool,
+    obscure_all: bool,
+    obscure_on_hover: bool,
+    clicks: Vec<[u32; 2]>,
 }
 struct Fake {
     controls: Arc<Mutex<Controls>>,
@@ -55,15 +69,19 @@ impl PlatformBackend for Fake {
         Ok(())
     }
     fn inspect(&mut self) -> Result<TargetState> {
+        let c = self.controls.lock().unwrap();
         Ok(TargetState {
             target: self.target,
-            left: 0,
-            top: 0,
-            width: 200,
-            height: 200,
+            left: c.target_origin[0],
+            top: c.target_origin[1],
+            width: c.target_size.map_or(200, |size| size[0]),
+            height: c.target_size.map_or(200, |size| size[1]),
             visible: true,
-            foreground: !self.controls.lock().unwrap().lose_focus,
+            foreground: !c.lose_focus,
         })
+    }
+    fn stop_capture(&mut self) {
+        self.controls.lock().unwrap().capture_active = false;
     }
     fn request_activation(&mut self) -> Result<bool> {
         Ok(true)
@@ -72,21 +90,49 @@ impl PlatformBackend for Fake {
         {
             let mut c = self.controls.lock().unwrap();
             c.captures += 1;
+            c.capture_active = true;
             c.capture_limits
                 .push(deadline.saturating_duration_since(Instant::now()));
             if c.fail_capture {
                 return Err(PlatformError("Injected capture failure".into()));
             }
+            if c.focus_change_during_capture {
+                c.focus_change_during_capture = false;
+                c.lose_focus = !c.lose_focus;
+                return Err(PlatformError("Window focus changed during capture".into()));
+            }
         }
         self.id += 1;
+        let mut pixels: Vec<_> = (0..200 * 200 * 3).map(|n| 128 + (n % 31) as u8).collect();
+        if self.controls.lock().unwrap().colored_candidates {
+            pixels.fill(35);
+            for (left, top) in [(80, 80), (140, 130)] {
+                for y in top..top + 24 {
+                    for x in left..left + 20 {
+                        let offset = (y * 200 + x) as usize * 3;
+                        pixels[offset..offset + 3].copy_from_slice(&[0, 220, 0]);
+                    }
+                }
+            }
+        }
+        if let Some([left, top]) = self.controls.lock().unwrap().hp_detail {
+            let template = hp_template();
+            for y in 0..template.height {
+                for x in 0..template.width {
+                    let offset = ((top + y) * 200 + left + x) as usize * 3;
+                    let source = (y * template.width + x) as usize * 3;
+                    pixels[offset..offset + 3].copy_from_slice(&template.bgr[source..source + 3]);
+                }
+            }
+        }
         Ok(CapturedFrame {
-            frame: Frame::new(
-                200,
-                200,
-                (0..200 * 200 * 3).map(|n| 128 + (n % 31) as u8).collect(),
-            )?,
+            frame: Frame::new(200, 200, pixels)?,
             target: self.target,
-            captured_at: Instant::now(),
+            captured_at: if self.controls.lock().unwrap().stale_capture {
+                Instant::now() - Duration::from_secs(1)
+            } else {
+                Instant::now()
+            },
             id: self.id,
             geometry: self.inspect()?,
         })
@@ -97,28 +143,46 @@ impl PlatformBackend for Fake {
     fn key_held(&self, _: u16) -> bool {
         false
     }
-    fn point_clear(&self, _: [i32; 2]) -> bool {
-        true
+    fn point_clear(&self, point: [i32; 2]) -> bool {
+        let c = self.controls.lock().unwrap();
+        let client_x = point[0] - c.target_origin[0];
+        !(c.obscure_all || (c.obscure_nearest && (80..100).contains(&client_x)))
     }
     fn cursor(&self) -> Result<[i32; 2]> {
-        Ok([0, 0])
+        Ok(self.controls.lock().unwrap().cursor)
     }
-    fn move_relative(&mut self, _: [i32; 2]) -> Result<()> {
+    fn move_relative(&mut self, delta: [i32; 2]) -> Result<()> {
+        let mut c = self.controls.lock().unwrap();
+        c.cursor[0] += delta[0];
+        c.cursor[1] += delta[1];
+        if c.obscure_on_hover {
+            c.obscure_all = true;
+        }
         Ok(())
     }
     fn key(&mut self, key: u16, down: bool, _: bool) -> Result<()> {
         let mut c = self.controls.lock().unwrap();
         c.calls.push((key, down));
-        if down && c.fail_key {
+        if !down && c.fail_release {
+            Err(PlatformError("Injected release failure".into()))
+        } else if down && c.fail_key {
             Err(PlatformError("Injected key failure".into()))
         } else {
             Ok(())
         }
     }
-    fn mouse(&mut self, _: [u32; 2], _: bool) -> Result<()> {
+    fn mouse(&mut self, point: [u32; 2], down: bool) -> Result<()> {
+        if down {
+            self.controls.lock().unwrap().clicks.push(point);
+        }
         Ok(())
     }
     fn hotkeys(&mut self) -> Result<HotkeyEvents> {
+        let barrier = self.controls.lock().unwrap().hotkey_barrier.take();
+        if let Some(barrier) = barrier {
+            barrier.wait();
+            barrier.wait();
+        }
         let mut c = self.controls.lock().unwrap();
         c.hotkey_polls += 1;
         let events = HotkeyEvents {
@@ -167,13 +231,17 @@ fn profile() -> Profile {
     p.timing.sample_interval = 0.1;
     p
 }
+fn hp_template() -> Frame {
+    Frame::new(10, 10, (0..300).map(|n| (n % 251) as u8).collect()).unwrap()
+}
+
 fn configure(r: &RuntimeHandle, p: Profile, target: TargetToken, mounted: bool, revision: u64) {
     let key = SessionKey {
         profile_id: p.id,
         target,
     };
     let new_session = r.latest().unwrap().key != Some(key);
-    let template = Frame::new(10, 10, (0..300).map(|n| (n % 251) as u8).collect()).unwrap();
+    let template = hp_template();
     r.send(Command::Configure {
         profile: Box::new(p),
         template: Some(template),
@@ -244,9 +312,19 @@ fn pause_cancels_pending_start_instead_of_resuming_after_delay() {
     r.send(Command::Arm { key }).unwrap();
     wait(&r, |s| s.state == "Armed");
     assert!(r.latest().unwrap().arming);
+    assert_eq!(
+        r.latest().unwrap().activity,
+        metin_core::ActivityKind::Starting
+    );
+    assert_eq!(r.latest().unwrap().active_skill, None);
     r.stop();
     wait(&r, |s| s.state != "Armed");
     assert!(!r.latest().unwrap().arming);
+    assert_eq!(
+        r.latest().unwrap().activity,
+        metin_core::ActivityKind::Paused
+    );
+    assert_eq!(r.latest().unwrap().active_skill, None);
     std::thread::sleep(Duration::from_millis(3200));
     assert!(!r.latest().unwrap().running);
     assert!(controls.lock().unwrap().calls.is_empty());
@@ -264,6 +342,357 @@ fn stop_then_new_configuration_is_not_dropped_while_receiver_waits() {
         wait(&r, |s| s.revision == revision);
     }
     r.shutdown().unwrap();
+}
+
+#[test]
+fn calibration_review_blocks_arm_and_f7_but_keeps_snapshot_and_preview_available() {
+    let (runtime, controls) = runtime();
+    let profile = profile();
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile, key.target, false, 1);
+    runtime.send(Command::Arm { key }).unwrap();
+    wait(&runtime, |snapshot| snapshot.arming);
+    runtime
+        .send(Command::CalibrationReview {
+            key,
+            revision: 1,
+            active: true,
+        })
+        .unwrap();
+    wait(&runtime, |snapshot| snapshot.calibration_review);
+    assert!(!runtime.latest().unwrap().arming);
+    assert!(!runtime.latest().unwrap().running);
+    runtime.send(Command::Arm { key }).unwrap();
+    runtime.send(Command::Snapshot { key }).unwrap();
+    wait(&runtime, |snapshot| snapshot.frame_id > 0);
+    assert!(!runtime.latest().unwrap().arming);
+    assert!(!runtime.latest().unwrap().running);
+    controls.lock().unwrap().toggle = true;
+    runtime
+        .send(Command::SetPreview { key, enabled: true })
+        .unwrap();
+    wait(&runtime, |snapshot| snapshot.frame_id > 2);
+    let snapshot = runtime.latest().unwrap();
+    assert!(snapshot.calibration_review);
+    assert!(!snapshot.running && !snapshot.arming);
+    assert!(snapshot.released_generation.is_some());
+    assert!(controls.lock().unwrap().calls.iter().all(|(_, down)| !down));
+    runtime.shutdown().unwrap();
+}
+
+#[test]
+fn calibration_review_survives_focus_resize_restore_and_stop_generation_changes() {
+    let (runtime, controls) = runtime();
+    let profile = profile();
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile, key.target, false, 1);
+    runtime
+        .send(Command::CalibrationReview {
+            key,
+            revision: 1,
+            active: true,
+        })
+        .unwrap();
+    wait(&runtime, |snapshot| snapshot.calibration_review);
+    for (focus_lost, size) in [(true, [240, 200]), (false, [240, 200]), (false, [200, 200])] {
+        {
+            let mut control = controls.lock().unwrap();
+            control.lose_focus = focus_lost;
+            control.target_size = Some(size);
+            control.toggle = true;
+        }
+        let previous = runtime.latest().unwrap().frame_id;
+        runtime.send(Command::Snapshot { key }).unwrap();
+        wait(&runtime, |snapshot| snapshot.frame_id > previous);
+        let snapshot = runtime.latest().unwrap();
+        assert!(snapshot.calibration_review);
+        assert!(!snapshot.running && !snapshot.arming);
+    }
+    runtime.stop();
+    wait(&runtime, |snapshot| {
+        snapshot.released_generation == Some(runtime.stop_generation())
+    });
+    controls.lock().unwrap().toggle = true;
+    let previous = runtime.latest().unwrap().frame_id;
+    runtime.send(Command::Snapshot { key }).unwrap();
+    wait(&runtime, |snapshot| snapshot.frame_id > previous);
+    assert!(runtime.latest().unwrap().calibration_review);
+    assert!(!runtime.latest().unwrap().running);
+    assert!(controls.lock().unwrap().calls.iter().all(|(_, down)| !down));
+    runtime.shutdown().unwrap();
+}
+
+#[test]
+fn calibration_review_ignores_stale_begin_and_end_and_matching_cancel_allows_start() {
+    let (runtime, controls) = runtime();
+    let profile = profile();
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile.clone(), key.target, false, 1);
+    runtime
+        .send(Command::CalibrationReview {
+            key,
+            revision: 1,
+            active: true,
+        })
+        .unwrap();
+    wait(&runtime, |snapshot| snapshot.calibration_review);
+    runtime
+        .send(Command::CalibrationReview {
+            key,
+            revision: 1,
+            active: false,
+        })
+        .unwrap();
+    wait(&runtime, |snapshot| !snapshot.calibration_review);
+    configure(&runtime, profile, key.target, false, 2);
+    let previous = runtime.latest().unwrap().frame_id;
+    runtime
+        .send(Command::CalibrationReview {
+            key,
+            revision: 1,
+            active: true,
+        })
+        .unwrap();
+    runtime.send(Command::Snapshot { key }).unwrap();
+    wait(&runtime, |snapshot| snapshot.frame_id > previous);
+    assert!(!runtime.latest().unwrap().calibration_review);
+    runtime
+        .send(Command::CalibrationReview {
+            key,
+            revision: 2,
+            active: true,
+        })
+        .unwrap();
+    wait(&runtime, |snapshot| snapshot.calibration_review);
+    for (stale_key, revision) in [
+        (key, 1),
+        (
+            SessionKey {
+                target: token(2),
+                ..key
+            },
+            2,
+        ),
+    ] {
+        runtime
+            .send(Command::CalibrationReview {
+                key: stale_key,
+                revision,
+                active: false,
+            })
+            .unwrap();
+    }
+    runtime.send(Command::Arm { key }).unwrap();
+    let previous = runtime.latest().unwrap().frame_id;
+    runtime.send(Command::Snapshot { key }).unwrap();
+    wait(&runtime, |snapshot| snapshot.frame_id > previous);
+    assert!(runtime.latest().unwrap().calibration_review);
+    assert!(!runtime.latest().unwrap().arming);
+    runtime
+        .send(Command::CalibrationReview {
+            key,
+            revision: 2,
+            active: false,
+        })
+        .unwrap();
+    wait(&runtime, |snapshot| !snapshot.calibration_review);
+    controls.lock().unwrap().toggle = true;
+    wait(&runtime, |snapshot| snapshot.running);
+    runtime.stop();
+    wait(&runtime, |snapshot| !snapshot.running);
+    runtime.send(Command::Arm { key }).unwrap();
+    wait(&runtime, |snapshot| snapshot.arming);
+    runtime.shutdown().unwrap();
+}
+
+#[test]
+fn calibration_review_resets_on_reconnect_and_session_replacement() {
+    let (runtime, _) = runtime();
+    let profile = profile();
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile.clone(), key.target, false, 1);
+    runtime
+        .send(Command::CalibrationReview {
+            key,
+            revision: 1,
+            active: true,
+        })
+        .unwrap();
+    wait(&runtime, |snapshot| snapshot.calibration_review);
+    runtime.send(Command::Connect { key, revision: 2 }).unwrap();
+    wait(&runtime, |snapshot| snapshot.revision == 2);
+    assert!(!runtime.latest().unwrap().calibration_review);
+    runtime.send(Command::Arm { key }).unwrap();
+    wait(&runtime, |snapshot| snapshot.arming);
+    runtime
+        .send(Command::CalibrationReview {
+            key,
+            revision: 2,
+            active: true,
+        })
+        .unwrap();
+    wait(&runtime, |snapshot| snapshot.calibration_review);
+    configure(&runtime, profile, token(2), false, 3);
+    assert!(!runtime.latest().unwrap().calibration_review);
+    let replacement = runtime.latest().unwrap().key.unwrap();
+    runtime
+        .send(Command::CalibrationReview {
+            key: replacement,
+            revision: 3,
+            active: true,
+        })
+        .unwrap();
+    wait(&runtime, |snapshot| snapshot.calibration_review);
+    runtime.send(Command::Detach).unwrap();
+    wait(&runtime, |snapshot| snapshot.key.is_none());
+    assert!(!runtime.latest().unwrap().calibration_review);
+    runtime.shutdown().unwrap();
+}
+
+#[test]
+fn calibration_review_cannot_be_bypassed_by_reapplying_the_same_session() {
+    let (runtime, controls) = runtime();
+    let profile = profile();
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile.clone(), key.target, false, 1);
+    runtime
+        .send(Command::CalibrationReview {
+            key,
+            revision: 1,
+            active: true,
+        })
+        .unwrap();
+    wait(&runtime, |snapshot| snapshot.calibration_review);
+    runtime
+        .send(Command::Configure {
+            profile: Box::new(profile),
+            template: Some(hp_template()),
+            target: key.target,
+            revision: 1,
+        })
+        .unwrap();
+    controls.lock().unwrap().toggle = true;
+    runtime.send(Command::Snapshot { key }).unwrap();
+    wait(&runtime, |snapshot| snapshot.frame_id > 0);
+    assert!(runtime.latest().unwrap().calibration_review);
+    assert!(!runtime.latest().unwrap().running);
+    assert!(controls.lock().unwrap().calls.iter().all(|(_, down)| !down));
+    runtime.shutdown().unwrap();
+}
+
+#[test]
+fn calibration_review_commands_survive_stop_generation_changes_in_fifo_order() {
+    let (runtime, controls) = runtime();
+    let profile = profile();
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile.clone(), key.target, false, 1);
+    for active in [true, false] {
+        let barrier = Arc::new(Barrier::new(2));
+        controls.lock().unwrap().hotkey_barrier = Some(barrier.clone());
+        barrier.wait();
+        runtime
+            .send(Command::CalibrationReview {
+                key,
+                revision: 1,
+                active,
+            })
+            .unwrap();
+        // Force the control command into the old generation before allowing
+        // the worker to receive it; release/stop must never discard review state.
+        runtime.stop();
+        barrier.wait();
+        wait(&runtime, |snapshot| {
+            snapshot.calibration_review == active
+                && snapshot.released_generation == Some(runtime.stop_generation())
+        });
+    }
+    // The save path cancels holds after queueing the matching review end.
+    // Both end and the later configuration must survive in FIFO order.
+    runtime
+        .send(Command::CalibrationReview {
+            key,
+            revision: 1,
+            active: true,
+        })
+        .unwrap();
+    wait(&runtime, |snapshot| snapshot.calibration_review);
+    let barrier = Arc::new(Barrier::new(2));
+    controls.lock().unwrap().hotkey_barrier = Some(barrier.clone());
+    barrier.wait();
+    runtime
+        .send(Command::CalibrationReview {
+            key,
+            revision: 1,
+            active: false,
+        })
+        .unwrap();
+    runtime.stop();
+    runtime
+        .send(Command::Configure {
+            profile: Box::new(profile),
+            template: Some(hp_template()),
+            target: key.target,
+            revision: 2,
+        })
+        .unwrap();
+    runtime.send(Command::Arm { key }).unwrap();
+    barrier.wait();
+    wait(&runtime, |snapshot| {
+        snapshot.revision == 2 && snapshot.arming
+    });
+    assert!(!runtime.latest().unwrap().calibration_review);
+    runtime.shutdown().unwrap();
+}
+
+#[test]
+fn calibration_review_pauses_and_releases_an_owned_attack() {
+    let (runtime, controls) = runtime();
+    let mut profile = profile();
+    profile.timing.search_timeout = 120.;
+    profile.out_of_target.during_search = true;
+    profile.out_of_target.search_after_seconds = 1.;
+    profile.out_of_target.search_attack_seconds = 3.;
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile, key.target, false, 1);
+    controls.lock().unwrap().toggle = true;
+    wait(&runtime, |snapshot| {
+        snapshot.state == "Out-of-target attack"
+    });
+    assert!(controls.lock().unwrap().calls.contains(&(0x20, true)));
+    runtime
+        .send(Command::CalibrationReview {
+            key,
+            revision: 1,
+            active: true,
+        })
+        .unwrap();
+    wait(&runtime, |snapshot| {
+        snapshot.calibration_review && snapshot.released_generation.is_some()
+    });
+    assert!(!runtime.latest().unwrap().running);
+    assert!(controls.lock().unwrap().calls.contains(&(0x20, false)));
+    runtime.shutdown().unwrap();
 }
 
 #[test]
@@ -391,7 +820,7 @@ fn history_clear_and_statistics_reset_keep_safety_budget_and_reject_stale_keys()
     r.stop();
     wait(&r, |s| !s.running && !s.events.is_empty());
     let active = r.latest().unwrap().schedule.active_seconds;
-    r.send(Command::ResetStatistics { key }).unwrap();
+    r.send(Command::ResetSession { key }).unwrap();
     r.send(Command::ClearHistory {
         key: SessionKey {
             profile_id: key.profile_id,
@@ -417,6 +846,122 @@ fn history_clear_and_statistics_reset_keep_safety_budget_and_reject_stale_keys()
 }
 
 #[test]
+fn session_reset_releases_held_attack_and_does_not_claim_success_when_release_fails() {
+    for fail_release in [false, true] {
+        let (runtime, controls) = runtime();
+        let mut profile = profile();
+        profile.safety.stop_enabled = true;
+        profile.timing.search_timeout = 120.;
+        profile.out_of_target.during_search = true;
+        profile.out_of_target.search_after_seconds = 1.;
+        profile.out_of_target.search_attack_seconds = 3.;
+        let key = SessionKey {
+            profile_id: profile.id,
+            target: token(1),
+        };
+        configure(&runtime, profile, key.target, false, 1);
+        controls.lock().unwrap().toggle = true;
+        wait(&runtime, |snapshot| {
+            snapshot.state == "Out-of-target attack"
+        });
+        let budget_before = runtime.latest().unwrap().schedule.active_seconds;
+        assert!(budget_before > 0.);
+        controls.lock().unwrap().fail_release = fail_release;
+        runtime.send(Command::ResetSession { key }).unwrap();
+        if fail_release {
+            wait(&runtime, |snapshot| {
+                !snapshot.running && snapshot.reason.contains("release failure")
+            });
+            let snapshot = runtime.latest().unwrap();
+            assert!(snapshot.statistics.active_seconds > 0.);
+            assert!(
+                !snapshot
+                    .events
+                    .iter()
+                    .any(|event| event.message.starts_with("Session reset"))
+            );
+            assert!(snapshot.released_generation.is_none());
+            controls.lock().unwrap().fail_release = false;
+        } else {
+            wait(&runtime, |snapshot| {
+                !snapshot.running
+                    && snapshot.events.len() == 1
+                    && snapshot.events[0].message.starts_with("Session reset")
+            });
+            let snapshot = runtime.latest().unwrap();
+            assert_eq!(snapshot.statistics, metin_core::Statistics::default());
+            assert!(snapshot.schedule.active_seconds >= budget_before);
+            assert_eq!(snapshot.mounted, Some(false));
+            assert!(snapshot.activity_progress.is_none());
+            assert!(snapshot.buff_presence.is_empty());
+        }
+        assert!(controls.lock().unwrap().calls.contains(&(0x20, false)));
+        runtime.shutdown().unwrap();
+    }
+}
+
+#[test]
+fn session_reset_interrupts_a_blocking_rotation_before_its_hold_finishes() {
+    let (runtime, controls) = runtime();
+    let mut profile = profile();
+    profile.buffs.enabled = false;
+    profile.timing.search_timeout = 2.;
+    profile.timing.rotate_seconds = 1.;
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile, key.target, false, 1);
+    controls.lock().unwrap().toggle = true;
+    let deadline = Instant::now() + Duration::from_secs(4);
+    while !controls.lock().unwrap().calls.contains(&(0x45, true)) {
+        assert!(Instant::now() < deadline, "Rotation never started");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let requested = Instant::now();
+    runtime.send(Command::ResetSession { key }).unwrap();
+    let deadline = requested + Duration::from_millis(700);
+    while !controls.lock().unwrap().calls.contains(&(0x45, false)) {
+        assert!(
+            Instant::now() < deadline,
+            "Reset waited for the full blocking hold"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    wait(&runtime, |snapshot| {
+        !snapshot.running
+            && snapshot.events.len() == 1
+            && snapshot.events[0].message.starts_with("Session reset")
+    });
+    assert_eq!(
+        runtime.latest().unwrap().statistics,
+        metin_core::Statistics::default()
+    );
+    runtime.shutdown().unwrap();
+}
+
+#[test]
+fn buff_presence_is_published_with_fresh_pixels_and_retired_when_the_frame_expires() {
+    let (runtime, _) = runtime();
+    let mut profile = profile();
+    profile.buffs.skills.push(metin_core::BuffSkill::default());
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile, key.target, false, 1);
+    runtime.send(Command::Snapshot { key }).unwrap();
+    wait(&runtime, |snapshot| {
+        snapshot.frame_id > 0 && snapshot.buff_presence == vec![metin_core::Presence::Unknown]
+    });
+    wait(&runtime, |snapshot| {
+        snapshot.captured_at.is_some() && snapshot.buff_presence.is_empty()
+    });
+    assert!(runtime.latest().unwrap().captured_at.unwrap().elapsed() >= Duration::from_millis(500));
+    runtime.shutdown().unwrap();
+}
+
+#[test]
 fn held_attack_keeps_capturing_and_releases_on_stop_focus_loss_or_capture_error() {
     for fault in [0, 1, 2] {
         let (r, controls) = runtime();
@@ -429,6 +974,10 @@ fn held_attack_keeps_capturing_and_releases_on_stop_focus_loss_or_capture_error(
         wait(&r, |s| s.revision == 1);
         controls.lock().unwrap().toggle = true;
         wait(&r, |s| s.state == "Out-of-target attack");
+        assert_eq!(
+            r.latest().unwrap().activity,
+            metin_core::ActivityKind::OutOfTarget
+        );
         let before = controls.lock().unwrap().captures;
         std::thread::sleep(Duration::from_millis(250));
         {
@@ -448,6 +997,15 @@ fn held_attack_keeps_capturing_and_releases_on_stop_focus_loss_or_capture_error(
             _ => controls.lock().unwrap().fail_capture = true,
         }
         wait(&r, |s| !s.running);
+        assert_eq!(
+            r.latest().unwrap().activity,
+            if fault == 0 {
+                metin_core::ActivityKind::Paused
+            } else {
+                metin_core::ActivityKind::Error
+            }
+        );
+        assert_eq!(r.latest().unwrap().active_skill, None);
         assert!(controls.lock().unwrap().calls.contains(&(0x20, false)));
         r.shutdown().unwrap();
     }
@@ -459,6 +1017,293 @@ fn a_paused_session_without_preview_demand_does_not_capture() {
     configure(&r, profile(), token(1), false, 1);
     std::thread::sleep(Duration::from_millis(300));
     assert_eq!(controls.lock().unwrap().captures, 0);
+    r.shutdown().unwrap();
+}
+
+fn candidate_profile() -> Profile {
+    let mut p = profile();
+    p.panel.threshold = 0.99;
+    p.color.as_mut().unwrap().hsv = [60, 255, 220];
+    p.timing.search_timeout = 120.;
+    p
+}
+
+#[test]
+fn obscured_new_candidate_is_skipped_for_a_clear_candidate_in_physical_coordinates() {
+    let (r, controls) = runtime();
+    {
+        let mut c = controls.lock().unwrap();
+        c.colored_candidates = true;
+        c.obscure_nearest = true;
+        c.target_origin = [-250, 300];
+        c.cursor = [-150, 400];
+    }
+    configure(&r, candidate_profile(), token(1), false, 1);
+    controls.lock().unwrap().toggle = true;
+    wait(&r, |_| !controls.lock().unwrap().clicks.is_empty());
+    let clicks = controls.lock().unwrap().clicks.clone();
+    assert_eq!(clicks, vec![[149, 141]]);
+    assert!(r.latest().unwrap().running);
+    wait(&r, |s| s.candidates.len() == 2);
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn all_obscured_candidates_remain_visible_in_preview_without_new_clicks() {
+    let (r, controls) = runtime();
+    {
+        let mut c = controls.lock().unwrap();
+        c.colored_candidates = true;
+        c.obscure_all = true;
+    }
+    configure(&r, candidate_profile(), token(1), false, 1);
+    controls.lock().unwrap().toggle = true;
+    wait(&r, |s| {
+        s.candidates.len() == 2 && s.schedule.active_seconds > 0.8
+    });
+    assert!(r.latest().unwrap().running);
+    assert!(r.latest().unwrap().next_target.is_none());
+    assert!(controls.lock().unwrap().clicks.is_empty());
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn candidate_obstruction_appearing_during_hover_still_pauses_before_mouse_down() {
+    let (r, controls) = runtime();
+    {
+        let mut c = controls.lock().unwrap();
+        c.colored_candidates = true;
+        c.obscure_on_hover = true;
+    }
+    configure(&r, candidate_profile(), token(1), false, 1);
+    controls.lock().unwrap().toggle = true;
+    wait(&r, |s| !s.running && s.reason.contains("obstructs"));
+    assert!(controls.lock().unwrap().clicks.is_empty());
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn arming_retries_preview_focus_transition_then_starts_from_a_fresh_frame() {
+    let (r, controls) = runtime();
+    let p = profile();
+    let key = SessionKey {
+        profile_id: p.id,
+        target: token(1),
+    };
+    configure(&r, p, token(1), false, 1);
+    r.send(Command::SetPreview { key, enabled: true }).unwrap();
+    wait(&r, |s| s.frame_id > 0);
+    {
+        let mut c = controls.lock().unwrap();
+        c.lose_focus = true;
+        c.focus_change_during_capture = true;
+    }
+    r.send(Command::Arm { key }).unwrap();
+    std::thread::sleep(Duration::from_millis(400));
+    assert!(r.latest().unwrap().arming, "{}", r.latest().unwrap().reason);
+    assert!(!r.latest().unwrap().running);
+    assert!(controls.lock().unwrap().calls.iter().all(|(_, down)| !down));
+    wait(&r, |s| s.running && s.frame_id > 1);
+    assert!(r.latest().unwrap().geometry.unwrap().foreground);
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn arming_waits_for_successful_capture_even_after_focus_delay() {
+    let (r, controls) = runtime();
+    let p = profile();
+    let key = SessionKey {
+        profile_id: p.id,
+        target: token(1),
+    };
+    configure(&r, p, token(1), false, 1);
+    controls.lock().unwrap().fail_capture = true;
+    r.send(Command::Arm { key }).unwrap();
+    std::thread::sleep(Duration::from_millis(3300));
+    assert!(r.latest().unwrap().arming);
+    assert!(!r.latest().unwrap().running);
+    assert!(controls.lock().unwrap().calls.iter().all(|(_, down)| !down));
+    controls.lock().unwrap().fail_capture = false;
+    wait(&r, |s| s.running && s.frame_id > 0);
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn stale_capture_cannot_start_armed_input_or_trigger_a_running_action() {
+    for arm in [true, false] {
+        let (r, controls) = runtime();
+        let p = profile();
+        let key = SessionKey {
+            profile_id: p.id,
+            target: token(1),
+        };
+        configure(&r, p, token(1), false, 1);
+        controls.lock().unwrap().stale_capture = true;
+        if arm {
+            r.send(Command::Arm { key }).unwrap();
+            std::thread::sleep(Duration::from_millis(3300));
+            assert!(r.latest().unwrap().arming);
+            assert!(!r.latest().unwrap().running);
+        } else {
+            controls.lock().unwrap().toggle = true;
+            wait(&r, |s| !s.running && s.reason.contains("stale"));
+        }
+        assert!(controls.lock().unwrap().calls.iter().all(|(_, down)| !down));
+        r.shutdown().unwrap();
+    }
+}
+
+#[test]
+fn capture_snapshot_has_current_geometry_and_matching_release_ack() {
+    let (r, _) = runtime();
+    let p = profile();
+    let key = SessionKey {
+        profile_id: p.id,
+        target: token(1),
+    };
+    configure(&r, p, token(1), false, 1);
+    r.stop();
+    let generation = r.stop_generation();
+    r.send(Command::Snapshot { key }).unwrap();
+    wait(&r, |s| {
+        s.frame_id > 0 && s.released_generation == Some(generation)
+    });
+    assert_eq!(r.latest().unwrap().geometry.unwrap().target, token(1));
+    r.send(Command::Detach).unwrap();
+    wait(&r, |s| s.key.is_none());
+    assert!(r.latest().unwrap().geometry.is_none());
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn oversized_hp_detail_still_publishes_raw_snapshots_for_repair_but_blocks_running() {
+    let (r, controls) = runtime();
+    let mut p = profile();
+    // An older imported profile may lack reference crop metadata, so its
+    // externally loaded PNG dimensions are known only to runtime recognition.
+    p.template_region = None;
+    let key = SessionKey {
+        profile_id: p.id,
+        target: token(1),
+    };
+    configure(&r, p.clone(), token(1), false, 1);
+    // A malformed imported reference can exceed the complete client frame.
+    let template = Frame::new(
+        201,
+        201,
+        (0..201 * 201 * 3).map(|n| (n % 251) as u8).collect(),
+    )
+    .unwrap();
+    r.send(Command::Configure {
+        profile: Box::new(p),
+        template: Some(template),
+        target: token(1),
+        revision: 2,
+    })
+    .unwrap();
+    wait(&r, |s| s.revision == 2);
+    r.send(Command::Snapshot { key }).unwrap();
+    wait(&r, |s| s.frame_id > 0 && s.geometry.is_some());
+    let snapshot = r.latest().unwrap();
+    assert!(snapshot.frame.is_some());
+    assert_eq!(snapshot.panel_score, 0.);
+    assert!(snapshot.panel_match.is_none());
+    assert!(
+        snapshot.reason.contains("Template is larger"),
+        "{}",
+        snapshot.reason
+    );
+    assert_eq!(snapshot.released_generation, Some(r.stop_generation()));
+    let frame_id = snapshot.frame_id;
+    r.send(Command::SetPreview { key, enabled: true }).unwrap();
+    wait(&r, |s| s.frame_id > frame_id && s.geometry.is_some());
+    controls.lock().unwrap().toggle = true;
+    wait(&r, |s| {
+        !s.running
+            && s.events.iter().any(|event| {
+                event.notify && event.message == "Template is larger than search region."
+            })
+    });
+    assert!(controls.lock().unwrap().calls.iter().all(|(_, down)| !down));
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn shrunk_client_with_enabled_visual_reference_still_provides_raw_repair_captures() {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    let (r, controls) = runtime();
+    let mut p = profile();
+    p.frame_size = Some([300, 300]);
+    let reference = Frame::new(
+        128,
+        128,
+        (0..128 * 128 * 3).map(|n| (n % 251) as u8).collect(),
+    )
+    .unwrap();
+    let mut rule = metin_core::SafetyRule::new("Visual reference before resize");
+    rule.enabled = true;
+    rule.reference = Some(metin_core::BuffIcon {
+        png: STANDARD.encode(metin_vision::encode_png(&reference).unwrap()),
+        region: Some(metin_core::Region {
+            left: 0.,
+            top: 0.,
+            right: 127. / 300.,
+            bottom: 127. / 300.,
+        }),
+    });
+    p.safety.rules.push(rule);
+    let key = SessionKey {
+        profile_id: p.id,
+        target: token(1),
+    };
+    configure(&r, p, token(1), false, 1);
+    r.send(Command::Snapshot { key }).unwrap();
+    wait(&r, |s| s.frame_id > 0 && s.geometry.is_some());
+    let snapshot = r.latest().unwrap();
+    assert_eq!(
+        [
+            snapshot.frame.as_ref().unwrap().width,
+            snapshot.geometry.unwrap().width
+        ],
+        [200, 200]
+    );
+    assert!(snapshot.safety_scores.is_empty());
+    assert!(snapshot.reason.contains("Recognition needs repair"));
+    assert!(snapshot.reason.contains("Template is larger"));
+    assert_eq!(snapshot.released_generation, Some(r.stop_generation()));
+    assert!(!snapshot.running && !snapshot.arming);
+    let frame_id = snapshot.frame_id;
+    r.send(Command::SetPreview { key, enabled: true }).unwrap();
+    wait(&r, |s| s.frame_id > frame_id && s.geometry.is_some());
+    controls.lock().unwrap().toggle = true;
+    wait(&r, |s| {
+        !s.running
+            && s.events
+                .iter()
+                .any(|event| event.notify && event.message.contains("dimensions changed"))
+    });
+    assert!(controls.lock().unwrap().calls.iter().all(|(_, down)| !down));
+    assert!(controls.lock().unwrap().clicks.is_empty());
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn failed_owned_release_never_acknowledges_capture_safety() {
+    let (r, controls) = runtime();
+    let mut p = profile();
+    p.timing.search_timeout = 120.;
+    p.out_of_target.during_search = true;
+    p.out_of_target.search_after_seconds = 1.;
+    p.out_of_target.search_attack_seconds = 3.;
+    configure(&r, p, token(1), false, 1);
+    controls.lock().unwrap().toggle = true;
+    wait(&r, |s| s.state == "Out-of-target attack");
+    controls.lock().unwrap().fail_release = true;
+    r.stop();
+    wait(&r, |s| !s.running && s.reason.contains("release failure"));
+    assert!(r.latest().unwrap().released_generation.is_none());
+    controls.lock().unwrap().fail_release = false;
+    wait(&r, |s| s.released_generation == Some(r.stop_generation()));
     r.shutdown().unwrap();
 }
 
@@ -551,6 +1396,11 @@ fn failed_connection_to_different_session_retires_old_controller_and_mount() {
         s.key.is_none() && s.reason.contains("Injected attachment failure")
     });
     assert_eq!(r.latest().unwrap().mounted, None);
+    assert_eq!(
+        r.latest().unwrap().activity,
+        metin_core::ActivityKind::Error
+    );
+    assert_eq!(r.latest().unwrap().active_skill, None);
     controls.lock().unwrap().toggle = true;
     std::thread::sleep(Duration::from_millis(300));
     assert!(!r.latest().unwrap().running);
@@ -604,5 +1454,108 @@ fn preview_and_snapshot_are_explicit_and_old_session_requests_are_ignored() {
     let stopped = controls.lock().unwrap().captures;
     std::thread::sleep(Duration::from_millis(200));
     assert_eq!(controls.lock().unwrap().captures, stopped);
+    r.shutdown().unwrap();
+}
+
+#[test]
+fn idle_snapshot_detach_and_shutdown_close_capture_resources_but_preview_can_resume() {
+    let (runtime, controls) = runtime();
+    let profile = profile();
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile.clone(), key.target, false, 1);
+    runtime
+        .send(Command::SetPreview { key, enabled: true })
+        .unwrap();
+    wait(&runtime, |snapshot| {
+        snapshot.frame_id > 0 && controls.lock().unwrap().capture_active
+    });
+    runtime
+        .send(Command::SetPreview {
+            key,
+            enabled: false,
+        })
+        .unwrap();
+    wait(&runtime, |_| !controls.lock().unwrap().capture_active);
+    let previous = runtime.latest().unwrap().frame_id;
+    runtime.send(Command::Snapshot { key }).unwrap();
+    wait(&runtime, |snapshot| {
+        snapshot.frame_id > previous && !controls.lock().unwrap().capture_active
+    });
+    controls.lock().unwrap().fail_capture = true;
+    let previous_attempts = controls.lock().unwrap().captures;
+    runtime.send(Command::Snapshot { key }).unwrap();
+    wait(&runtime, |snapshot| {
+        snapshot.reason.contains("Injected capture failure")
+            && controls.lock().unwrap().captures > previous_attempts
+    });
+    runtime.stop();
+    wait(&runtime, |snapshot| {
+        snapshot.released_generation == Some(runtime.stop_generation())
+    });
+    let stopped_attempts = controls.lock().unwrap().captures;
+    std::thread::sleep(Duration::from_millis(150));
+    assert_eq!(
+        controls.lock().unwrap().captures,
+        stopped_attempts,
+        "Cancel must retire a failed one-shot, not continue capturing in the background"
+    );
+    controls.lock().unwrap().fail_capture = false;
+    runtime
+        .send(Command::SetPreview { key, enabled: true })
+        .unwrap();
+    wait(&runtime, |_| controls.lock().unwrap().capture_active);
+    runtime.send(Command::Detach).unwrap();
+    wait(&runtime, |snapshot| {
+        snapshot.key.is_none() && !controls.lock().unwrap().capture_active
+    });
+    configure(&runtime, profile, key.target, false, 2);
+    runtime
+        .send(Command::SetPreview { key, enabled: true })
+        .unwrap();
+    wait(&runtime, |_| controls.lock().unwrap().capture_active);
+    runtime.shutdown().unwrap();
+    assert!(!controls.lock().unwrap().capture_active);
+}
+
+#[test]
+fn hp_matching_tracks_all_connected_client_corners_independent_of_target_area_and_masks() {
+    let (r, controls) = runtime();
+    let mut p = profile();
+    p.region = Some(metin_core::Region {
+        left: 0.4,
+        top: 0.4,
+        right: 0.6,
+        bottom: 0.6,
+    });
+    p.masks.push(metin_core::Region {
+        left: 0.,
+        top: 0.,
+        right: 1.,
+        bottom: 1.,
+    });
+    let key = SessionKey {
+        profile_id: p.id,
+        target: token(1),
+    };
+    controls.lock().unwrap().target_origin = [-350, 125];
+    configure(&r, p, token(1), false, 1);
+    for position in [[0, 0], [190, 0], [0, 190], [190, 190]] {
+        controls.lock().unwrap().hp_detail = Some(position);
+        r.send(Command::Snapshot { key }).unwrap();
+        wait(&r, |s| {
+            s.panel_match
+                .is_some_and(|found| found.position == position && found.score > 0.9999)
+        });
+        let snapshot = r.latest().unwrap();
+        let geometry = snapshot.geometry.unwrap();
+        assert_eq!([geometry.left, geometry.top], [-350, 125]);
+        assert_eq!([geometry.width, geometry.height], [200, 200]);
+        assert!(snapshot.candidates.is_empty());
+        assert!(!snapshot.running);
+    }
+    assert!(controls.lock().unwrap().calls.iter().all(|(_, down)| !down));
     r.shutdown().unwrap();
 }

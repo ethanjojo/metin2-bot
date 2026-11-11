@@ -1,0 +1,11 @@
+{
+  "sdk_version": "2.1.0",
+  "sdk_url": "https://github.com/hifihedgehog/HIDMaestro/releases/download/v2.1.0/HIDMaestro-v2.1.0.zip",
+  "sdk_sha256": "7fe349f163864b8dfc36117af260d51bac94a2263b6cdfa719cb364a808397b4",
+  "source_commit": "c28c1f640d89038154b0962ae01627e0cda37cb0",
+  "source_url": "https://api.github.com/repos/hifihedgehog/HIDMaestro/zipball/c28c1f640d89038154b0962ae01627e0cda37cb0",
+  "source_sha256": "8a509a7aee587b15e9d699d34a75dcb58817e25e530fe66a10d3984b964b49df",
+  "dotnet_version": "10.0.403",
+  "dotnet_url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.403/dotnet-sdk-10.0.403-win-x64.zip",
+  "dotnet_sha512": "7a114c318fa7f1d9822991b534b2814d0e78386ceda816b371f5141acefe741d87ccb606ede06cadac8f9ac5070e32b708a67bbd1619ff5e5a7858a27874ef48"
+}

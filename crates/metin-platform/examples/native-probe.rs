@@ -12,8 +12,10 @@ mod probe {
         time::{Duration, Instant},
     };
     use windows_sys::Win32::{
-        Foundation::*, Graphics::Gdi::*, System::LibraryLoader::GetModuleHandleW,
-        UI::WindowsAndMessaging::*,
+        Foundation::*,
+        Graphics::Gdi::*,
+        System::LibraryLoader::GetModuleHandleW,
+        UI::{Input::KeyboardAndMouse::GetKeyState, WindowsAndMessaging::*},
     };
     struct State {
         cover: bool,
@@ -47,8 +49,14 @@ mod probe {
             .contains(&message)
                 && !state.is_null()
             {
+                let key = if [WM_LBUTTONDOWN, WM_LBUTTONUP].contains(&message) {
+                    1
+                } else {
+                    wparam as i32
+                };
                 (*state).events.push(
-                    serde_json::json!({"message":message,"key":wparam,"flags":lparam as u32}),
+                    serde_json::json!({"message":message,"key":wparam,"flags":lparam as u32,
+                        "pressed":GetKeyState(key) < 0}),
                 );
             }
             match message {
@@ -96,7 +104,7 @@ mod probe {
             events: vec![],
             cover: title.contains("OCCLUDER"),
         };
-        let class = wide("MetinBot.NativeVerification");
+        let class = wide("Companion.NativeVerification");
         let title = wide(title);
         unsafe {
             let instance = GetModuleHandleW(null());
@@ -140,10 +148,10 @@ mod probe {
         std::fs::write(report, serde_json::to_vec_pretty(&state.events)?)?;
         Ok(())
     }
-    fn run(report: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    fn run(report: &Path, input_only: bool) -> std::result::Result<(), Box<dyn std::error::Error>> {
         enable_dpi();
         let event_report = report.with_extension("events.json");
-        let title = format!("MetinBot input test - CLICK HERE - {}", std::process::id());
+        let title = format!("Companion input test - CLICK HERE - {}", std::process::id());
         let mut child = Command::new(std::env::current_exe()?)
             .arg("--fixture")
             .arg(&title)
@@ -176,16 +184,25 @@ mod probe {
         // Give the operator time to release the activation click and mouse.
         std::thread::sleep(Duration::from_secs(3));
         let stop = StopToken::default();
-        let frame = backend.capture(Instant::now() + Duration::from_secs(2), &stop, 0)?;
-        let offset = (80 * frame.frame.width + 80) as usize * 3;
-        let pixel = &frame.frame.bgr[offset..offset + 3];
-        if pixel != [30, 170, 220] {
-            return Err(format!("Captured pixels do not match rendered fixture: {pixel:?}").into());
+        let state = backend.inspect()?;
+        let (width, height) = (state.width, state.height);
+        if !input_only {
+            let frame = backend.capture(Instant::now() + Duration::from_secs(2), &stop, 0)?;
+            let offset = (80 * frame.frame.width + 80) as usize * 3;
+            let pixel = &frame.frame.bgr[offset..offset + 3];
+            if pixel != [30, 170, 220] {
+                return Err(
+                    format!("Captured pixels do not match rendered fixture: {pixel:?}").into(),
+                );
+            }
         }
         let mut profile = Profile::create("Isolated native acceptance");
-        profile.frame_size = Some([frame.frame.width, frame.frame.height]);
+        profile.frame_size = Some([width, height]);
         let mut visual_checks = 0;
         let mut verify = |backend: &mut dyn PlatformBackend| -> Result<()> {
+            if input_only {
+                return Ok(());
+            }
             let fresh = backend.capture(Instant::now() + Duration::from_secs(2), &stop, 0)?;
             let offset = (80 * fresh.frame.width + 80) as usize * 3;
             if fresh.frame.bgr[offset..offset + 3] != [30, 170, 220] {
@@ -217,10 +234,10 @@ mod probe {
                 kind: ActionKind::Configured {
                     input: metin_core::ActionInput::Click {
                         region: Some(metin_core::Region {
-                            left: 70. / f64::from(frame.frame.width),
-                            top: 70. / f64::from(frame.frame.height),
-                            right: 90. / f64::from(frame.frame.width),
-                            bottom: 90. / f64::from(frame.frame.height),
+                            left: 70. / f64::from(width),
+                            top: 70. / f64::from(height),
+                            right: 90. / f64::from(width),
+                            bottom: 90. / f64::from(height),
                         }),
                     },
                 },
@@ -247,7 +264,10 @@ mod probe {
         let mut held_captures = 0;
         while executor.attack_held() {
             executor.poll_attack(backend.as_mut(), &stop, 0)?;
-            if let Some(budget) = executor.capture_budget().filter(|_| executor.attack_held()) {
+            if let Some(budget) = executor
+                .capture_budget()
+                .filter(|_| !input_only && executor.attack_held())
+            {
                 if let Err(error) = backend.capture(Instant::now() + budget, &stop, 0) {
                     let _ = executor.release(backend.as_mut());
                     return Err(error.into());
@@ -256,7 +276,7 @@ mod probe {
             }
             std::thread::sleep(Duration::from_millis(10));
         }
-        if held_captures == 0 {
+        if !input_only && held_captures == 0 {
             return Err("No capture while native attack was held".into());
         }
         // The fixture is our own exact child PID/title; close it after every up
@@ -292,10 +312,20 @@ mod probe {
         if !actual.ends_with(&expected) {
             return Err(format!("Native input order differs: {actual:?}").into());
         }
+        let states: Vec<_> = events[events.len() - expected.len()..]
+            .iter()
+            .map(|event| event["pressed"].as_bool())
+            .collect();
+        if states != [true, true, false, false, true, false, true, false].map(Some) {
+            return Err(format!(
+                "Windows did not register actual pressed/released input: {states:?}"
+            )
+            .into());
+        }
         std::fs::write(
             report,
             serde_json::to_vec_pretty(
-                &serde_json::json!({"success":true,"capture_matches_rendered_pixels":true,"captured_size":[frame.frame.width,frame.frame.height],"keyboard_and_mouse_order":true,"visual_pre_down_captures":visual_checks,"persistent_attack_and_release":true,"captures_during_attack":held_captures,"child_pid":child.id(),"game_input":false,"events":events}),
+                &serde_json::json!({"success":true,"capture_matches_rendered_pixels":!input_only,"captured_size":[width,height],"keyboard_and_mouse_order":true,"windows_input_state":true,"visual_pre_down_captures":visual_checks,"persistent_attack_and_release":true,"captures_during_attack":held_captures,"child_pid":child.id(),"game_input":false,"events":events}),
             )?,
         )?;
         Ok(())
@@ -304,7 +334,7 @@ mod probe {
     fn capture_only(report: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
         enable_dpi();
         let exe = std::env::current_exe()?;
-        let title = format!("MetinBot capture fixture {}", std::process::id());
+        let title = format!("Companion capture fixture {}", std::process::id());
         let mut child = Command::new(&exe)
             .args(["--fixture", &title])
             .arg(report.with_extension("fixture.json"))
@@ -321,7 +351,7 @@ mod probe {
         backend.attach(target.token)?;
         // A second, different-colored exact child window fully covers the first.
         // No foreground activation, keyboard event or mouse input is required.
-        let cover_title = format!("MetinBot OCCLUDER {}", std::process::id());
+        let cover_title = format!("Companion OCCLUDER {}", std::process::id());
         let mut cover = Command::new(&exe)
             .args(["--fixture", &cover_title])
             .arg(report.with_extension("cover.json"))
@@ -425,12 +455,27 @@ mod probe {
             fixture(&args[2], Path::new(&args[3]))
         } else if args.get(1).is_some_and(|a| a == "--capture-only") {
             capture_only(Path::new(&args[2]))
+        } else if args.get(1).is_some_and(|a| a == "--input-only") {
+            run(Path::new(&args[2]), true)
         } else if let Some(path) = args.get(1) {
-            run(Path::new(path))
+            run(Path::new(path), false)
         } else {
             Err("Usage: native-probe <report.json>".into())
         };
         if let Err(error) = result {
+            let path = if matches!(
+                args.get(1).map(String::as_str),
+                Some("--input-only" | "--capture-only")
+            ) {
+                args.get(2)
+            } else if args.get(1).is_some_and(|arg| !arg.starts_with("--")) {
+                args.get(1)
+            } else {
+                None
+            };
+            if let Some(path) = path {
+                let _ = std::fs::write(path, serde_json::to_vec_pretty(&serde_json::json!({"success":false,"error":error.to_string(),"game_input":false})).expect("error report serializes"));
+            }
             eprintln!("Native verification failed: {error}");
             std::process::exit(1);
         }

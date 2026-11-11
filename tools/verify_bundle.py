@@ -28,16 +28,31 @@ def verify_inventory(directory: Path) -> None:
         raise ValueError("Bundle contains missing or unlisted files")
 
 
+def verify_input_bridge(image) -> None:
+    """Require the complete native ABI and reject a managed-runtime shim."""
+    exports = {entry.name for entry in getattr(image, "DIRECTORY_ENTRY_EXPORT", ()).symbols} if hasattr(image, "DIRECTORY_ENTRY_EXPORT") else set()
+    required = {b"mi_abi_version", b"mi_manage", b"mi_open", b"mi_keyboard", b"mi_mouse", b"mi_close"}
+    if not required.issubset(exports):
+        raise ValueError("Input bridge is missing required C ABI exports")
+    if image.OPTIONAL_HEADER.DATA_DIRECTORY[14].VirtualAddress:
+        raise ValueError("Input bridge requires an installed .NET runtime")
+    for entry in (*getattr(image, "DIRECTORY_ENTRY_IMPORT", []), *getattr(image, "DIRECTORY_ENTRY_DELAY_IMPORT", [])):
+        if entry.dll.decode("ascii").lower() in {"mscoree.dll", "coreclr.dll", "hostfxr.dll", "hostpolicy.dll"}:
+            raise ValueError("Input bridge depends on an installed .NET runtime")
+
+
 def verify_bundle(directory: Path, version: str, commit: str) -> dict:
     import pefile
     verify_inventory(directory)
     info = json.loads((directory / "build-info.json").read_text(encoding="utf-8"))
     if (info["version"], info["commit_sha"], info["runtime"], info["working_tree_dirty"]) != (version, commit.lower(), "rust", False):
         raise ValueError("Bundled release identity mismatch or dirty build")
-    for name in ("opencv_world4130.dll", "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll", "concrt140.dll"):
+    for name in ("MetinInput.dll", "opencv_world4130.dll", "msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll", "concrt140.dll"):
         if not (directory / name).is_file():
             raise ValueError(f"Missing native runtime: {name}")
-    for name in ("profiles", "ui-settings.json", "config.json", "config.queue-backup.json", "_internal"):
+    if not (directory / "licenses/HIDMaestro.txt").is_file():
+        raise ValueError("Missing HIDMaestro license")
+    for name in ("profiles", "ui-settings.json", "config.json", "config.queue-backup.json", "_internal", "MetinBot.exe"):
         if (directory / name).exists():
             raise ValueError("User data or obsolete runtime files included in bundle")
     bundled = {path.name.lower(): path for path in directory.iterdir() if path.is_file()}
@@ -48,14 +63,16 @@ def verify_bundle(directory: Path, version: str, commit: str) -> dict:
         with pefile.PE(str(path), fast_load=True) as dependency:
             if dependency.FILE_HEADER.Machine != 0x8664:
                 raise ValueError(f"Non-x64 native file: {path.name}")
-            dependency.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_IMPORT"]])
-            for entry in getattr(dependency, "DIRECTORY_ENTRY_IMPORT", []):
+            dependency.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY[name] for name in ("IMAGE_DIRECTORY_ENTRY_IMPORT", "IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT", "IMAGE_DIRECTORY_ENTRY_EXPORT")])
+            if path.name.lower() == "metininput.dll":
+                verify_input_bridge(dependency)
+            for entry in (*getattr(dependency, "DIRECTORY_ENTRY_IMPORT", []), *getattr(dependency, "DIRECTORY_ENTRY_DELAY_IMPORT", [])):
                 name = entry.dll.decode("ascii").lower()
                 if name in bundled or name.startswith(("api-ms-", "ext-ms-")):
                     continue
                 if name.startswith(("msvcp", "vcruntime", "concrt", "opencv")) or not (system / name).is_file():
                     raise ValueError(f"Unresolved native import: {path.name} -> {name}")
-    with pefile.PE(str(directory / "MetinBot.exe")) as image:
+    with pefile.PE(str(directory / "Companion.exe")) as image:
         if image.FILE_HEADER.Machine != 0x8664:
             raise ValueError("Executable must be Windows x64")
         strings = {}

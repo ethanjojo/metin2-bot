@@ -1,0 +1,8 @@
+    internal static bool EnsureForCreate(string identityToken)
+    {
+        using var deployLock = Machine.Lock();
+        if (!Machine.StoreHasBothPackages() || OlderThanBuild().Count > 0)
+            throw new InvalidOperationException(
+                "The HIDMaestro driver is missing or older than this build. Run the Companion installer to install or repair the input driver before starting automation.");
+        return false;
+    }

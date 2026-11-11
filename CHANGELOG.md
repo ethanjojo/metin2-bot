@@ -1,36 +1,20 @@
 # Changelog
 
-## Unreleased
-
-- Integrate compact mount confirmation into Run activity, link scheduled items to their exact editors, and open full event history in a scrollable dialog without moving the Run page.
-
-- Redesign Run around activity, actionable setup, game preview, session statistics and upcoming actions. Add preview control and a five-event summary linked to the full-history dialog.
-- Share mount confirmation between Run and Actions; connect and declare without a Snapshot or valid draft, while keeping Start blocked until configuration is ready.
-
-- Fix safety capture budgets, refresh buffs during uninterrupted search, periodic-action search accounting, committed-save cleanup reporting and mount declarations across sessions.
-- Capture paused previews only on demand, reuse readback textures, copy only requested image regions and avoid cloning profiles for unsaved-state checks.
-
-- Separate visual-rule notification, immediate-pause and action choices into checkboxes; keep pause after completion and migrate saved reactions without changing their alert behavior.
-
-- Move visual rules to Actions, remove event presets, and add guarded key/click reactions with reference-disappearance verification, bounded retries and pause/continue choices. Explicit wait-only mode records an unverified outcome.
-- Add calibrated clicks and a first-use choice to periodic actions. New actions wait for the first interval; existing saved actions keep their immediate first use.
-
-- Trigger puller sequences at confirmed combat start or periodically during combat; add configurable, bounded attack-key holds after combat and during long searching, with ongoing vision and guarded release.
-
-- Added grouped Actions/Settings navigation, periodic actions, configurable combat-triggered auto-puller, calibrated visual rules, bounded recovery, local alerts, preview performance controls and diagnostic export.
-
-- Split navigation into Run, Calibration, Actions, Safety and Settings.
-- Add profile-specific loot, active-time/local-time stop limits, safe-boundary breaks and session event history.
-- Preserve existing buff, mount, calibration and guarded-input workflows.
-
 ## 0.1.0-rc.1
 
-- Rust/egui desktop interface with Run, Calibration, Buffs and Settings.
-- Local target recognition, target tracking, buff scheduling and mount state.
-- Per-profile searchable window selection and guarded Windows capture/input.
-- Interactive regions, excluded areas, color picker, crop validation, dimension overlays and zoom.
-- Ordered skills with compact move/delete controls and active/inactive icon capture.
-- Light/dark themes, application branding and platform icon resources.
-- Profile import, dependency notices, verified package inventories and release checksums.
+First public Companion release candidate for Windows x64.
 
-This is a prerelease. See [release notes](docs/release-notes.md) for acceptance requirements and platform limits.
+- Compact Metin-style interface with Run, Actions, Recognition, Safety and Settings, searchable profiles, native icons and fixed Start/Pause and mount controls.
+- Automatic window discovery with screenshot thumbnails, session-based connection, pinning and collapse controls.
+- Direct frozen-capture selection with dimming, move/resize, color preview, cancellable edits and explicit calibration review after a client-size change.
+- Full-client HP-detail matching, color detection, exclusions and click-through game annotations. Current targets keep their outline without a persistent click-position cross.
+- Ordered timed/icon-based buffs, animated-icon stabilization and a 44-skill English icon picker across four classes.
+- Loot, mount behavior, periodic key/click actions, visual rules with bounded verification, combat-triggered/repeated puller use and bounded out-of-target key holds.
+- Active-time/local-time stop limits, scheduled breaks, recovery limits, local alerts and event history.
+- Background update checks/downloads with Stable/Preview channels, size/SHA256 validation and explicit Install and restart. Restart stays paused.
+- One pinned HIDMaestro NativeAOT input path with focus, geometry, privilege, cancellation and balanced-release checks; setup discloses required machine changes.
+- Companion executable, install/data folders and application identity; verified migration and retained backups for previous default paths.
+- Windows setup/checksums, native dependencies and third-party notices, exact-commit CI and installer acceptance.
+- MIT license for project-authored source code, with separate third-party/artwork terms.
+
+The complete integrated live-game cycle remains an acceptance requirement for a stable release. See [release notes](docs/release-notes.md).

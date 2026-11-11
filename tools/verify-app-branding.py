@@ -18,6 +18,8 @@ def verify(path: Path, require_admin: bool) -> dict:
                     # Inno Setup pads its fixed-capacity version strings.
                     strings.update({k.decode("utf-8"): v.decode("utf-8").rstrip(" \0") for k, v in table.entries.items()})
         expected = {"CompanyName": identity["publisher"], "ProductName": identity["product_name"], "LegalCopyright": identity["copyright"]}
+        if require_admin:
+            expected.update({"InternalName": identity["internal_name"], "OriginalFilename": identity["original_filename"]})
         for key, value in expected.items():
             if strings.get(key) != value:
                 raise ValueError(f"{path.name}: {key} does not match identity")

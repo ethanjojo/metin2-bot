@@ -14,12 +14,13 @@ class GitIgnoreTests(unittest.TestCase):
                  'profiles/example/template-uuid.png','profiles/example/profile.json.tmp',
                  'profiles/selection.json','profiles/selection.json.tmp','ui-settings.json.tmp',
                  'config.json','config.json.tmp','config.queue-backup.json','config.queue-backup.json.tmp',
-                 'diagnostics/run.log','diagnostics/screen.png','diagnostics/compact-ui-fixture-data/profile.json',
-                 'build/output','dist/output','.env','target/debug/metinbot.exe',
+                 'logs/run.log.1','diagnostics/run.log','diagnostics/screen.png','diagnostics/compact-ui-fixture-data/profile.json',
+                 'build/output','dist/output','.env','target/debug/companion.exe',
                  'docs/superpowers/specs/new-feature.md','docs/superpowers/plans/new-feature.md',
-                 '.DS_Store','packaging/._metinbot.icns','debug.dSYM/info'}
+                 'superpowers/new-plan.md','.superpowers/local-state.json',
+                 '.DS_Store','packaging/._companion.ico','debug.dSYM/info'}
         sources={'README.md','run.cmd','tools/launch-rust.ps1','Cargo.lock',
-                 'crates/metin-desktop/src/main.rs','packaging/icons/metinbot.icns','profile.example.json'}
+                 'crates/metin-desktop/src/main.rs','packaging/icons/companion.ico','profile.example.json'}
         with tempfile.TemporaryDirectory(prefix='ignore-test-',dir=PROJECT/'tests') as folder:
             root=Path(folder).resolve()
             self.assertTrue(root.is_relative_to(PROJECT/'tests'))

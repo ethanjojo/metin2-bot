@@ -1,0 +1,4 @@
+<Project><PropertyGroup>
+  <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)../../build/sdk-resource-extractor-obj/</BaseIntermediateOutputPath>
+  <BaseOutputPath>$(MSBuildThisFileDirectory)../../build/sdk-resource-extractor-managed/</BaseOutputPath>
+</PropertyGroup></Project>

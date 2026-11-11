@@ -7,6 +7,36 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use visual_execution::VisualExecution;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ActivityProgress {
+    pub label: String,
+    pub elapsed_seconds: f64,
+    pub remaining_seconds: Option<f64>,
+    pub total_seconds: Option<f64>,
+}
+
+/// Presentation categories derived from owned execution state, never status text.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ActivityKind {
+    #[default]
+    Stopped,
+    Searching,
+    Confirming,
+    Attacking,
+    OutOfTarget,
+    Looting,
+    Buffing,
+    Puller,
+    Periodic,
+    Waiting,
+    Break,
+    Recovering,
+    Paused,
+    Starting,
+    Error,
+    VisualRule,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Candidate {
     pub x: u32,
@@ -113,6 +143,12 @@ enum AttackReason {
     AfterCombat,
     Search,
 }
+#[derive(Debug, Clone, Copy)]
+enum HaltCause {
+    Stopped,
+    Paused,
+    Error,
+}
 #[derive(Debug, Clone)]
 struct OutOfTargetExecution {
     reason: AttackReason,
@@ -124,6 +160,7 @@ pub struct Controller {
     pub session: Session,
     pub buffs: BuffCycle,
     pub running: bool,
+    halt_cause: HaltCause,
     pub phase: Phase,
     pub state: String,
     pub reason: String,
@@ -161,12 +198,51 @@ pub struct Controller {
     visual: Option<VisualExecution>,
 }
 impl Controller {
+    pub fn activity(&self) -> ActivityKind {
+        if !self.running {
+            return match self.halt_cause {
+                HaltCause::Stopped => ActivityKind::Stopped,
+                HaltCause::Paused => ActivityKind::Paused,
+                HaltCause::Error => ActivityKind::Error,
+            };
+        }
+        if self
+            .pending_action
+            .as_ref()
+            .is_some_and(|action| matches!(action.kind, ActionKind::Pull { .. }))
+        {
+            return ActivityKind::Puller;
+        }
+        match self.phase {
+            Phase::Initial | Phase::Acquiring => ActivityKind::Confirming,
+            Phase::Seeking => ActivityKind::Searching,
+            Phase::Active => ActivityKind::Attacking,
+            Phase::Settling => ActivityKind::Waiting,
+            Phase::Buffing => ActivityKind::Buffing,
+            Phase::Looting => ActivityKind::Looting,
+            Phase::Break => ActivityKind::Break,
+            Phase::Scheduled => match self.scheduled.as_ref().map(|s| s.key) {
+                Some(crate::ScheduledKey::Puller) => ActivityKind::Puller,
+                _ => ActivityKind::Periodic,
+            },
+            Phase::Recovering => ActivityKind::Recovering,
+            Phase::OutOfTarget => ActivityKind::OutOfTarget,
+            Phase::VisualRule => ActivityKind::VisualRule,
+        }
+    }
+    /// The current cast or its acknowledged animation wait; due timers are unrelated.
+    pub fn active_skill(&self, now: f64) -> Option<usize> {
+        (self.running && self.phase == Phase::Buffing)
+            .then(|| self.buffs.active_skill(now))
+            .flatten()
+    }
     pub fn new(profile: Profile) -> Self {
         Self {
             buffs: BuffCycle::new(profile.buffs.clone()),
             profile,
             session: Session::default(),
             running: false,
+            halt_cause: HaltCause::Stopped,
             phase: Phase::Initial,
             state: "Stopped".into(),
             reason: "Calibrate the profile and start the bot.".into(),
@@ -298,7 +374,7 @@ impl Controller {
         self.recovery_until = None;
         self.budget.advance(now, true);
         self.session.advance(now, true);
-        self.break_until = None;
+        let interrupted_break = self.break_until.take();
         self.phase = Phase::Initial;
         self.since = now;
         self.present = 0;
@@ -316,7 +392,35 @@ impl Controller {
             "Checking target",
             "Checking whether a target panel is already present.",
         );
+        if let Some(until) = interrupted_break {
+            if until > now {
+                self.phase = Phase::Break;
+                self.break_until = Some(until);
+                self.buffs.pause(now);
+                self.budget.pause(Some(now));
+                self.session.pause(Some(now));
+                self.status(
+                    "On break",
+                    "Finishing the scheduled break before continuing.",
+                );
+            } else {
+                self.break_base = self.budget.active_seconds;
+            }
+        }
         Ok(())
+    }
+    /// Reset visible session state without extending safety limits or schedules.
+    /// The platform owner must successfully release all held inputs first.
+    pub fn reset_session(&mut self, now: f64) {
+        self.pause(now, "Session reset; press Start when ready.");
+        self.buffs.reset_timers(now);
+        self.session.reset();
+        self.events.clear();
+        self.event(
+            "Session",
+            "Session reset; statistics, history and buff timers cleared.",
+            false,
+        );
     }
     pub fn pause(&mut self, now: f64, reason: impl Into<String>) {
         if now.is_finite() {
@@ -328,13 +432,13 @@ impl Controller {
         }
         self.session.pause(Some(now));
         self.running = false;
+        self.halt_cause = HaltCause::Paused;
         self.search_budget.pause(Some(now));
         self.puller.cancel();
         self.out_of_target = None;
         self.pending_action = None;
-        if self.break_until.take().is_some() {
-            self.break_base = self.budget.active_seconds;
-        }
+        // Pause cancels automatic continuation, not the remaining safety break.
+        // Explicit Start still honors its fixed deadline.
         self.loot_left = 0;
         self.scheduled = None;
         self.visual = None;
@@ -362,6 +466,7 @@ impl Controller {
         } else {
             self.pause_with_notice(now, reason);
         }
+        self.halt_cause = HaltCause::Error;
     }
     pub fn event(&mut self, activity: &str, message: &str, warning: bool) {
         self.event_id += 1;
@@ -524,6 +629,86 @@ impl Controller {
             Phase::Settling => t.settle_seconds,
         };
         Some((limit - (now - self.since)).max(0.))
+    }
+    pub fn activity_progress(&self, now: f64) -> Option<ActivityProgress> {
+        if !self.running || !now.is_finite() {
+            return None;
+        }
+        let (label, start, remaining) = match self.phase {
+            Phase::Seeking => ("Searching", self.since, None),
+            Phase::Initial | Phase::Acquiring => {
+                ("Target confirmation limit", self.since, self.remaining(now))
+            }
+            Phase::Active => ("Combat limit", self.since, self.remaining(now)),
+            Phase::Settling => ("Waiting for the scene", self.since, self.remaining(now)),
+            Phase::Buffing => ("Buff wait", self.buffs.wait_started(), self.remaining(now)),
+            Phase::Looting => {
+                let duration = if self.loot_left == self.profile.loot.presses {
+                    self.profile.loot.delay_seconds
+                } else {
+                    self.profile.loot.interval_seconds
+                };
+                (
+                    "Next pickup",
+                    self.loot_ready - duration,
+                    self.remaining(now),
+                )
+            }
+            Phase::Break => (
+                "Break ends",
+                self.break_until.unwrap_or(now) - self.profile.safety.break_seconds,
+                self.remaining(now),
+            ),
+            Phase::Scheduled => (
+                "Action wait",
+                self.scheduled
+                    .as_ref()
+                    .and_then(|s| s.finish_at.map(|end| end - s.timing.wait_seconds))
+                    .unwrap_or(now),
+                self.remaining(now),
+            ),
+            Phase::Recovering => (
+                "Recovery wait",
+                self.recovery_until
+                    .map(|end| end - self.profile.safety.recovery_wait_seconds)
+                    .unwrap_or(now),
+                self.remaining(now),
+            ),
+            Phase::OutOfTarget => (
+                "Attack key releases",
+                self.out_of_target
+                    .as_ref()
+                    .and_then(|a| {
+                        a.finish_at.map(|end| {
+                            end - match a.reason {
+                                AttackReason::AfterCombat => {
+                                    self.profile.out_of_target.after_combat_seconds
+                                }
+                                AttackReason::Search => {
+                                    self.profile.out_of_target.search_attack_seconds
+                                }
+                            }
+                        })
+                    })
+                    .unwrap_or(now),
+                self.remaining(now),
+            ),
+            Phase::VisualRule => (
+                "Visual rule limit",
+                self.visual
+                    .as_ref()
+                    .and_then(|v| v.sent_at)
+                    .unwrap_or(self.since),
+                self.remaining(now),
+            ),
+        };
+        let elapsed = (now - start).max(0.);
+        Some(ActivityProgress {
+            label: label.into(),
+            elapsed_seconds: elapsed,
+            remaining_seconds: remaining,
+            total_seconds: remaining.map(|left| elapsed + left),
+        })
     }
     fn active(&mut self, now: f64) {
         self.puller.begin(now, &self.profile.puller);
@@ -1205,5 +1390,207 @@ impl Controller {
             self.pause_with_notice(now, reason);
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod progress_reset_tests {
+    use super::*;
+    fn controller() -> Controller {
+        let mut profile = Profile::create("Progress");
+        profile.buffs.enabled = false;
+        profile.safety.stop_enabled = true;
+        profile.safety.stop_after_seconds = 100.;
+        profile.safety.breaks_enabled = true;
+        profile.safety.break_every_seconds = 60.;
+        profile.safety.break_seconds = 10.;
+        Controller::new(profile)
+    }
+    #[test]
+    fn activity_uses_phase_and_owned_input_instead_of_status_text_or_due_timers() {
+        let mut c = controller();
+        assert_eq!(c.activity(), ActivityKind::Stopped);
+        c.start(0.).unwrap();
+        for (phase, expected) in [
+            (Phase::Initial, ActivityKind::Confirming),
+            (Phase::Seeking, ActivityKind::Searching),
+            (Phase::Acquiring, ActivityKind::Confirming),
+            (Phase::Active, ActivityKind::Attacking),
+            (Phase::Settling, ActivityKind::Waiting),
+            (Phase::Buffing, ActivityKind::Buffing),
+            (Phase::Looting, ActivityKind::Looting),
+            (Phase::Break, ActivityKind::Break),
+            (Phase::Scheduled, ActivityKind::Periodic),
+            (Phase::Recovering, ActivityKind::Recovering),
+            (Phase::OutOfTarget, ActivityKind::OutOfTarget),
+            (Phase::VisualRule, ActivityKind::VisualRule),
+        ] {
+            c.phase = phase;
+            c.state = "Auto-puller".into();
+            assert_eq!(c.activity(), expected);
+        }
+        c.phase = Phase::Active;
+        c.profile.puller.enabled = true;
+        c.puller.begin(0., &c.profile.puller);
+        assert_eq!(c.activity(), ActivityKind::Attacking);
+        let action = c
+            .issue(ActionKind::Pull {
+                shortcut: "F4".into(),
+                hold_seconds: 0.1,
+            })
+            .unwrap();
+        assert_eq!(c.activity(), ActivityKind::Puller);
+        c.ack(0.1, action.id, true).unwrap();
+        assert_eq!(c.activity(), ActivityKind::Attacking);
+        c.pause(0.2, "Buffing");
+        assert_eq!(c.activity(), ActivityKind::Paused);
+        c.events.clear();
+        assert_eq!(c.activity(), ActivityKind::Paused);
+        c.pause_on_runtime_error(0.3, "Searching");
+        assert_eq!(c.activity(), ActivityKind::Error);
+        c.events.clear();
+        assert_eq!(c.activity(), ActivityKind::Error);
+        c.start(0.4).unwrap();
+        assert_eq!(c.activity(), ActivityKind::Confirming);
+    }
+    #[test]
+    fn active_skill_follows_cast_animation_expiry_mount_and_pause() {
+        let mut c = controller();
+        c.profile.buffs.enabled = true;
+        c.profile.buffs.fight_mounted = true;
+        c.profile.buffs.skills = vec![crate::BuffSkill {
+            wait_seconds: 1.,
+            ..Default::default()
+        }];
+        c.buffs = BuffCycle::new(c.profile.buffs.clone());
+        c.buffs.mounted = Some(false);
+        c.start(0.).unwrap();
+        assert_eq!(c.active_skill(0.), None);
+        c.buffs.begin(0., &[], &HashSet::new());
+        c.phase = Phase::Buffing;
+        let cast = c.buff_step(0., &[]).unwrap();
+        assert_eq!(c.active_skill(0.), Some(0));
+        c.ack(0.1, cast.id, true).unwrap();
+        assert_eq!(c.active_skill(1.), Some(0));
+        assert_eq!(c.active_skill(1.1), None);
+        assert_eq!(c.active_skill(f64::NAN), None);
+        let mount = c.buff_step(1.1, &[]).unwrap();
+        assert!(matches!(mount.kind, ActionKind::Mount { .. }));
+        assert_eq!(c.active_skill(1.1), None);
+        c.ack(1.2, mount.id, true).unwrap();
+        assert_eq!(c.active_skill(1.3), None);
+        c.pause(1.3, "Pause");
+        assert_eq!(c.active_skill(1.3), None);
+        c.start(2.).unwrap();
+        assert_eq!(c.active_skill(2.), None);
+    }
+    #[test]
+    fn active_skill_advances_only_on_real_buff_steps_and_clears_on_failed_input() {
+        let mut c = controller();
+        c.profile.buffs.enabled = true;
+        c.profile.buffs.fight_mounted = false;
+        c.profile.buffs.skills = vec![crate::BuffSkill::default(), crate::BuffSkill::default()];
+        c.buffs = BuffCycle::new(c.profile.buffs.clone());
+        c.buffs.mounted = Some(c.profile.buffs.fight_mounted);
+        c.start(0.).unwrap();
+        assert_eq!(c.active_skill(0.), None, "A due timer is not a cast");
+        c.buffs.begin(0., &[], &HashSet::new());
+        c.phase = Phase::Buffing;
+        let first = c.buff_step(0., &[]).unwrap();
+        c.ack(0., first.id, true).unwrap();
+        assert_eq!(c.active_skill(0.5), Some(0));
+        let next_at = c.buffs.wait_until;
+        let second = c.buff_step(next_at, &[]).unwrap();
+        assert_eq!(c.active_skill(next_at), Some(1));
+        c.ack(next_at, second.id, false).unwrap();
+        assert_eq!(c.activity(), ActivityKind::Error);
+        assert_eq!(c.active_skill(next_at), None);
+    }
+    #[test]
+    fn phase_progress_distinguishes_elapsed_search_from_combat_timeout() {
+        let mut controller = controller();
+        controller.start(0.).unwrap();
+        controller.phase = Phase::Seeking;
+        controller.since = 2.;
+        let search = controller.activity_progress(8.).unwrap();
+        assert_eq!(search.label, "Searching");
+        assert_eq!(search.elapsed_seconds, 6.);
+        assert!(search.total_seconds.is_none() && search.remaining_seconds.is_none());
+        controller.phase = Phase::Active;
+        let combat = controller.activity_progress(8.).unwrap();
+        assert_eq!(combat.label, "Combat limit");
+        assert_eq!(
+            combat.total_seconds,
+            Some(controller.profile.timing.attack_timeout)
+        );
+        controller.pause(8., "Pause");
+        assert!(controller.activity_progress(10.).is_none());
+        assert!(controller.activity_progress(f64::NAN).is_none());
+    }
+    #[test]
+    fn loot_progress_restarts_at_each_real_delay() {
+        let mut controller = controller();
+        controller.start(0.).unwrap();
+        controller.phase = Phase::Looting;
+        controller.loot_left = controller.profile.loot.presses;
+        controller.loot_ready = 5. + controller.profile.loot.delay_seconds;
+        let initial = controller.activity_progress(5.1).unwrap();
+        assert!((initial.elapsed_seconds - 0.1).abs() < 1e-9);
+        assert_eq!(
+            initial.total_seconds,
+            Some(controller.profile.loot.delay_seconds)
+        );
+        controller.loot_left -= 1;
+        controller.loot_ready = 6. + controller.profile.loot.interval_seconds;
+        let repeated = controller.activity_progress(6.1).unwrap();
+        assert!(
+            (repeated.total_seconds.unwrap() - controller.profile.loot.interval_seconds).abs()
+                < 1e-9
+        );
+    }
+    #[test]
+    fn session_reset_preserves_limits_mount_and_safety_timebase() {
+        let mut controller = controller();
+        controller
+            .profile
+            .buffs
+            .skills
+            .push(crate::BuffSkill::default());
+        controller.profile.buffs.enabled = true;
+        controller.profile.safety.clock_enabled = true;
+        controller.buffs = BuffCycle::new(controller.profile.buffs.clone());
+        controller.buffs.mounted = Some(true);
+        controller.start_with_clock(0., Some(90.)).unwrap();
+        controller.tick(7.);
+        controller.session.completed = 4;
+        let before = controller.schedule(7.);
+        controller.reset_session(7.);
+        assert!(!controller.running);
+        assert_eq!(controller.schedule(7.), before);
+        assert_eq!(controller.buffs.mounted, Some(true));
+        assert_eq!(controller.session.snapshot(), crate::Statistics::default());
+        assert_eq!(controller.events.len(), 1);
+        assert!(controller.events[0].message.starts_with("Session reset"));
+        assert_eq!(controller.buffs.skill_remaining(7., true), vec![Some(0.)]);
+    }
+    #[test]
+    fn reset_during_break_retains_deadline_and_does_not_skip_its_remaining_time() {
+        let mut controller = controller();
+        controller.start(0.).unwrap();
+        controller.tick(20.);
+        controller.phase = Phase::Break;
+        controller.break_until = Some(30.);
+        controller.budget.pause(Some(20.));
+        let before = controller.schedule(22.);
+        controller.pause(22., "Simulated release failure");
+        assert_eq!(controller.schedule(22.), before);
+        controller.reset_session(22.);
+        assert_eq!(controller.schedule(22.), before);
+        controller.start(24.).unwrap();
+        assert_eq!(controller.phase, Phase::Break);
+        assert_eq!(controller.schedule(24.).break_ends_in, Some(6.));
+        controller.tick(30.);
+        assert_eq!(controller.phase, Phase::Initial);
+        assert_eq!(controller.schedule(30.).active_seconds, 20.);
     }
 }

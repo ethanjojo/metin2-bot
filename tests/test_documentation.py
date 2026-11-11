@@ -1,5 +1,6 @@
 """Keep published documentation links and captured assets usable."""
 from html.parser import HTMLParser
+import hashlib
 from pathlib import Path
 import json
 import re
@@ -26,7 +27,9 @@ class Links(HTMLParser):
 
 class DocumentationTests(unittest.TestCase):
     def test_local_markdown_and_html_links_resolve_inside_repository(self):
-        for path in [ROOT / "README.md", ROOT / "CHANGELOG.md", *sorted((ROOT / "docs").rglob("*.md"))]:
+        public_docs = sorted(path for path in (ROOT / "docs").rglob("*.md")
+                             if not path.is_relative_to(ROOT / "docs/superpowers"))
+        for path in [ROOT / "README.md", ROOT / "CHANGELOG.md", *public_docs]:
             with self.subTest(document=path.relative_to(ROOT)):
                 content = path.read_text(encoding="utf-8")
                 parser = Links()
@@ -41,15 +44,25 @@ class DocumentationTests(unittest.TestCase):
                     self.assertTrue(resolved.exists(), f"{path.name}: {target}")
 
     def test_documented_screenshots_are_complete_pngs(self):
-        sizes = {name: (1280, 820) for name in (
-            "calibration-dark", "calibration-light", "actions-dark", "actions-light",
-            "run-dark", "run-light", "settings-dark", "safety-dark", "puller-dark",
-            "out-of-target-dark", "periodic-dark", "visual-rules-dark",
+        sizes = {name: (460, 620) for name in (
+            "calibration", "actions", "run", "settings", "safety", "puller",
+            "out-of-target", "periodic", "visual-rules", "action-catalog",
+            "buff-detail", "buff-icon-picker", "run-setup", "run-break",
+            "profile-menu", "overlay-controls", "overlay-controls-off", "size-review",
+            "updates", "update-available", "update-download", "update-ready", "update-error",
         )}
-        sizes["event-history-dark"] = (800, 560)
+        sizes["window-chooser"] = (780, 600)
+        sizes["event-history"] = (400, 500)
+        seen_images = {}
         for name, expected_size in sizes.items():
             with self.subTest(screenshot=name):
-                data = (ROOT / "docs/assets" / f"{name}.png").read_bytes()
+                path = ROOT / "docs/assets" / f"{name}.png"
+                self.assertTrue(path.is_file(), f"Missing documentation capture: {name}")
+                data = path.read_bytes()
+                digest = hashlib.sha256(data).hexdigest()
+                self.assertNotIn(digest, seen_images,
+                                 f"{name} reuses another view: {seen_images.get(digest)}")
+                seen_images[digest] = name
                 self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
                 self.assertGreater(len(data), 10_000)
                 offset, ended = 8, False
@@ -71,7 +84,7 @@ class DocumentationTests(unittest.TestCase):
     def test_example_profile_uses_neutral_defaults(self):
         example = json.loads((ROOT / "profile.example.json").read_text(encoding="utf-8"))
         self.assertEqual(example["name"], "Main profile")
-        self.assertEqual(example["process_name"], "game-client.exe")
+        self.assertNotIn("process_name", example)
         periodic = example["periodic_actions"][0]
         self.assertFalse(periodic["enabled"])
         self.assertEqual(periodic["first_run"], "after_interval")

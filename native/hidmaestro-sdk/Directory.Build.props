@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)../../build/input-sdk-adapter-obj/</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)../../build/input-sdk-adapter-managed/</BaseOutputPath>
+    <InputSdkCache>$(MSBuildThisFileDirectory)../../build/input-sdk/2.1.0/</InputSdkCache>
+    <InputSdkSource>$(InputSdkCache)source/hifihedgehog-HIDMaestro-c28c1f6/sdk/HIDMaestro.Core/</InputSdkSource>
+  </PropertyGroup>
+</Project>

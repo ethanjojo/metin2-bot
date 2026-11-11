@@ -6,5 +6,13 @@ Cargo.lock text eol=lf
 *.json text eol=lf
 *.yml text eol=lf
 *.md text eol=lf
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.iss text eol=crlf
+*.cmd text eol=crlf
+*.cs text eol=lf
+*.csproj text eol=lf
+*.png binary
+*.ico binary
 # Preserve the supplied logo vectors byte-for-byte, including source formatting.
 packaging/icons/logo*.svg -whitespace

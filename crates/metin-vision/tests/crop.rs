@@ -54,6 +54,7 @@ fn crops_match_opencv_inclusive_roi_for_tiny_and_rounded_edges() {
             [0.25, 0.25, 0.75, 0.75],
             [0.998, 0.998, 1., 1.],
             [0., 0., 0.002, 0.002],
+            [0., 0., 0.0005, 1.],
         ] {
             let region = Region {
                 left,
@@ -99,7 +100,6 @@ fn invalid_and_reversed_regions_are_rejected_before_crop() {
     for [left, top, right, bottom] in [
         [0.8, 0., 0.2, 1.],
         [0., 0.9, 1., 0.1],
-        [0., 0., 0.0005, 1.],
         [0., 0., 1., 0.],
         [-0.1, 0., 1., 1.],
         [0., 0., 1.1, 1.],

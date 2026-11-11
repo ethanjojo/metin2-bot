@@ -9,10 +9,9 @@ impl MetinApp {
     ) -> bool {
         let mut changed = false;
         let mut click = matches!(input, metin_core::ActionInput::Click { .. });
-        ui.horizontal(|ui| {
-            ui.label("Input");
-            changed |= ui.radio_value(&mut click, false, "Key").changed();
+        widgets::field(ui, "Input", |ui| {
             changed |= ui.radio_value(&mut click, true, "Click").changed();
+            changed |= ui.radio_value(&mut click, false, "Key").changed();
         });
         if changed {
             self.binding = None;
@@ -27,7 +26,9 @@ impl MetinApp {
                 shortcut,
                 hold_seconds,
             } => {
-                self.keybind_button(ui, binding, shortcut);
+                widgets::field(ui, "Keyboard shortcut", |ui| {
+                    self.keybind_button(ui, binding, shortcut)
+                });
                 changed |= crate::ui_controls::numeric(
                     ui,
                     "Key hold (s)",
@@ -37,14 +38,8 @@ impl MetinApp {
             }
             metin_core::ActionInput::Click { region } => {
                 ui.horizontal(|ui| {
-                if widgets::button(ui, widgets::Icon::Target, "Select click target", true, "Open Calibration. Draw a small rectangle inside the intended button; input clicks its center in the original game pixels. A window-size change clears this target.").clicked() {
-                    // Store the chosen input kind before opening Calibration.
-                    self.edit_area(mode);
-                }
-                if widgets::button(ui, widgets::Icon::Trash, "", region.is_some(), "Clear this click target. Configure it again before enabling the action.").clicked() {
-                    *region = None;
-                    changed = true;
-                }
+                    if widgets::button(ui,widgets::Icon::Target,"Select click target",true,"Select a small area inside the intended button over a fresh game image. Input uses its source-pixel center.").clicked(){self.edit_area(mode);}
+                    if widgets::small_icon_button(ui,widgets::Icon::Trash,region.is_some(),"Clear this click target. Undo restores it.").clicked(){*region=None;changed=true;}
                 });
                 self.click_target_preview(ui, *region);
             }
@@ -57,7 +52,7 @@ impl MetinApp {
         region: Option<metin_core::Region>,
     ) {
         let Some(region) = region else {
-            ui.small("Click target missing.");
+            ui.small("Click target missing. Select a target to continue.");
             return;
         };
         if let Some([width, height]) = self.editor.profile.frame_size {
@@ -110,13 +105,16 @@ impl MetinApp {
         let active = self
             .binding
             .is_some_and(|(recording, _)| recording == binding);
-        let response = ui.button(if active {
-            "Press a key…"
-        } else if value.is_empty() {
-            "Record shortcut"
-        } else {
-            value
-        });
+        let response = widgets::plain_button(
+            ui,
+            if active {
+                "Press a key…"
+            } else if value.is_empty() {
+                "Record shortcut"
+            } else {
+                value
+            },
+        );
         if response.clicked() || response.gained_focus() {
             self.runtime.stop();
             response.request_focus();
@@ -229,29 +227,44 @@ impl MetinApp {
         }
     }
     pub(super) fn icon_thumbnail(&mut self, ui: &mut egui::Ui, icon: &metin_core::BuffIcon) {
-        if !self.icon_textures.contains_key(&icon.png)
-            && let Ok(bytes) = icon.png_bytes()
-            && let Ok(frame) = metin_vision::decode_png(&bytes)
-        {
-            let pixels = frame
-                .bgr
-                .as_chunks::<3>()
-                .0
-                .iter()
-                .flat_map(|p| [p[2], p[1], p[0]])
-                .collect::<Vec<_>>();
-            let texture = ui.ctx().load_texture(
-                "buff-icon",
-                egui::ColorImage::from_rgb([frame.width as usize, frame.height as usize], &pixels),
-                egui::TextureOptions::NEAREST,
+        if let Some(texture) = icon_texture(ui, icon, &mut self.icon_textures) {
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(36., 36.), egui::Sense::hover());
+            super::skin::sprite(ui, "public/slot_base", rect);
+            ui.painter().image(
+                texture.id(),
+                rect.shrink(2.),
+                egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1., 1.)),
+                egui::Color32::WHITE,
             );
-            if self.icon_textures.len() > 32 {
-                self.icon_textures.clear();
-            }
-            self.icon_textures.insert(icon.png.clone(), texture);
-        }
-        if let Some(texture) = self.icon_textures.get(&icon.png) {
-            ui.image((texture.id(), egui::vec2(36., 36.)));
         }
     }
+}
+
+pub(super) fn icon_texture(
+    ui: &egui::Ui,
+    icon: &metin_core::BuffIcon,
+    textures: &mut std::collections::HashMap<String, egui::TextureHandle>,
+) -> Option<egui::TextureHandle> {
+    if !textures.contains_key(&icon.png)
+        && let Ok(bytes) = icon.png_bytes()
+        && let Ok(frame) = metin_vision::decode_png(&bytes)
+    {
+        let pixels = frame
+            .bgr
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .flat_map(|p| [p[2], p[1], p[0]])
+            .collect::<Vec<_>>();
+        let texture = ui.ctx().load_texture(
+            "buff-icon",
+            egui::ColorImage::from_rgb([frame.width as usize, frame.height as usize], &pixels),
+            egui::TextureOptions::NEAREST,
+        );
+        if textures.len() > 32 {
+            textures.clear();
+        }
+        textures.insert(icon.png.clone(), texture);
+    }
+    textures.get(&icon.png).cloned()
 }

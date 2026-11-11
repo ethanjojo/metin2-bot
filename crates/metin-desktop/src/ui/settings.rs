@@ -8,6 +8,7 @@ pub enum SettingsPage {
     Combat,
     Appearance,
     Diagnostics,
+    Updates,
 }
 impl MetinApp {
     pub(super) fn settings_view(&mut self, ui: &mut egui::Ui) {
@@ -22,18 +23,23 @@ impl MetinApp {
                 ),
                 (
                     SettingsPage::Combat,
-                    "Combat & timing",
+                    "Timing",
                     "Timing presets, delays and input guards.",
                 ),
                 (
                     SettingsPage::Appearance,
-                    "Appearance & performance",
-                    "Application-wide theme, scale and preview settings.",
+                    "Display",
+                    "Application-wide scale and preview settings.",
                 ),
                 (
                     SettingsPage::Diagnostics,
                     "Diagnostics",
                     "Build information, logs and diagnostic export.",
+                ),
+                (
+                    SettingsPage::Updates,
+                    "Updates",
+                    "Checked downloads and confirmed installation.",
                 ),
             ],
         ) {
@@ -42,10 +48,11 @@ impl MetinApp {
         egui::ScrollArea::vertical().id_salt(("settings-scroll",self.settings_page as u8)).show(ui,|ui| {
             let mut changed=false;
             match self.settings_page {
-                SettingsPage::Detection=>{widgets::heading(ui,"Detection","Recognition settings for the selected profile.");changed|=self.recognition_settings(ui);}
+                SettingsPage::Detection=>{widgets::icon_heading(ui,catalog::Artwork::Settings,"Detection","Recognition settings for the selected profile.");changed|=self.recognition_settings(ui);}
                 SettingsPage::Combat=>{widgets::heading(ui,"Combat & timing","Concrete timing values; detection and input guards remain independent.");changed|=self.timing_preset(ui);changed|=self.timing_settings(ui);}
                 SettingsPage::Appearance=>self.appearance_settings(ui),
                 SettingsPage::Diagnostics=>self.diagnostics_view(ui),
+                SettingsPage::Updates=>self.updates_view(ui),
             }
             if changed {self.runtime.stop();self.editor.record();}
         });
@@ -53,19 +60,25 @@ impl MetinApp {
     fn timing_preset(&mut self, ui: &mut egui::Ui) -> bool {
         let current = metin_core::TimingPreset::infer(&self.editor.profile.timing);
         let mut chosen = current;
-        egui::ComboBox::from_id_salt("tempo-preset")
-            .selected_text(current.map_or("Custom", |p| p.label()))
-            .show_ui(ui, |ui| {
-                for p in [
-                    metin_core::TimingPreset::Careful,
-                    metin_core::TimingPreset::Normal,
-                    metin_core::TimingPreset::Responsive,
-                ] {
-                    ui.selectable_value(&mut chosen, Some(p), p.label());
-                }
-                ui.add_enabled(false, egui::Label::new("Custom — edit values below"));
-            });
-        ui.small("A preset replaces all timing values below. Manual edits become Custom. Detection thresholds and safeguards are preserved.");
+        widgets::field(ui, "Tempo preset", |ui| {
+            widgets::ComboBox::from_id_salt("tempo-preset")
+                .width(ui.available_width())
+                .selected_text(current.map_or("Custom", |p| p.label()))
+                .show_ui(ui, |ui| {
+                    for p in [
+                        metin_core::TimingPreset::Careful,
+                        metin_core::TimingPreset::Normal,
+                        metin_core::TimingPreset::Responsive,
+                    ] {
+                        select::option(ui, &mut chosen, Some(p), p.label());
+                    }
+                    ui.add_enabled(false, egui::Label::new("Custom — edit values below"));
+                });
+        });
+        crate::ui_controls::help(
+            ui,
+            "A preset replaces all timing values below. Manual edits become Custom; detection thresholds and safeguards are preserved.",
+        );
         if chosen != current
             && let Some(p) = chosen
         {
@@ -85,11 +98,10 @@ impl MetinApp {
         section(ui, "Interface", |ui| {
             ui.label("UI scale");
             changed|=ui.add(egui::Slider::new(&mut self.settings.ui_scale,0.75..=1.5).step_by(0.05).show_value(true)).on_hover_text("Scales text and controls. The window can be resized; scroll areas keep settings accessible.").changed();
-            ui.small("Use the sun/moon button at the far right of the header to change theme.");
         });
-        section(ui, "Preview rendering", |ui| {
-            changed|=ui.checkbox(&mut self.settings.lite_mode,"Lite Mode").on_hover_text("Limits preview refresh to at most once per second. Does not change detection sampling, scheduling or input safety.").changed();
-            ui.horizontal(|ui| {
+        section(ui, "Overlay rendering", |ui| {
+            changed|=ui.checkbox(&mut self.settings.lite_mode,"Lite Mode").on_hover_text("Draws overlay changes at most once per second. Freshness checks remain active; detection sampling, scheduling and input safety are unchanged.").changed();
+            ui.horizontal_wrapped(|ui| {
                 ui.label("Refresh interval (ms)");
                 changed |= ui
                     .add(
@@ -99,7 +111,6 @@ impl MetinApp {
                     )
                     .changed();
             });
-            ui.small("Only preview presentation is throttled. Recognition and all safety checks continue at the profile's capture interval.");
         });
         if changed {
             ui.ctx().set_zoom_factor(self.settings.ui_scale);
@@ -115,12 +126,17 @@ impl MetinApp {
             "Build information, platform support and local diagnostic export.",
         );
         section(ui, "Platform & build", |ui| {
-            ui.label(format!("MetinBot {}", crate::VERSION));
-            ui.monospace(
-                crate::build_info()["commit_sha"]
-                    .as_str()
-                    .unwrap_or("unknown"),
-            );
+            ui.label(format!("{} {}", crate::PRODUCT_NAME, crate::VERSION));
+            egui::CollapsingHeader::new("Advanced build details").show(ui, |ui| {
+                ui.monospace(
+                    crate::build_info()["commit_sha"]
+                        .as_str()
+                        .unwrap_or("unknown"),
+                );
+                ui.small(
+                    "Windows x64 automation uses the HIDMaestro driver installed by Windows setup.",
+                );
+            });
             if self.snapshot.capabilities.automation_ready() {
                 widgets::badge(ui, "Capture and guarded input available", widgets::GREEN);
             } else {
@@ -131,11 +147,11 @@ impl MetinApp {
                     &self.snapshot.capabilities.reason
                 });
             }
-            ui.small("Linux/macOS automation remains disabled until native capture and guarded input are verified.");
+
             if button(
                 ui,
                 Icon::Target,
-                "Open calibration",
+                "Open recognition",
                 true,
                 "Select the game window and inspect capture.",
             )
@@ -147,7 +163,7 @@ impl MetinApp {
         section(ui, "Reports & notifications", |ui| {
             ui.label(&self.snapshot.notification_status);
             if button(ui,Icon::Save,"Export diagnostics",true,"Save build details, platform capabilities, session statistics and visible event messages. No images, profiles or raw log files are included.").clicked()
-                && let Some(path)=rfd::FileDialog::new().set_title("Export diagnostics").set_file_name("metinbot-diagnostics.json").add_filter("JSON",&["json"]).save_file() {
+                && let Some(path)=rfd::FileDialog::new().set_title("Export diagnostics").set_file_name("companion-diagnostics.json").add_filter("JSON",&["json"]).save_file() {
                     let c=&self.snapshot.capabilities;
                     let report=serde_json::json!({"schema_version":1,"build":crate::build_info(),"platform":{"capture":c.capture,"input":c.input,"foreground":c.foreground,"emergency_stop":c.emergency_stop,"reason":c.reason},"statistics":self.snapshot.statistics,"state":self.snapshot.state,"reason":self.snapshot.reason,"events":self.snapshot.events});
                     match serde_json::to_vec_pretty(&report).map_err(|e|e.to_string()).and_then(|bytes|crate::storage::atomic_write(&path,&bytes).map_err(|e|e.to_string())) {Ok(())=>{},Err(error)=>self.error=Some(error)}
@@ -180,7 +196,7 @@ impl MetinApp {
                     "stable_frames",
                     &mut c.stable_frames,
                 );
-                ui.small("A candidate must remain stable before the bot selects it.");
+
                 ui.collapsing("Advanced color & shape limits", |ui| {
                     for (label, name, value) in [
                         ("Hue tolerance", "hue_tolerance", &mut c.hue_tolerance),
@@ -208,7 +224,7 @@ impl MetinApp {
                     );
                 });
             } else {
-                ui.label("Pick a Metin color in Calibration before adjusting its tolerances.");
+                ui.label("Pick a Metin color in Recognition before adjusting its tolerances.");
             }
         });
         section(ui, "Target panel confirmation", |ui| {
@@ -224,7 +240,6 @@ impl MetinApp {
                 "stable_frames",
                 &mut self.editor.profile.panel.stable_frames,
             );
-            ui.small("Higher thresholds require a closer match to the captured reference crop.");
         });
         changed
     }

@@ -1,32 +1,33 @@
-# Windows prerelease
+# Companion Windows release candidate
 
-MetinBot includes a Rust/egui interface with Run, Calibration, Actions, Safety and Settings, searchable per-profile window selection, window capture, interactive calibration, skill ordering, icon recognition and light/dark appearance.
+The first public Companion release candidate for Windows x64. A compact Rust/egui desktop application for local visual recognition, calibration and configurable actions.
 
-## Run overview
+## Highlights
 
-Run groups the current activity, reason, countdowns and compact mount declaration in one panel. Mount confirmation is shared with Actions and needs only a connected game window, not a Snapshot or finished calibration; confirming pauses automation without sending a game key. A confirmed state offers Change, while an unknown state shows On foot / Mounted choices.
+- One resizable Metin-style panel with Run, Actions, Recognition, Safety and Settings. Searchable profiles keep Save/Revert/Undo/Redo available; Start/Pause and mount declaration stay in the footer.
+- Choose a game window from an automatically refreshed screenshot grid. Pin the panel to the selected client or collapse it to its title bar.
+- Select regions, colors and buff/action references directly over a fresh frozen game capture. Move/resize existing selections; Escape/F8 cancels without changing calibration. Review client-size changes explicitly.
+- Recognize targets by color and one fixed HP-panel detail. Click-through annotations show current/next targets, exclusions and optional sizes without a persistent cross at the last click.
+- Configure ordered timed/icon-based buffs, loot, mount behavior, periodic actions, visual rules, auto-puller and bounded out-of-target attacks. Animated buff icons use a short configurable Active-state hold.
+- Apply stop limits, breaks, recovery limits and local notifications. Follow activity/countdowns in Run and open searchable event history inside the same panel.
+- Check Stable or Preview updates, review notes, download with size/SHA256 verification, then explicitly Install and restart. Startup checks are opt-in and installation never resumes automation.
 
-Action and skill names open their exact settings. The overview keeps the latest five events; full history opens in a dialog with its own scrolling, warning filter and clear controls. Closing the dialog preserves the Run page position. Preview can be switched off without changing active detection or safety processing.
+## Install or upgrade
 
-## Installation
+Requires Windows x64, Windows 10 build 19041 or newer, and a D3D11-capable graphics device. Download the setup plus `SHA256SUMS.txt` and verify the installer checksum. Native runtime libraries and the NativeAOT input bridge are included; no installed .NET runtime is needed.
 
-Download the Windows x64 installer or portable ZIP and verify it against `SHA256SUMS.txt`. Extract the complete ZIP if using the portable package. Runtime dependencies are included. Windows 10 version 2004 / build 19041 or newer and a D3D11-capable graphics device are required.
+Setup requires administrator access and explicit consent for the shared HIDMaestro 2.1.0 driver. It discloses machine signing-certificate trust/private-key changes and automatic startup of `GameInputSvc`. App/setup are unsigned; `jojo` is product metadata, not a verified publisher. See [driver installation and removal](user-guide.md#installation-and-hid-driver).
 
-Packages request the normal administrator confirmation and are unsigned. `jojo` is product metadata, not a verified Windows publisher.
+Companion installs under `Program Files/Companion` and keeps profiles, reference PNGs, settings and logs under `%LOCALAPPDATA%/Companion`. Upgrades migrate previous default paths with verified backups; custom data paths stay explicit. Keep complete backups until the migrated application is verified. Ordinary uninstall retains profiles and the shared driver. Removing the driver requires a separate explicit choice and refuses while another consumer runs.
 
-## Data
+## Known limits
 
-Back up the complete MetinBot data folder before upgrading. Profiles, assets and settings are kept outside the installation directory and survive uninstall. Import copies data without modifying its source. Windows stores data under `%LOCALAPPDATA%/MetinBot`; keep profile JSON and PNG assets together when backing up.
+- Windows x64 setup is the only supported distribution.
+- Keep the selected game in the foreground. Capture/input guards remain active; this is not unattended background control of an inactive window.
+- Windows capture privacy policy may retain a capture indicator when borderless permission is unavailable or denied.
+- The complete integrated targeting, attack, buff, mount and emergency-stop cycle still requires live-game acceptance before stable release.
+- Screenshot/update UI fixtures use isolated demonstration data; they do not establish live-game or interactive updater-install acceptance.
 
-## Known limitations
+Project-authored source is [MIT licensed](../LICENSE). Original artwork and third-party components retain their existing terms; see [notices](../THIRD_PARTY_NOTICES.md).
 
-- Live-game acceptance of targeting, attacks, buffs and mount handling is pending.
-- Hosted installation, upgrade and uninstall checks must pass for the final artifact before publication.
-- Linux supports an editor/recognition preview. Linux and macOS automation is disabled because capture/input are unavailable.
-- Full native macOS execution and Finder/Dock appearance still require verification.
-
-When reporting an issue, include the application version/commit, operating-system version, reproduction steps and relevant log excerpt. Review logs and screenshots for private data before sharing.
-
-Action scheduling includes configurable pickup after confirmed target ends, active-time/local-time automatic stopping, deferred breaks and bounded session-event history. All new automation options default to off. Live-game acceptance of these additions is pending.
-
-Actions additionally includes named periodic keys/clicks, user-calibrated visual rules and an auto-puller triggered at confirmed combat start or repeated during combat. Visual rules have no event presets: configure a reference and choose a notification, pause or guarded input. Inputs can verify reference disappearance with bounded retries, or explicitly finish after an unverified delay, then pause or continue from fresh recognition. Periodic actions choose immediate first use or waiting for the first interval; new actions default to waiting, while existing profiles retain immediate first use. Click regions are relative to the calibrated game window. Safety includes bounded recovery and optional local sound/system alerts. Settings separates detection, timing presets, appearance/performance and diagnostics. Run links events to their settings and shows upcoming action timers. New controls default off; image rules require explicit calibration. Out-of-target attacks can hold a configured key after combat or during long searching, with bounded attempts and guarded release. These additions still require live-game acceptance.
+[User guide](user-guide.md) · [Changelog](../CHANGELOG.md) · [Release procedure](releasing.md)

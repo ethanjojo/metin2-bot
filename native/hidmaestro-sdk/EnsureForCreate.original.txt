@@ -1,0 +1,19 @@
+    internal static bool EnsureForCreate(string identityToken)
+    {
+        using var deployLock = Machine.Lock();
+        string? recorded = Machine.ManifestHash();
+        if (recorded != null && string.Equals(recorded, Volatile.Read(ref s_confirmedManifest), StringComparison.OrdinalIgnoreCase))
+            return false;
+        bool deployed = false;
+        if (!Machine.StoreHasBothPackages() || OlderThanBuild().Count > 0)
+        {
+            var outcome = Run(identityToken);
+            deployed = outcome is HMDriverInstallOutcome.Installed or HMDriverInstallOutcome.Upgraded;
+            if (!Machine.StoreHasBothPackages())
+                throw new InvalidOperationException(
+                    $"The HIDMaestro driver is not in the driver store, and a deploy for this create ended with {outcome}.");
+        }
+        if (OlderThanBuild().Count == 0)
+            Volatile.Write(ref s_confirmedManifest, Machine.ManifestHash());
+        return deployed;
+    }

@@ -10,6 +10,7 @@ __pycache__/
 /*.json.tmp
 # Local diagnostic output; reusable checks belong under tools/ or tests/.
 /diagnostics/
+/logs/
 *.log
 
 # Build/package outputs and development tooling.
@@ -18,6 +19,8 @@ dist/
 .idea/
 .vscode/
 /target/
+/native/**/obj/
+/native/**/bin/
 .env
 .env.*
 !.env.example
@@ -30,3 +33,5 @@ Desktop.ini
 
 # Local design specs and implementation plans.
 /docs/superpowers/
+/superpowers/
+/.superpowers/
