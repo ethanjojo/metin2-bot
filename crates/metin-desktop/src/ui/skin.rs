@@ -30,6 +30,17 @@ struct Manifest {
 struct Skin {
     manifest: Manifest,
     texture: egui::TextureHandle,
+    title_alpha: [AlphaTile; 3],
+}
+struct AlphaTile {
+    width: u32,
+    height: u32,
+    pixels: Vec<u8>,
+}
+impl AlphaTile {
+    fn sample(&self, x: f32, y: f32) -> u8 {
+        self.pixels[(y as u32 % self.height * self.width + x as u32 % self.width) as usize]
+    }
 }
 
 fn get(ctx: &egui::Context) -> Arc<Skin> {
@@ -49,7 +60,24 @@ fn get(ctx: &egui::Context) -> Arc<Skin> {
         &icon.rgba,
     );
     let texture = ctx.load_texture("Metin UI atlas", image, egui::TextureOptions::NEAREST);
-    let skin = Arc::new(Skin { manifest, texture });
+    let title_alpha = ["left", "center", "right"].map(|part| {
+        let name = &manifest.styles["titlebar"].parts[part];
+        let [x, y, width, height] = manifest.regions[name].rect;
+        let pixels = (y..y + height)
+            .flat_map(|py| (x..x + width).map(move |px| ((py * icon.width + px) * 4 + 3) as usize))
+            .map(|offset| icon.rgba[offset])
+            .collect();
+        AlphaTile {
+            width,
+            height,
+            pixels,
+        }
+    });
+    let skin = Arc::new(Skin {
+        manifest,
+        texture,
+        title_alpha,
+    });
     ctx.data_mut(|data| data.insert_temp(id, skin.clone()));
     skin
 }
@@ -184,15 +212,16 @@ impl Skin {
 }
 
 pub fn background(ui: &egui::Ui, collapsed: bool) {
+    if collapsed {
+        return;
+    }
     let ctx = ui.ctx();
     let painter = ctx.layer_painter(egui::LayerId::background());
     let rect = ctx.content_rect();
     painter.rect_filled(rect, 0., ui.visuals().window_fill);
-    if !collapsed {
-        let skin = get(ctx);
-        painter.add(skin.panel_shape("board", rect));
-        painter.rect_filled(rect.shrink(12.), 0., Color32::from_black_alpha(120));
-    }
+    let skin = get(ctx);
+    painter.add(skin.panel_shape("board", rect));
+    painter.rect_filled(rect.shrink(12.), 0., Color32::from_black_alpha(120));
 }
 
 /// The source right cap includes its own X. Its close action paints that cap once.
@@ -200,9 +229,22 @@ pub struct TitleBar {
     pub content: Rect,
     pub close_rect: Rect,
     right_cap: Rect,
+    paint: Rect,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub(super) struct TitleClip {
+    rect: Rect,
+    pixels_per_point: f32,
 }
 
 impl TitleBar {
+    pub(super) fn clip(&self, pixels_per_point: f32) -> TitleClip {
+        TitleClip {
+            rect: self.paint,
+            pixels_per_point,
+        }
+    }
     pub fn close(self, ui: &mut egui::Ui, hint: &str) -> egui::Response {
         let response = control_response(
             ui,
@@ -229,22 +271,21 @@ impl TitleBar {
     }
 }
 
-/// Reserve the complete artwork and expose the native title's logical content strip.
+/// Reserve the native logical strip; the original 32 px artwork paints beyond it.
 pub fn title(ui: &mut egui::Ui) -> TitleBar {
     let skin = get(ui.ctx());
     let style = &skin.manifest.styles["titlebar"];
     let [l, r] = style.cap_widths_px.unwrap().map(|v| v as f32);
     let height = style.paint_height_px.unwrap() as f32;
+    let logical_height = style.logical_height_px.unwrap() as f32;
     let (rect, _) = ui.allocate_exact_size(
-        egui::vec2(ui.available_width(), height),
+        egui::vec2(ui.available_width(), logical_height),
         egui::Sense::hover(),
     );
-    let content = Rect::from_min_size(
-        rect.min,
-        egui::vec2(rect.width(), style.logical_height_px.unwrap() as f32),
-    );
+    let content = rect;
     let title = TitleBar {
         content,
+        paint: Rect::from_min_size(rect.min, egui::vec2(rect.width(), height)),
         // In the 32 px source cap the integrated X is centered at x=21.
         close_rect: Rect::from_center_size(
             egui::pos2(rect.right() - 11., content.center().y),
@@ -271,6 +312,47 @@ pub fn title(ui: &mut egui::Ui) -> TitleBar {
         );
     }
     title
+}
+
+/// Pixel runs from the same atlas that paints the title, including DPI and tiled center.
+/// Windows clips the collapsed native surface to these runs, independent of GPU alpha support.
+pub(super) fn title_clip_runs(ctx: &egui::Context, clip: TitleClip) -> Vec<[i32; 4]> {
+    let skin = get(ctx);
+    let [left_cap, right_cap] = skin.manifest.styles["titlebar"]
+        .cap_widths_px
+        .unwrap()
+        .map(|v| v as f32);
+    let rect = clip.rect;
+    let scale = clip.pixels_per_point;
+    let mut runs = Vec::new();
+    for py in (rect.top() * scale).floor() as i32..(rect.bottom() * scale).ceil() as i32 {
+        let y = (py as f32 + 0.5) / scale - rect.top();
+        let mut start = None;
+        let end = (rect.right() * scale).ceil() as i32;
+        for px in (rect.left() * scale).floor() as i32..=end {
+            let x = (px as f32 + 0.5) / scale - rect.left();
+            let alpha = if px == end || x < 0. || x >= rect.width() || y < 0. || y >= rect.height()
+            {
+                0
+            } else if x < left_cap {
+                skin.title_alpha[0].sample(x, y)
+            } else if x < rect.width() - right_cap {
+                skin.title_alpha[1].sample(x - left_cap, y)
+            } else {
+                let tile = &skin.title_alpha[2];
+                tile.sample(
+                    (x - rect.width() + right_cap) * tile.width as f32 / right_cap,
+                    y * tile.height as f32 / rect.height(),
+                )
+            };
+            if alpha >= 128 {
+                start.get_or_insert(px);
+            } else if let Some(left) = start.take() {
+                runs.push([left, py, px, py + 1]);
+            }
+        }
+    }
+    runs
 }
 
 pub fn sprite(ui: &egui::Ui, name: &str, rect: Rect) {

@@ -2864,3 +2864,4 @@ include!("qol_action_tests.rs");
 include!("qol_rules_tests.rs");
 include!("qol_shared_tests.rs");
 include!("update_tests.rs");
+include!("profile_menu_tests.rs");

@@ -107,9 +107,31 @@ pub fn option_row(
     selected: bool,
     label: impl Into<egui::WidgetText>,
 ) -> egui::Response {
-    let label = label.into();
+    option_row_with_size(ui, selected, label.into(), None)
+}
+
+/// Explicit row geometry keeps text and adjacent profile actions on one baseline.
+pub fn sized_option_row(
+    ui: &mut egui::Ui,
+    selected: bool,
+    label: impl Into<egui::WidgetText>,
+    size: egui::Vec2,
+) -> egui::Response {
+    option_row_with_size(ui, selected, label.into(), Some(size))
+}
+
+fn option_row_with_size(
+    ui: &mut egui::Ui,
+    selected: bool,
+    label: egui::WidgetText,
+    size: Option<egui::Vec2>,
+) -> egui::Response {
     let hint = label.text().to_owned();
-    let response = ui.add(egui::Button::selectable(selected, label).truncate());
+    let button = egui::Button::selectable(selected, label).truncate();
+    let response = match size {
+        Some(size) => ui.add_sized(size, button),
+        None => ui.add(button),
+    };
     if response.gained_focus() {
         response.scroll_to_me(Some(egui::Align::Center));
     }

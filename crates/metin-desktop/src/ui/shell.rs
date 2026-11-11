@@ -3,8 +3,11 @@ use widgets::Icon;
 
 impl MetinApp {
     pub(super) fn toolbar(&mut self, ui: &mut egui::Ui) {
+        // The title and profile row share one header; avoid an extra widget gap.
+        let row_spacing = ui.spacing().item_spacing.y;
+        ui.spacing_mut().item_spacing.y = 0.;
         let _title = egui::Frame::new()
-            .inner_margin(egui::Margin::symmetric(10, 4))
+            .inner_margin(egui::Margin { left: 10, right: 10, top: 4, bottom: 0 })
             .show(ui, |ui| {
                 let title = skin::title(ui);
                 let content = title.content;
@@ -26,13 +29,24 @@ impl MetinApp {
                     ui.make_persistent_id("title-drag"),
                     egui::Sense::DRAG,
                 );
-                ui.painter().text(
-                    content.left_center() + egui::vec2(10., 0.),
-                    egui::Align2::LEFT_CENTER,
-                    crate::PRODUCT_NAME,
-                    egui::FontId::proportional(14.),
-                    egui::Color32::WHITE,
+                let title_color = egui::Color32::from_rgb(245, 235, 214);
+                let galley = ui.painter().layout_no_wrap(
+                    crate::PRODUCT_NAME.into(),
+                    egui::FontId::proportional(13.),
+                    title_color,
                 );
+                // Center the visible letters, not the font's ascent/descent box.
+                // The left ornament occupies the first part of the source cap.
+                let position = egui::pos2(
+                    content.left() + 24. - galley.mesh_bounds.left(),
+                    content.center().y - galley.mesh_bounds.center().y,
+                );
+                let pixels_per_point = ui.ctx().pixels_per_point();
+                let position = egui::pos2(
+                    (position.x * pixels_per_point).round() / pixels_per_point,
+                    (position.y * pixels_per_point).round() / pixels_per_point,
+                );
+                ui.painter().galley(position, galley, title_color);
                 if response.drag_started() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
                 }
@@ -74,10 +88,13 @@ impl MetinApp {
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::InnerSize(self.expanded_size));
                     }
                 }
+                #[cfg(windows)]
+                self.sync_title_clip(ui.ctx(), self.collapsed.then(|| title.clip(ui.ctx().pixels_per_point())));
                 if title.close(ui, "Close Companion").clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 }
             });
+        ui.spacing_mut().item_spacing.y = row_spacing;
         #[cfg(test)]
         ui.ctx().data_mut(|data| {
             data.insert_temp(egui::Id::unique("shell-header"), _title.response.rect)
@@ -86,128 +103,13 @@ impl MetinApp {
             return;
         }
         egui::Frame::new()
-            .inner_margin(egui::Margin::symmetric(12, 5))
+            .inner_margin(egui::Margin {
+                left: 12,
+                right: 12,
+                top: 6,
+                bottom: 5,
+            })
             .show(ui, |ui| self.profile_select(ui));
-    }
-    fn profile_select(&mut self, ui: &mut egui::Ui) {
-        let dirty = self.has_unsaved_profile();
-        let label = format!(
-            "{}{}",
-            self.editor.profile.name,
-            if dirty { "  *" } else { "" }
-        );
-        let response = ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 5.;
-            let width = ui.available_width() - 4. * 26. - 4. * ui.spacing().item_spacing.x;
-            let response = widgets::combo_trigger(ui, egui::Id::unique("profile-menu"), &label, width);
-            let allowed = self.pending_overlay.is_none();
-            if widgets::small_icon_button(
-                ui, Icon::Undo, self.editor.can_undo() && allowed, "Undo profile edit (Ctrl+Z)",
-            ).clicked() {
-                self.undo_profile();
-            }
-            if widgets::small_icon_button(
-                ui, Icon::Redo, self.editor.can_redo() && allowed, "Redo profile edit (Ctrl+Y)",
-            ).clicked() {
-                self.redo_profile();
-            }
-            let can_commit = dirty && allowed && !self.editor.is_recalibrating();
-            if widgets::small_icon_button(
-                ui, Icon::Revert, can_commit,
-                "Revert all unsaved changes to the saved profile. The connected game window stays selected.",
-            ).clicked() {
-                self.revert_profile();
-            }
-            if widgets::small_icon_button(
-                ui, Icon::Save, can_commit, "Save profile changes. Applying changes pauses automation.",
-            ).clicked() && let Err(error) = self.save() {
-                self.error = Some(error);
-            }
-            response
-        }).inner;
-        #[cfg(test)]
-        ui.ctx()
-            .data_mut(|d| d.insert_temp(egui::Id::unique("profile-trigger"), response.rect));
-        if response.clicked() {
-            self.profile_search.clear();
-            self.profile_rename = false;
-        }
-        if self.profile_open_requested {
-            egui::Popup::open_id(ui.ctx(), egui::Popup::default_response_id(&response));
-            self.profile_open_requested = false;
-        }
-        let popup = egui::Popup::menu(&response)
-            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-            .layout(egui::Layout::top_down_justified(egui::Align::Min))
-            .frame(skin::popup_frame(ui))
-            .width(response.rect.width());
-        #[cfg(feature = "ui-smoke")]
-        let popup = if self.profile_menu_fixture {
-            popup.open(true)
-        } else {
-            popup
-        };
-        popup.show(|ui| {
-            ui.add(
-                egui::TextEdit::singleline(&mut self.profile_search)
-                    .hint_text("Search profiles…")
-                    .desired_width(f32::INFINITY),
-            );
-            let profiles = self
-                .profiles
-                .iter()
-                .filter(|p| {
-                    self.profile_search.trim().is_empty()
-                        || p.name
-                            .to_lowercase()
-                            .contains(&self.profile_search.trim().to_lowercase())
-                })
-                .map(|p| (p.id, p.name.clone()))
-                .collect::<Vec<_>>();
-            select::menu_scroll(ui, "profile-options", 190., |ui| {
-                if profiles.is_empty() {
-                    ui.weak("No matching profiles.");
-                }
-                for (id, name) in profiles {
-                    if select::option_row(ui, id == self.editor.profile.id, name).clicked() {
-                        self.switch_profile(id);
-                        ui.close();
-                    }
-                }
-            });
-            ui.separator();
-            ui.horizontal(|ui| {
-                if widgets::button(
-                    ui,
-                    Icon::Plus,
-                    "New profile",
-                    true,
-                    "Create a new profile; unsaved changes are checked first.",
-                )
-                .clicked()
-                    && self.discard_or_save()
-                {
-                    self.replace_profile(Profile::create("New profile"), None);
-                    self.navigate(Tab::Calibration);
-                    ui.close();
-                }
-                if widgets::plain_button(ui, "Rename").clicked() {
-                    self.profile_rename = !self.profile_rename;
-                }
-            });
-            if self.profile_rename
-                && ui
-                    .add(
-                        egui::TextEdit::singleline(&mut self.editor.profile.name)
-                            .char_limit(80)
-                            .desired_width(f32::INFINITY),
-                    )
-                    .changed()
-            {
-                self.runtime.stop();
-                self.editor.record();
-            }
-        });
     }
     pub(super) fn navigation(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
@@ -373,24 +275,46 @@ impl MetinApp {
         }
     }
     pub(super) fn status_bar(&mut self, ui: &mut egui::Ui) {
+        if self.error.is_none() && !self.feedback_current() {
+            self.feedback = None;
+            return;
+        }
         let width = ui.available_width();
-        ui.allocate_ui_with_layout(egui::vec2(width, 20.), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.set_min_width(width);
-            ui.set_min_height(20.);
-            if let Some(error) = self.error.clone() {
-                let text_width = (width - 58.).max(1.);
-                ui.allocate_ui_with_layout(egui::vec2(text_width, 18.), egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                    ui.set_min_width(text_width);
-                    ui.add(egui::Label::new(egui::RichText::new(&error).small().color(widgets::RED)).truncate()).on_hover_text(&error);
-                });
-                if widgets::plain_button(ui,"Dismiss").on_hover_text("Hide this message; resolve the underlying condition before starting.").clicked() { self.error = None; }
-            } else if self.feedback_view(ui) {
-                // This slot stays the same height for success, warning and idle states.
-            } else if self.has_unsaved_profile() {
-                ui.label(egui::RichText::new("Unsaved edits").small().color(widgets::AMBER))
-                    .on_hover_text("Save applies your changes. Revert restores the saved profile. Start also saves before beginning.");
-            }
-        });
+        ui.allocate_ui_with_layout(
+            egui::vec2(width, 20.),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.set_min_width(width);
+                ui.set_min_height(20.);
+                if let Some(error) = self.error.clone() {
+                    let text_width = (width - 58.).max(1.);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(text_width, 18.),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            ui.set_min_width(text_width);
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(&error).small().color(widgets::RED),
+                                )
+                                .truncate(),
+                            )
+                            .on_hover_text(&error);
+                        },
+                    );
+                    if widgets::plain_button(ui, "Dismiss")
+                        .on_hover_text(
+                            "Hide this message; resolve the underlying condition before starting.",
+                        )
+                        .clicked()
+                    {
+                        self.error = None;
+                    }
+                } else {
+                    self.feedback_view(ui);
+                }
+            },
+        );
     }
     pub(super) fn window_frame(&mut self, ui: &mut egui::Ui) {
         let bounds = ui.ctx().content_rect().shrink(1.);

@@ -282,7 +282,7 @@ fn profile_menu_keyboard_keeps_a_long_list_visible_and_accepts_the_focused_profi
         draw_at_size(&mut app, &ctx, &mut vec![], size);
     }
     let (id, rect, clip) = row("Profile 16");
-    assert_eq!(ctx.memory(|m| m.focused()), Some(id));
+    assert_eq!(ctx.memory(|m| m.focused()), Some(id), "Actual row focus: {:?}", profiles.iter().find(|p| Some(row(&p.name).0) == ctx.memory(|m| m.focused())).map(|p| &p.name));
     assert!(
         rect.top() >= clip.top() - 1. && rect.bottom() <= clip.bottom() + 1.,
         "Focused profile must scroll into view"
@@ -494,11 +494,11 @@ fn missing_profile_name_opens_the_canonical_rename_editor_without_losing_calibra
     let before = app.editor.profile.clone();
     app.open_setup(SetupAction::Calibration);
     let output = compact_settle(&mut app, &ctx, egui::vec2(460., 620.));
-    assert!(app.profile_rename);
+    assert!(app.profile_rename.is_some());
     assert!(
         text_regions(&output)
             .iter()
-            .any(|(text, _)| text == "Rename")
+            .any(|(text, _)| text == "Profile name")
     );
     assert_eq!(app.editor.profile, before);
     app.runtime.shutdown().unwrap();
@@ -534,6 +534,13 @@ fn compact_chrome_fills_header_and_keeps_footer_clear_of_window_frame() {
                 size.y - primary.bottom() >= 9. && primary.left() >= 9.,
                 "Start must clear the outer frame: {primary:?} / {size:?}"
             );
+            let footer: egui::Rect = ctx.data(|d| d.get_temp(egui::Id::unique("shell-footer"))).unwrap();
+            assert!(primary.top() - footer.top() <= 6., "Idle footer must not reserve an empty message row: {primary:?}, {footer:?}");
+            app.show_feedback("Saved", false);
+            compact_settle(&mut app, &ctx, size);
+            let with_notice: egui::Rect = ctx.data(|d| d.get_temp(egui::Id::unique("shell-primary"))).unwrap();
+            assert_eq!(with_notice, primary, "Messages must not move Start or the mount control");
+            app.feedback = None;
         }
         app.collapsed = true;
         compact_settle(&mut app, &ctx, egui::vec2(320., 42.));

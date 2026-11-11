@@ -104,6 +104,7 @@ impl MetinApp {
         self.runtime.stop();
         self.send(Command::Detach);
         self.editor = Editor::new(profile, template);
+        self.profile_rename = None;
         self.history_open = false;
         self.reset_capture_navigation();
         self.units.fill(false);
@@ -302,7 +303,7 @@ impl MetinApp {
             SetupAction::Calibration => {
                 self.navigate(Tab::Calibration);
                 if self.editor.profile.name.trim().is_empty() {
-                    self.profile_rename = true;
+                    self.begin_profile_rename(self.editor.profile.id);
                     self.profile_open_requested = true;
                 }
             }

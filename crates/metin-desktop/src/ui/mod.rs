@@ -7,8 +7,11 @@ mod feedback;
 mod forms;
 pub(crate) mod icons;
 mod mount;
+#[cfg(windows)]
+mod native_chrome;
 mod overlay;
 mod periodic;
+mod profiles;
 mod run;
 mod safety;
 mod select;
@@ -80,6 +83,8 @@ pub struct MetinApp {
     settings: UISettings,
     #[cfg(windows)]
     native_window: Option<Arc<winit::window::Window>>,
+    #[cfg(windows)]
+    title_clip: Option<skin::TitleClip>,
     profiles: Vec<Profile>,
     editor: Editor,
     runtime: RuntimeHandle,
@@ -87,7 +92,7 @@ pub struct MetinApp {
     target: Option<TargetToken>,
     window_search: String,
     profile_search: String,
-    profile_rename: bool,
+    profile_rename: Option<profiles::RenameDraft>,
     profile_open_requested: bool,
     window_chooser: window_selection::WindowChooser,
     target_list_revision: u64,
@@ -201,6 +206,8 @@ impl MetinApp {
             settings,
             #[cfg(windows)]
             native_window: None,
+            #[cfg(windows)]
+            title_clip: None,
             profiles,
             editor: Editor::new(profile, template),
             runtime,
@@ -208,7 +215,7 @@ impl MetinApp {
             target: None,
             window_search: String::new(),
             profile_search: String::new(),
-            profile_rename: false,
+            profile_rename: None,
             profile_open_requested: false,
             window_chooser: window_selection::WindowChooser::default(),
             target_list_revision: 0,
@@ -328,6 +335,10 @@ impl MetinApp {
             });
         }
         Ok(())
+    }
+    #[cfg(feature = "ui-smoke")]
+    pub fn prepare_collapsed_fixture(&mut self) {
+        self.collapsed = true;
     }
     #[cfg(feature = "ui-smoke")]
     pub fn request_screenshot(&mut self, path: PathBuf, tab: Option<Tab>) {
@@ -705,8 +716,11 @@ impl MetinApp {
         self.icon_sheet = true;
     }
     #[cfg(feature = "ui-smoke")]
-    pub fn prepare_profile_menu_fixture(&mut self) {
+    pub fn prepare_profile_menu_fixture(&mut self, rename: bool) {
         self.profile_menu_fixture = true;
+        if rename {
+            self.begin_profile_rename(self.editor.profile.id);
+        }
     }
 
     pub fn render(&mut self, ui: &mut egui::Ui) {
@@ -721,7 +735,11 @@ impl MetinApp {
         }
         #[cfg(feature = "ui-smoke")]
         if let Some((path, Some(started))) = &self.smoke {
-            if !self.smoke_requested && started.elapsed() >= std::time::Duration::from_millis(700) {
+            // A collapsed capture must include settled native composition, not
+            // just an offscreen GPU frame before the OS has displayed the strip.
+            let delay = if self.collapsed { 2000 } else { 700 };
+            if !self.smoke_requested && started.elapsed() >= std::time::Duration::from_millis(delay)
+            {
                 let path = path.clone();
                 self.smoke_requested = true;
                 tracing::info!(?path, "UI screenshot requested");
@@ -770,6 +788,12 @@ impl MetinApp {
             self.expanded_size = ui.ctx().content_rect().size();
         }
         self.sync_game_overlay(ui.ctx());
+        #[cfg(windows)]
+        if !self.collapsed {
+            // Chooser/target-loss routes return before the toolbar: restore the
+            // complete native surface here, not only when the title is drawn.
+            self.sync_title_clip(ui.ctx(), None);
+        }
         if self.window_chooser.open {
             egui::CentralPanel::default().show(ui, |ui| self.window_chooser_view(ui));
             self.window_frame(ui);
@@ -795,7 +819,7 @@ impl MetinApp {
             .show(ui, |ui| self.toolbar(ui));
         if !self.collapsed {
             egui::Panel::top("navigation").show(ui, |ui| self.navigation(ui));
-            egui::Panel::bottom("status")
+            let _footer = egui::Panel::bottom("status")
                 .frame(
                     egui::Frame::new()
                         .fill(ui.visuals().panel_fill)
@@ -807,6 +831,10 @@ impl MetinApp {
                         }),
                 )
                 .show(ui, |ui| self.footer(ui));
+            #[cfg(test)]
+            ui.ctx().data_mut(|d| {
+                d.insert_temp(egui::Id::unique("shell-footer"), _footer.response.rect)
+            });
         }
         egui::CentralPanel::default().show(ui, |ui| {
             if !self.collapsed {
@@ -868,6 +896,10 @@ impl MetinApp {
     }
 }
 impl eframe::App for MetinApp {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        // Expanded mode paints its own board; collapsed mode is only the atlas strip.
+        [0.; 4]
+    }
     #[cfg(feature = "ui-smoke")]
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
         if self.smoke.is_some() {

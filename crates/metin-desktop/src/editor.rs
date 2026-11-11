@@ -58,6 +58,21 @@ impl Editor {
     pub fn dirty(&self) -> bool {
         self.profile != self.saved.profile || self.template != self.saved.template
     }
+    pub(crate) fn saved_profile(&self) -> &Profile {
+        &self.saved.profile
+    }
+    /// A committed metadata rename must not save or undo unrelated draft edits.
+    pub(crate) fn apply_saved_name(&mut self, name: &str) {
+        self.profile.name = name.into();
+        self.saved.profile.name = name.into();
+        for snapshot in &mut self.history {
+            snapshot.profile.name = name.into();
+        }
+        if let Some(base) = &mut self.review_base {
+            base.apply_saved_name(name);
+        }
+        self.change_id = self.change_id.wrapping_add(1);
+    }
     pub fn mark_saved(&mut self, profile: Profile) {
         self.profile = profile;
         self.saved = self.snapshot();

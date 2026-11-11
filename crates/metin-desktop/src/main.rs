@@ -165,6 +165,14 @@ fn startup(cli: Cli) -> Result<(), String> {
     } else {
         viewport
     };
+    #[cfg(feature = "ui-smoke")]
+    let viewport = if cli.ui_collapsed {
+        viewport
+            .with_inner_size([if cli.ui_small { 400. } else { 460. }, 42.])
+            .with_min_inner_size([320., 42.])
+    } else {
+        viewport
+    };
     let options = eframe::NativeOptions {
         viewport,
         ..Default::default()
@@ -173,10 +181,20 @@ fn startup(cli: Cli) -> Result<(), String> {
         metin_desktop::PRODUCT_NAME,
         options,
         Box::new(move |cc| {
+            #[cfg(windows)]
+            if let Some(window) = cc.winit_window() {
+                use winit::platform::windows::{CornerPreference, WindowExtWindows};
+                // The atlas supplies the frame, including its own shaped corners.
+                window.set_border_color(None);
+                window.set_corner_preference(CornerPreference::DoNotRound);
+            }
             let app = metin_desktop::ui::MetinApp::new(cc, root).map_err(std::io::Error::other)?;
             #[cfg(feature = "ui-smoke")]
             let app = {
                 let mut app = app;
+                if cli.ui_collapsed {
+                    app.prepare_collapsed_fixture();
+                }
                 if let Some(path) = &cli.ui_fixture {
                     app.load_fixture(path).map_err(std::io::Error::other)?;
                 }
@@ -229,7 +247,7 @@ fn startup(cli: Cli) -> Result<(), String> {
                         app.prepare_icon_sheet();
                     }
                     if cli.ui_profile_menu {
-                        app.prepare_profile_menu_fixture();
+                        app.prepare_profile_menu_fixture(cli.ui_profile_rename);
                     }
                     app.request_screenshot(path, cli.ui_tab);
                 }

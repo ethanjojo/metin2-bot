@@ -14,6 +14,7 @@ pub enum Icon {
     Refresh,
     Back,
     Check,
+    Edit,
     Cross,
     Target,
     Pin,
@@ -142,6 +143,18 @@ pub fn paint_sized(p: &egui::Painter, center: Pos2, kind: Icon, color: Color32, 
         }
         Icon::Check => {
             line(&[(4., 12.), (9., 17.), (20., 6.)]);
+        }
+        Icon::Edit => {
+            line(&[
+                (4., 16.),
+                (15., 5.),
+                (19., 9.),
+                (8., 20.),
+                (3., 21.),
+                (4., 16.),
+            ]);
+            line(&[(13., 7.), (17., 11.)]);
+            line(&[(16., 4.), (18., 2.), (22., 6.), (20., 8.)]);
         }
         Icon::Cross => {
             line(&[(5., 5.), (19., 19.)]);
@@ -301,6 +314,7 @@ pub fn sheet(ui: &mut egui::Ui) {
                 Icon::Refresh,
                 Icon::Back,
                 Icon::Check,
+                Icon::Edit,
                 Icon::Cross,
                 Icon::Target,
                 Icon::Pin,

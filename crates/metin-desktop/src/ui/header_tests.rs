@@ -21,6 +21,11 @@ fn header_profile_actions_stay_visible_aligned_and_fixed_across_clean_and_dirty_
     let size = egui::vec2(400., 500.);
     compact_settle(&mut app, &ctx, size);
     let clean = header_profile_geometry(&ctx);
+    let header = ctx
+        .data(|d| d.get_temp::<egui::Rect>(egui::Id::unique("shell-header")))
+        .unwrap();
+    let gap = clean[0].top() - (header.top() + 4. + 23.);
+    assert!((6. ..=8.).contains(&gap), "Profile row must follow the visible title strip without a blank band: {gap}");
     for rect in clean {
         assert_eq!(rect.height(), 28.);
         assert_eq!(rect.top(), clean[0].top());
@@ -128,7 +133,11 @@ fn header_glyph_controls_keep_pointer_keyboard_focus_and_collapse_actions() {
     compact_click_at(&mut app, &ctx, size, collapse.center());
     assert!(app.collapsed);
     let compact = egui::vec2(400., 42.);
-    compact_settle(&mut app, &ctx, compact);
+    let collapsed = compact_settle(&mut app, &ctx, compact);
+    assert_eq!(eframe::App::clear_color(&app, &egui::Visuals::dark()), [0.; 4]);
+    assert!(!collapsed.shapes.iter().any(|shape| matches!(&shape.shape,
+        egui::Shape::Rect(rect) if rect.fill.a() > 0 && rect.rect.width() > 100.
+    )), "Collapsed mode must paint only the source title artwork, without an opaque window backing");
     let expand = compact_control_rect(&ctx, "Expand panel");
     compact_click_at(&mut app, &ctx, compact, expand.center());
     assert!(!app.collapsed);
@@ -284,10 +293,16 @@ fn header_title_and_native_controls_use_logical_title_center_and_source_dimensio
                 .find(|(text, _)| text == crate::PRODUCT_NAME)
                 .unwrap()
                 .1;
+            let ink = output.shapes.iter().find_map(|shape| match &shape.shape {
+                egui::Shape::Text(text) if text.galley.job.text == crate::PRODUCT_NAME =>
+                    Some(text.galley.mesh_bounds.translate(text.pos.to_vec2())),
+                _ => None,
+            }).unwrap();
             assert!(
-                (title.center().y - center_y).abs() <= 0.75,
-                "Title must use the logical 23 px strip: {title:?}, center {center_y}"
+                (ink.center().y - center_y).abs() <= 0.75,
+                "Painted letters must be centered in the 23 px strip: {ink:?}, center {center_y}"
             );
+            assert!(ink.left() >= header.left() + 22., "Title must clear the source ornament: {ink:?}");
             let controls = [
                 "Change the connected game window. Automation pauses before the window chooser opens.",
                 if app.pinned { "Unpin the panel from the selected game window" } else { "Pin the panel to the selected game window" },

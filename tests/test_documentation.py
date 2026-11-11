@@ -48,11 +48,12 @@ class DocumentationTests(unittest.TestCase):
             "calibration", "actions", "run", "settings", "safety", "puller",
             "out-of-target", "periodic", "visual-rules", "action-catalog",
             "buff-detail", "buff-icon-picker", "run-setup", "run-break",
-            "profile-menu", "overlay-controls", "overlay-controls-off", "size-review",
+            "profile-menu", "profile-rename", "overlay-controls", "overlay-controls-off", "size-review",
             "updates", "update-available", "update-download", "update-ready", "update-error",
         )}
         sizes["window-chooser"] = (780, 600)
         sizes["event-history"] = (400, 500)
+        sizes["collapsed"] = (460, 42)
         seen_images = {}
         for name, expected_size in sizes.items():
             with self.subTest(screenshot=name):
@@ -64,7 +65,7 @@ class DocumentationTests(unittest.TestCase):
                                  f"{name} reuses another view: {seen_images.get(digest)}")
                 seen_images[digest] = name
                 self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
-                self.assertGreater(len(data), 10_000)
+                self.assertGreater(len(data), 1_000 if expected_size[1] < 100 else 10_000)
                 offset, ended = 8, False
                 while offset < len(data):
                     length = int.from_bytes(data[offset:offset + 4], "big")

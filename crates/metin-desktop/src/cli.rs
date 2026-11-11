@@ -70,10 +70,16 @@ pub struct Cli {
     pub ui_small: bool,
     #[cfg(feature = "ui-smoke")]
     #[arg(long, requires = "ui_screenshot")]
+    pub ui_collapsed: bool,
+    #[cfg(feature = "ui-smoke")]
+    #[arg(long, requires = "ui_screenshot")]
     pub ui_icon_sheet: bool,
     #[cfg(feature = "ui-smoke")]
     #[arg(long, requires = "ui_screenshot")]
     pub ui_profile_menu: bool,
+    #[cfg(feature = "ui-smoke")]
+    #[arg(long, requires = "ui_profile_menu")]
+    pub ui_profile_rename: bool,
     #[cfg(feature = "ui-smoke")]
     #[arg(long,requires_all=["ui_screenshot","ui_fixture"])]
     pub ui_window_picker: Option<crate::ui::WindowPickerFixture>,
