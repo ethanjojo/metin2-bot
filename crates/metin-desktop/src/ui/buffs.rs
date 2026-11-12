@@ -35,7 +35,7 @@ impl MetinApp {
                         Icon::Back,
                         "Back to Buffs",
                         true,
-                        "Return to the skill order without discarding edits.",
+                        "Return to the buff order without discarding edits.",
                     )
                     .clicked()
                     {
@@ -54,7 +54,7 @@ impl MetinApp {
             ui,
             catalog::Artwork::Skills,
             "Buffs",
-            "Skills run between targets in this order. F7/F8 remain reserved for Start and Pause.",
+            "Buffs run between targets in this order. F7/F8 remain reserved for Start and Pause.",
         );
         ui.horizontal(|ui| {
             if ui
@@ -68,9 +68,9 @@ impl MetinApp {
                 if button(
                     ui,
                     Icon::Plus,
-                    "Add skill",
+                    "Add buff",
                     self.editor.profile.buffs.skills.len() < 8,
-                    "Add a skill. Up to eight skills are supported.",
+                    "Add a buff. Up to eight buffs are supported.",
                 )
                 .clicked()
                 {
@@ -87,7 +87,7 @@ impl MetinApp {
                 let list_width = ui.available_width();
                 for (i, skill) in self.editor.profile.buffs.skills.iter().enumerate() {
                     let name = if skill.name.is_empty() {
-                        format!("Skill {}", i + 1)
+                        format!("Buff {}", i + 1)
                     } else {
                         skill.name.clone()
                     };
@@ -163,7 +163,7 @@ impl MetinApp {
                                 egui::vec2(26., 32.),
                                 true,
                                 false,
-                                &format!("Delete {name}. Undo restores the skill."),
+                                &format!("Delete {name}. Undo restores the buff."),
                             )
                             .clicked()
                             {
@@ -179,8 +179,8 @@ impl MetinApp {
                     self.remove_skill(index);
                 }
                 if self.editor.profile.buffs.skills.is_empty() {
-                    widgets::section(ui, "No skills yet", |ui| {
-                        ui.label("Add a skill, record its shortcut and choose when to use it.");
+                    widgets::section(ui, "No buffs yet", |ui| {
+                        ui.label("Add a buff, record its shortcut and choose when to use it.");
                     });
                 }
             });
@@ -295,14 +295,14 @@ impl MetinApp {
         widgets::icon_heading(
             ui,
             glyph,
-            if name.is_empty() { "Skill" } else { &name },
+            if name.is_empty() { "Buff" } else { &name },
             "Record a shortcut, then choose a timer or an inactive-icon check. Captures remain unsaved edits until Save.",
         );
         let mut changed = skill_icon::picker(
             ui,
             &mut self.editor.profile.buffs.skills[index].display_icon,
         );
-        changed |= widgets::field(ui, "Skill name", |ui| {
+        changed |= widgets::field(ui, "Buff name", |ui| {
             ui.add(
                 egui::TextEdit::singleline(&mut self.editor.profile.buffs.skills[index].name)
                     .desired_width(f32::INFINITY),
@@ -424,13 +424,13 @@ impl MetinApp {
             "Advanced timing",
             ("skill-advanced-timing", index),
             format!(
-                "After skill: {} s",
+                "After buff: {} s",
                 self.editor.profile.buffs.skills[index].wait_seconds
             ),
             |ui| {
                 changed |= numeric(
                     ui,
-                    "Wait after skill (s)",
+                    "Wait after buff (s)",
                     "wait_seconds",
                     &mut self.editor.profile.buffs.skills[index].wait_seconds,
                 );

@@ -236,7 +236,7 @@ impl BuffSkill {
         number("buff_active_hold_seconds", self.active_hold_seconds)?;
         require(
             self.name.chars().count() <= 60 && !self.name.chars().any(|c| (c as u32) < 32),
-            "Skill name must be at most 60 characters without control characters.",
+            "Buff name must be at most 60 characters without control characters.",
         )?;
         match self.mode {
             BuffMode::Refresh => number(
@@ -246,7 +246,7 @@ impl BuffSkill {
             )?,
             BuffMode::Inactive => require(
                 self.interval_seconds.is_none(),
-                "Toggle skills do not have intervals.",
+                "Toggle buffs do not have intervals.",
             )?,
         };
         for icon in [&self.icon, &self.inactive_icon].into_iter().flatten() {
@@ -304,7 +304,7 @@ impl BuffConfig {
         number("key_hold_seconds", self.key_hold_seconds)?;
         require(
             self.skills.len() <= 8 && (!self.enabled || !self.skills.is_empty()),
-            "Configure one to eight skills when buffing is enabled.",
+            "Configure one to eight buffs when buffing is enabled.",
         )?;
         let mut seen = std::collections::HashSet::new();
         for skill in &self.skills {
@@ -312,7 +312,7 @@ impl BuffConfig {
             let key = Shortcut::parse(&skill.shortcut)?;
             require(
                 key != mount && seen.insert(key),
-                "Skill shortcuts must be unique and differ from mounting.",
+                "Buff shortcuts must be unique and differ from mounting.",
             )?;
         }
         if let Some(r) = self.icon_region {

@@ -1,6 +1,10 @@
 use super::*;
-use crate::updates::{UpdateChannel, UpdateState, VerifiedInstaller};
-use std::{ffi::OsString, path::Path};
+use crate::update_helper::PreparedUpdate;
+use crate::updates::{UpdateChannel, UpdateState};
+use std::{
+    path::PathBuf,
+    sync::mpsc::{self, Receiver, TryRecvError},
+};
 
 fn file_size(bytes: u64) -> String {
     if bytes < 1024 {
@@ -13,17 +17,10 @@ fn file_size(bytes: u64) -> String {
 }
 
 pub(super) enum UpdateHandoff {
-    InstallerStarted { _guard: VerifiedInstaller },
+    Preparing(Receiver<Result<PreparedUpdate, String>>),
+    Waiting(PreparedUpdate),
+    InstallerStarted { _guard: PreparedUpdate },
     ReleaseFailed(String),
-}
-
-fn installer_arguments(root: &Path) -> Result<Vec<OsString>, String> {
-    let root = root
-        .canonicalize()
-        .map_err(|e| format!("The profile directory is unavailable: {e}"))?;
-    let mut data = OsString::from("/COMPANIONDATADIR=");
-    data.push(root);
-    Ok(vec![OsString::from("/RESTARTCOMPANION=1"), data])
 }
 
 impl MetinApp {
@@ -34,8 +31,35 @@ impl MetinApp {
         )
     }
     pub(super) fn sync_updates(&mut self, ctx: &egui::Context) {
+        self.poll_update_handoff(ctx);
         if self.updates.poll() {
             ctx.request_repaint();
+        }
+        if matches!(
+            self.updates.state(),
+            UpdateState::Idle
+                | UpdateState::Checking
+                | UpdateState::UpToDate
+                | UpdateState::Cancelled
+                | UpdateState::Failed(_)
+        ) {
+            self.update_install_requested = None;
+        }
+        let requested_ready = self.update_install_requested.as_ref().is_some_and(|intent| {
+            matches!(self.updates.state(), UpdateState::Ready(candidate) if candidate.version() == intent.version() && candidate.digest_hex() == intent.digest_hex())
+        });
+        if requested_ready && !self.update_fixture {
+            self.begin_update_install(ctx);
+        }
+        if self.startup_update_open
+            && self.update_handoff.is_none()
+            && self.update_error.is_none()
+            && matches!(
+                self.updates.state(),
+                UpdateState::Idle | UpdateState::UpToDate | UpdateState::Cancelled
+            )
+        {
+            self.startup_update_open = false;
         }
         if matches!(
             self.updates.state(),
@@ -65,97 +89,88 @@ impl MetinApp {
             self.update_preferences(ui, busy);
         }
         ui.separator();
+        self.update_status(ui, false);
+        if primary_first {
+            ui.separator();
+            ui.small("Update preferences");
+            self.update_preferences(ui, busy);
+        }
+    }
+
+    pub(super) fn update_status(&mut self, ui: &mut egui::Ui, startup: bool) {
+        if self.update_handoff_waiting() || self.update_exit_pending() {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label("Preparing update…");
+            });
+            ui.small("Safely releasing input and opening the update window.");
+            return;
+        }
+        if let Some(error) = &self.update_error {
+            ui.colored_label(widgets::RED, error);
+        }
+        let state = self.updates.state().clone();
+        let offer = matches!(state, UpdateState::Available(_) | UpdateState::Ready(_));
         match state {
             UpdateState::Idle | UpdateState::Cancelled => {
-                ui.weak(if matches!(state, UpdateState::Cancelled) {
-                    "Update cancelled. Nothing was installed."
-                } else {
-                    "Check when you are ready. Nothing downloads automatically."
-                });
-                if widgets::plain_button(ui, "Check for updates").clicked() {
-                    let _ = self.updates.check(self.settings.update_channel);
-                }
+                ui.weak("Check when you are ready. Nothing downloads automatically.");
             }
             UpdateState::Checking => {
                 ui.horizontal(|ui| {
                     ui.spinner();
                     ui.label("Checking GitHub…");
-                    if widgets::plain_button(ui, "Cancel").clicked() {
-                        self.updates.cancel();
-                    }
                 });
             }
             UpdateState::UpToDate => {
                 widgets::badge(ui, "No compatible newer release", widgets::GREEN);
                 ui.weak("Only verified Windows Companion installers in the selected channel are offered.");
-                if widgets::plain_button(ui, "Check again").clicked() {
-                    let _ = self.updates.check(self.settings.update_channel);
-                }
             }
             UpdateState::Failed(error) => {
                 ui.colored_label(widgets::RED, error.to_string());
                 ui.weak("Your application and profiles have not been changed.");
-                if widgets::plain_button(ui, "Retry check").clicked() {
-                    let _ = self.updates.check(self.settings.update_channel);
-                }
             }
             UpdateState::Available(candidate) | UpdateState::Ready(candidate) => {
-                let ready = matches!(self.updates.state(), UpdateState::Ready(_));
                 widgets::badge(
                     ui,
                     &format!("Companion {}", candidate.version()),
                     widgets::GREEN,
                 );
                 ui.small(format!("Windows x64 · {}", file_size(candidate.size())));
-                if ready {
+                ui.horizontal_wrapped(|ui| {
+                    ui.small("Includes input-driver and machine-wide certificate/service updates.");
+                    crate::ui_controls::help(ui,"Selecting Install permits Setup to create or reuse the HIDMaestro signing certificate (including its private key in LocalMachine\\My), trust it in LocalMachine\\Root and TrustedPublisher, install or update the shared virtual keyboard/mouse driver, and set GameInputSvc to automatic startup. Uninstall retains these shared components unless you explicitly request removal. Profiles and settings are retained.");
+                });
+                if matches!(self.updates.state(), UpdateState::Ready(_)) {
                     ui.label("Download verified. Ready to install.");
-                    let allowed = !self.update_fixture
-                        && !self.editor.is_recalibrating()
-                        && self.pending_overlay.is_none();
-                    if widgets::button(ui,widgets::Icon::Save,"Install and restart",allowed,"Pause and release input, resolve unsaved edits, then open the verified installer. Driver consent remains in Setup.").clicked() {
-                        let ctx=ui.ctx().clone();
-                        if let Err(error)=self.install_update_with(&ctx,|path,args| {
-                            let mut command=std::process::Command::new(path);
-                            command.args(args);
-                            #[cfg(windows)] {
-                                use std::os::windows::process::CommandExt;
-                                command.creation_flags(0x08000000); // CREATE_NO_WINDOW
-                            }
-                            command.spawn().map(|_|()).map_err(|e|format!("The installer could not start: {e}"))
-                        }) { self.error=Some(error); }
-                    }
-                    if self.update_fixture {
-                        ui.small("Preview only · installation disabled.");
-                    } else if !allowed {
-                        ui.small("Finish or cancel the selection/calibration review first.");
-                    }
-                    if widgets::plain_button(ui, "Discard download").clicked() {
-                        self.updates.cancel();
-                    }
-                } else if widgets::plain_button(ui, "Download update").clicked() {
-                    let _ = self.updates.download();
                 }
-                ui.add_space(6.);
-                ui.strong("Release notes");
-                let notes = candidate.release_notes();
-                egui::ScrollArea::vertical()
-                    .id_salt("update-notes")
-                    .max_height(100.)
-                    .show(ui, |ui| {
-                        ui.label(if notes.trim().is_empty() {
-                            "No release notes were provided."
-                        } else {
-                            notes
+                if !startup {
+                    self.update_primary_action(ui, false);
+                    ui.add_space(6.);
+                    ui.strong("Release notes");
+                    egui::ScrollArea::vertical()
+                        .id_salt("update-notes")
+                        .max_height(100.)
+                        .show(ui, |ui| {
+                            ui.label(if candidate.release_notes().trim().is_empty() {
+                                "No release notes were provided."
+                            } else {
+                                candidate.release_notes()
+                            });
                         });
-                    });
-                ui.hyperlink_to("View release on GitHub", candidate.release_url());
+                    ui.hyperlink_to("View release on GitHub", candidate.release_url());
+                }
             }
             UpdateState::Downloading {
                 candidate,
                 downloaded,
                 total,
             } => {
-                ui.label(format!("Downloading Companion {}", candidate.version()));
+                let verifying = downloaded >= total;
+                ui.label(if verifying {
+                    "Verifying update…".into()
+                } else {
+                    format!("Downloading Companion {}", candidate.version())
+                });
                 let fraction = if total > 0 {
                     downloaded as f32 / total as f32
                 } else {
@@ -165,17 +180,84 @@ impl MetinApp {
                     egui::vec2(ui.available_width(), 12.),
                     egui::Sense::hover(),
                 );
-                widgets::progress_track(ui, rect, Some(fraction));
+                widgets::progress_track(ui, rect, (!verifying).then_some(fraction));
                 ui.small(format!("{} / {}", file_size(downloaded), file_size(total)));
-                if widgets::plain_button(ui, "Cancel download").clicked() {
+            }
+        }
+        if !startup && !offer {
+            self.update_primary_action(ui, false);
+        }
+    }
+
+    pub(super) fn update_primary_action(&mut self, ui: &mut egui::Ui, startup: bool) {
+        if self.update_handoff_waiting() || self.update_exit_pending() {
+            return;
+        }
+        match self.updates.state().clone() {
+            UpdateState::Idle
+            | UpdateState::Cancelled
+            | UpdateState::UpToDate
+            | UpdateState::Failed(_) => {
+                let label = match self.updates.state() {
+                    UpdateState::Failed(_) => "Retry check",
+                    UpdateState::UpToDate => "Check again",
+                    _ => "Check for updates",
+                };
+                if widgets::plain_button(ui, label).clicked() {
+                    self.update_error = None;
+                    self.update_install_requested = None;
+                    let _ = self.updates.check(self.settings.update_channel);
+                }
+            }
+            UpdateState::Checking | UpdateState::Downloading { .. } => {
+                if !startup
+                    && widgets::plain_button(
+                        ui,
+                        if matches!(self.updates.state(), UpdateState::Checking) {
+                            "Cancel"
+                        } else {
+                            "Cancel download"
+                        },
+                    )
+                    .clicked()
+                {
+                    self.update_install_requested = None;
                     self.updates.cancel();
                 }
             }
-        }
-        if primary_first {
-            ui.separator();
-            ui.small("Update preferences");
-            self.update_preferences(ui, busy);
+            UpdateState::Available(candidate) => {
+                if widgets::plain_button(
+                    ui,
+                    if startup {
+                        "Install update"
+                    } else {
+                        "Download update"
+                    },
+                )
+                .clicked()
+                {
+                    self.update_error = None;
+                    self.update_install_requested = startup.then_some(candidate);
+                    let _ = self.updates.download();
+                }
+            }
+            UpdateState::Ready(_) => {
+                let allowed = !self.update_fixture
+                    && !self.editor.is_recalibrating()
+                    && self.pending_overlay.is_none();
+                if widgets::button(ui,widgets::Icon::Save,if startup {"Install update"} else {"Install and restart"},allowed,"Pause and release input, resolve unsaved edits, then update through the verified Companion update window.").clicked() { self.begin_update_install(ui.ctx()); }
+                if !startup {
+                    if self.update_fixture {
+                        ui.small("Preview only · installation disabled.");
+                    } else if !allowed {
+                        ui.small("Finish or cancel the selection/calibration review first.");
+                    }
+                    if widgets::plain_button(ui, "Discard download").clicked() {
+                        self.update_install_requested = None;
+                        self.updates.cancel();
+                    }
+                }
+            }
         }
     }
 
@@ -213,23 +295,116 @@ impl MetinApp {
         }
     }
 
-    /// Execution authority is a retained verified handle, never a caller-supplied path.
+    fn begin_update_install(&mut self, ctx: &egui::Context) {
+        self.update_install_requested = None;
+        let bounds = ctx.input(|input| input.viewport().inner_rect);
+        let zoom = ctx.zoom_factor();
+        let result = self.install_update_with(ctx, move |guard, candidate, root| {
+            let mut prepared = PreparedUpdate::prepare(guard, &candidate, &root)?;
+            if let Some(bounds) = bounds {
+                prepared.set_window_bounds(bounds, zoom)?;
+            }
+            prepared.spawn()?;
+            Ok(prepared)
+        });
+        if let Err(error) = result {
+            self.update_error = Some(error);
+        }
+    }
+
+    pub(super) fn update_handoff_waiting(&self) -> bool {
+        matches!(
+            self.update_handoff,
+            Some(UpdateHandoff::Preparing(_) | UpdateHandoff::Waiting(_))
+        )
+    }
+
+    fn recover_update_runtime(
+        &mut self,
+        ctx: &egui::Context,
+        error: String,
+    ) -> Option<UpdateHandoff> {
+        let notify = ctx.clone();
+        self.runtime = RuntimeHandle::spawn_with_notify(move || notify.request_repaint());
+        self.snapshot = match self.runtime.latest() {
+            Ok(snapshot) => snapshot,
+            Err(worker_error) => {
+                return Some(UpdateHandoff::ReleaseFailed(worker_error));
+            }
+        };
+        self.target = None;
+        self.open_window_chooser();
+        self.update_install_requested = None;
+        self.update_error = Some(error);
+        None
+    }
+
+    fn poll_update_handoff(&mut self, ctx: &egui::Context) {
+        let Some(handoff) = self.update_handoff.take() else {
+            return;
+        };
+        self.update_handoff = match handoff {
+            UpdateHandoff::Preparing(receiver) => match receiver.try_recv() {
+                Ok(Ok(helper)) => Some(UpdateHandoff::Waiting(helper)),
+                Ok(Err(error)) => self.recover_update_runtime(ctx, error),
+                Err(TryRecvError::Empty) => Some(UpdateHandoff::Preparing(receiver)),
+                Err(TryRecvError::Disconnected) => self.recover_update_runtime(
+                    ctx,
+                    "The update preparation worker stopped. Nothing was installed.".into(),
+                ),
+            },
+            UpdateHandoff::Waiting(mut helper) => match helper.poll() {
+                Ok(true) => match helper.commit() {
+                    Ok(()) => {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        Some(UpdateHandoff::InstallerStarted { _guard: helper })
+                    }
+                    Err(error) => self.recover_update_runtime(ctx, error),
+                },
+                Ok(false) => Some(UpdateHandoff::Waiting(helper)),
+                Err(error) => self.recover_update_runtime(ctx, error),
+            },
+            state => Some(state),
+        };
+        if self.update_handoff_waiting() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(50));
+        }
+    }
+
+    /// Only a retained verified download can enter the asynchronous helper handoff.
     pub(super) fn install_update_with(
         &mut self,
         ctx: &egui::Context,
-        launch: impl FnOnce(&Path, &[OsString]) -> Result<(), String>,
+        prepare: impl FnOnce(
+            crate::updates::VerifiedInstaller,
+            crate::updates::UpdateCandidate,
+            PathBuf,
+        ) -> Result<PreparedUpdate, String>
+        + Send
+        + 'static,
     ) -> Result<(), String> {
-        self.install_update_after_decision(ctx, |app| app.discard_or_save(), launch)
+        self.install_update_after_decision(ctx, |app| app.discard_or_save(), prepare)
     }
+
     pub(super) fn install_update_after_decision(
         &mut self,
-        ctx: &egui::Context,
+        _ctx: &egui::Context,
         decide: impl FnOnce(&mut Self) -> bool,
-        launch: impl FnOnce(&Path, &[OsString]) -> Result<(), String>,
+        prepare: impl FnOnce(
+            crate::updates::VerifiedInstaller,
+            crate::updates::UpdateCandidate,
+            PathBuf,
+        ) -> Result<PreparedUpdate, String>
+        + Send
+        + 'static,
     ) -> Result<(), String> {
-        if self.update_fixture || !matches!(self.updates.state(), UpdateState::Ready(_)) {
+        if self.update_fixture || self.update_handoff.is_some() {
             return Err("No verified installer is ready.".into());
         }
+        let crate::updates::UpdateState::Ready(candidate) = self.updates.state() else {
+            return Err("No verified installer is ready.".into());
+        };
+        let candidate = candidate.clone();
         if self.editor.is_recalibrating() || self.pending_overlay.is_some() {
             return Err(
                 "Finish or cancel the selection/calibration review before updating.".into(),
@@ -239,7 +414,10 @@ impl MetinApp {
         if !decide(self) {
             return Err("Update cancelled; your unsaved edits are still open.".into());
         }
-        let args = installer_arguments(&self.root)?;
+        let root = self
+            .root
+            .canonicalize()
+            .map_err(|e| format!("The profile directory is unavailable: {e}"))?;
         let guard = self
             .updates
             .take_verified_installer()
@@ -251,18 +429,23 @@ impl MetinApp {
             self.update_handoff = Some(UpdateHandoff::ReleaseFailed(message.clone()));
             return Err(message);
         }
-        if let Err(error) = launch(guard.installer_path(), &args) {
-            // The runtime was safely stopped before execution. A failed launcher
-            // must leave an operable paused application rather than a dead worker.
-            let notify = ctx.clone();
-            self.runtime = RuntimeHandle::spawn_with_notify(move || notify.request_repaint());
-            self.snapshot = self.runtime.latest()?;
-            self.target = None;
-            self.open_window_chooser();
-            return Err(error);
+        let (sender, receiver) = mpsc::sync_channel(1);
+        if let Err(error) = std::thread::Builder::new()
+            .name("companion-update-handoff".into())
+            .spawn(move || {
+                let _ = sender.send(prepare(guard, candidate, root));
+            })
+        {
+            self.update_handoff = self.recover_update_runtime(
+                _ctx,
+                format!("The update preparation worker could not start: {error}"),
+            );
+            return Err(
+                "The update preparation worker could not start. Nothing was installed.".into(),
+            );
         }
-        self.update_handoff = Some(UpdateHandoff::InstallerStarted { _guard: guard });
-        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        self.update_handoff = Some(UpdateHandoff::Preparing(receiver));
+        self.startup_update_open = true;
         Ok(())
     }
 
@@ -271,6 +454,8 @@ impl MetinApp {
         use crate::updates::UpdateFixture;
         let fixture = match state {
             "idle" => UpdateFixture::Idle,
+            "checking" => UpdateFixture::Checking,
+            "up-to-date" => UpdateFixture::UpToDate,
             "available" => UpdateFixture::Available,
             "downloading" => UpdateFixture::Downloading,
             "ready" => UpdateFixture::Ready,
@@ -280,9 +465,16 @@ impl MetinApp {
         self.updates =
             crate::updates::UpdateService::fixture(fixture).map_err(|e| e.to_string())?;
         self.update_fixture = true;
+        self.startup_update_open = false;
         self.window_chooser.open = false;
         self.tab = Tab::Settings;
         self.settings_page = SettingsPage::Updates;
         Ok(())
+    }
+
+    #[cfg(feature = "ui-smoke")]
+    pub fn prepare_startup_update_fixture(&mut self) {
+        self.startup_update_open = true;
+        self.window_chooser.open = true;
     }
 }

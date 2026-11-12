@@ -631,83 +631,122 @@ impl Controller {
         Some((limit - (now - self.since)).max(0.))
     }
     pub fn activity_progress(&self, now: f64) -> Option<ActivityProgress> {
-        if !self.running || !now.is_finite() {
+        if !self.running || !now.is_finite() || self.pending_action.is_some() {
             return None;
         }
-        let (label, start, remaining) = match self.phase {
-            Phase::Seeking => ("Searching", self.since, None),
-            Phase::Initial | Phase::Acquiring => {
-                ("Target confirmation limit", self.since, self.remaining(now))
+        let t = &self.profile.timing;
+        let (label, start, deadline) = match self.phase {
+            Phase::Seeking => {
+                let search_deadline = self.since + t.search_timeout;
+                let mut budget = self.search_budget.clone();
+                budget.advance(now, true);
+                let attack_start = now - budget.active_seconds;
+                let attack_deadline =
+                    attack_start + self.profile.out_of_target.search_after_seconds;
+                if self.profile.out_of_target.during_search
+                    && (attack_deadline <= now || attack_deadline <= search_deadline)
+                {
+                    (
+                        if self.search_attacks >= self.profile.out_of_target.max_search_attacks {
+                            "Search attack limit"
+                        } else {
+                            "Next out-of-target attack"
+                        },
+                        attack_start,
+                        attack_deadline,
+                    )
+                } else {
+                    (
+                        if self.rotations >= t.max_rotations {
+                            "Search limit"
+                        } else {
+                            "Next rotation"
+                        },
+                        self.since,
+                        search_deadline,
+                    )
+                }
             }
-            Phase::Active => ("Combat limit", self.since, self.remaining(now)),
-            Phase::Settling => ("Waiting for the scene", self.since, self.remaining(now)),
-            Phase::Buffing => ("Buff wait", self.buffs.wait_started(), self.remaining(now)),
+            Phase::Initial | Phase::Acquiring => (
+                "Target confirmation limit",
+                self.since,
+                self.since + t.acquire_timeout,
+            ),
+            Phase::Active => ("Combat limit", self.since, self.since + t.attack_timeout),
+            Phase::Settling => (
+                "Waiting for the scene",
+                self.since,
+                self.since + t.settle_seconds,
+            ),
+            Phase::Buffing => {
+                if self.buffs.pending.is_some() {
+                    return None;
+                }
+                (
+                    "Buff wait",
+                    self.buffs.wait_started(),
+                    self.buffs.wait_until,
+                )
+            }
             Phase::Looting => {
                 let duration = if self.loot_left == self.profile.loot.presses {
                     self.profile.loot.delay_seconds
                 } else {
                     self.profile.loot.interval_seconds
                 };
+                ("Next pickup", self.loot_ready - duration, self.loot_ready)
+            }
+            Phase::Break => {
+                let end = self.break_until?;
+                ("Break ends", end - self.profile.safety.break_seconds, end)
+            }
+            Phase::Scheduled => {
+                let scheduled = self.scheduled.as_ref()?;
+                let end = scheduled.finish_at?;
+                ("Action wait", end - scheduled.timing.wait_seconds, end)
+            }
+            Phase::Recovering => {
+                let end = self.recovery_until?;
                 (
-                    "Next pickup",
-                    self.loot_ready - duration,
-                    self.remaining(now),
+                    "Recovery wait",
+                    end - self.profile.safety.recovery_wait_seconds,
+                    end,
                 )
             }
-            Phase::Break => (
-                "Break ends",
-                self.break_until.unwrap_or(now) - self.profile.safety.break_seconds,
-                self.remaining(now),
-            ),
-            Phase::Scheduled => (
-                "Action wait",
-                self.scheduled
-                    .as_ref()
-                    .and_then(|s| s.finish_at.map(|end| end - s.timing.wait_seconds))
-                    .unwrap_or(now),
-                self.remaining(now),
-            ),
-            Phase::Recovering => (
-                "Recovery wait",
-                self.recovery_until
-                    .map(|end| end - self.profile.safety.recovery_wait_seconds)
-                    .unwrap_or(now),
-                self.remaining(now),
-            ),
-            Phase::OutOfTarget => (
-                "Attack key releases",
-                self.out_of_target
-                    .as_ref()
-                    .and_then(|a| {
-                        a.finish_at.map(|end| {
-                            end - match a.reason {
-                                AttackReason::AfterCombat => {
-                                    self.profile.out_of_target.after_combat_seconds
-                                }
-                                AttackReason::Search => {
-                                    self.profile.out_of_target.search_attack_seconds
-                                }
-                            }
-                        })
-                    })
-                    .unwrap_or(now),
-                self.remaining(now),
-            ),
-            Phase::VisualRule => (
-                "Visual rule limit",
-                self.visual
-                    .as_ref()
-                    .and_then(|v| v.sent_at)
-                    .unwrap_or(self.since),
-                self.remaining(now),
-            ),
+            Phase::OutOfTarget => {
+                let attack = self.out_of_target.as_ref()?;
+                let end = attack.finish_at?;
+                let duration = match attack.reason {
+                    AttackReason::AfterCombat => self.profile.out_of_target.after_combat_seconds,
+                    AttackReason::Search => self.profile.out_of_target.search_attack_seconds,
+                };
+                ("Attack key releases", end - duration, end)
+            }
+            Phase::VisualRule => {
+                let visual = self.visual.as_ref()?;
+                let start = visual.sent_at.unwrap_or(self.since);
+                let duration = if visual.sent_at.is_some() {
+                    visual.rule.execution.wait_seconds
+                        + if visual.rule.execution.verification
+                            == crate::Verification::ReferenceGone
+                        {
+                            visual.rule.execution.timeout_seconds
+                        } else {
+                            0.
+                        }
+                } else {
+                    visual.rule.execution.timeout_seconds
+                };
+                ("Visual rule limit", start, start + duration)
+            }
         };
-        let elapsed = (now - start).max(0.);
+        // Derive both quantities from the same real deadline. An overdue phase
+        // stays at zero without stretching the configured total duration.
         Some(ActivityProgress {
             label: label.into(),
-            elapsed_seconds: elapsed,
-            remaining_seconds: remaining,
-            total_seconds: remaining.map(|left| elapsed + left),
+            elapsed_seconds: (now - start).max(0.),
+            remaining_seconds: Some((deadline - now).max(0.)),
+            total_seconds: Some((deadline - start).max(0.)),
         })
     }
     fn active(&mut self, now: f64) {
@@ -1507,15 +1546,22 @@ mod progress_reset_tests {
         assert_eq!(c.active_skill(next_at), None);
     }
     #[test]
-    fn phase_progress_distinguishes_elapsed_search_from_combat_timeout() {
+    fn phase_progress_counts_down_to_search_transition_and_combat_timeout() {
         let mut controller = controller();
         controller.start(0.).unwrap();
         controller.phase = Phase::Seeking;
         controller.since = 2.;
         let search = controller.activity_progress(8.).unwrap();
-        assert_eq!(search.label, "Searching");
+        assert_eq!(search.label, "Next rotation");
         assert_eq!(search.elapsed_seconds, 6.);
-        assert!(search.total_seconds.is_none() && search.remaining_seconds.is_none());
+        assert_eq!(
+            search.total_seconds,
+            Some(controller.profile.timing.search_timeout)
+        );
+        assert_eq!(
+            search.remaining_seconds,
+            Some((controller.profile.timing.search_timeout - 6.).max(0.))
+        );
         controller.phase = Phase::Active;
         let combat = controller.activity_progress(8.).unwrap();
         assert_eq!(combat.label, "Combat limit");
@@ -1526,6 +1572,64 @@ mod progress_reset_tests {
         controller.pause(8., "Pause");
         assert!(controller.activity_progress(10.).is_none());
         assert!(controller.activity_progress(f64::NAN).is_none());
+    }
+    #[test]
+    fn search_progress_uses_the_earliest_real_deadline_and_accumulated_budget() {
+        let mut c = controller();
+        c.start(0.).unwrap();
+        c.phase = Phase::Seeking;
+        c.since = 2.;
+        c.profile.timing.search_timeout = 30.;
+        c.profile.out_of_target.during_search = true;
+        c.profile.out_of_target.search_after_seconds = 10.;
+        c.search_budget.advance(0., true);
+        c.search_budget.advance(6., false);
+        c.search_budget.advance(20., true);
+        let attack = c.activity_progress(22.).unwrap();
+        assert_eq!(attack.label, "Next out-of-target attack");
+        assert_eq!(attack.total_seconds, Some(10.));
+        assert_eq!(attack.elapsed_seconds, 8.);
+        assert_eq!(attack.remaining_seconds, Some(2.));
+        c.profile.timing.search_timeout = 21.;
+        let rotation = c.activity_progress(22.).unwrap();
+        assert_eq!(rotation.label, "Next rotation");
+        assert_eq!(rotation.remaining_seconds, Some(1.));
+        c.rotations = c.profile.timing.max_rotations;
+        assert_eq!(c.activity_progress(22.).unwrap().label, "Search limit");
+        let overdue = c.activity_progress(25.).unwrap();
+        assert_eq!(
+            overdue.label, "Next out-of-target attack",
+            "The search state checks a due attack before its timeout when both are overdue"
+        );
+        assert_eq!(overdue.remaining_seconds, Some(0.));
+    }
+    #[test]
+    fn pending_actions_do_not_invent_a_countdown_before_acknowledgement() {
+        let mut c = controller();
+        c.start(0.).unwrap();
+        c.phase = Phase::Recovering;
+        c.recovery_until = None;
+        assert!(c.activity_progress(3.).is_none());
+        c.phase = Phase::OutOfTarget;
+        c.out_of_target = None;
+        assert!(c.activity_progress(3.).is_none());
+        c.phase = Phase::Scheduled;
+        c.scheduled = None;
+        assert!(c.activity_progress(3.).is_none());
+        c.phase = Phase::Active;
+        let action = c
+            .issue(ActionKind::Pull {
+                shortcut: "F4".into(),
+                hold_seconds: 0.1,
+            })
+            .unwrap();
+        assert_eq!(c.activity(), ActivityKind::Puller);
+        assert!(
+            c.activity_progress(3.).is_none(),
+            "Queued input has no confirmed execution start"
+        );
+        c.ack(3., action.id, true).unwrap();
+        assert_eq!(c.activity_progress(3.).unwrap().label, "Combat limit");
     }
     #[test]
     fn loot_progress_restarts_at_each_real_delay() {

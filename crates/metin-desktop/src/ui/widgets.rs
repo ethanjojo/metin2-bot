@@ -356,8 +356,19 @@ pub fn heading(ui: &mut egui::Ui, title: &str, subtitle: &str) {
     ui.add_space(5.);
 }
 pub fn section(ui: &mut egui::Ui, title: &str, body: impl FnOnce(&mut egui::Ui)) {
+    section_body(ui, title, true, body);
+}
+
+/// The page navigation already supplies the first separator, above its heading.
+pub fn first_section(ui: &mut egui::Ui, title: &str, body: impl FnOnce(&mut egui::Ui)) {
+    section_body(ui, title, false, body);
+}
+
+fn section_body(ui: &mut egui::Ui, title: &str, separator: bool, body: impl FnOnce(&mut egui::Ui)) {
     ui.add_space(5.);
-    ui.separator();
+    if separator {
+        ui.separator();
+    }
     ui.label(
         egui::RichText::new(title)
             .small()
@@ -406,6 +417,7 @@ pub fn badge(ui: &mut egui::Ui, text: &str, color: Color32) {
     ui.label(egui::RichText::new(text).color(color).strong());
 }
 pub fn theme(ctx: &egui::Context) {
+    ctx.add_plugin(ContainedTooltips);
     ctx.set_theme(egui::Theme::Dark);
     let mut visuals = egui::Visuals::dark();
     let stone = Color32::from_rgb(25, 25, 23);
@@ -458,6 +470,139 @@ pub fn theme(ctx: &egui::Context) {
         style.spacing.combo_width = 160.;
         style.wrap_mode = Some(egui::TextWrapMode::Wrap);
     });
+}
+
+/// Ordinary egui hover hints share the viewport's logical width, including zoom.
+/// Registering a typed plugin is idempotent when presentation settings are reapplied.
+struct ContainedTooltips;
+
+impl egui::plugin::Plugin for ContainedTooltips {
+    fn debug_name(&self) -> &'static str {
+        "Companion tooltip bounds"
+    }
+
+    fn on_begin_pass(&mut self, ui: &mut egui::Ui) {
+        // Reserve popup padding, stroke and a small gap from both native edges.
+        let width = (ui.ctx().content_rect().width() - 32.).clamp(40., 400.);
+        if ui.ctx().global_style().spacing.tooltip_width != width {
+            ui.ctx().all_styles_mut(|style| {
+                style.spacing.tooltip_width = width;
+            });
+        }
+    }
+}
+
+#[cfg(test)]
+mod tooltip_layout_tests {
+    use super::*;
+
+    fn text_shapes<'a>(shape: &'a egui::Shape, output: &mut Vec<&'a egui::epaint::TextShape>) {
+        match shape {
+            egui::Shape::Text(text) => output.push(text),
+            egui::Shape::Vec(shapes) => {
+                for shape in shapes {
+                    text_shapes(shape, output);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn ordinary_tooltips_keep_long_words_inside_viewport_after_resize_and_zoom() {
+        let hint = format!(
+            "Captured reference: C:\\Companion\\{}\\reference.png. Keep the whole tooltip readable.",
+            "DistinctiveReference".repeat(7)
+        );
+        for zoom in [1., 1.5] {
+            let ctx = egui::Context::default();
+            theme(&ctx);
+            ctx.set_zoom_factor(zoom);
+            ctx.all_styles_mut(|style| style.interaction.tooltip_delay = 0.);
+            let mut time = 0.;
+            for size in [
+                egui::vec2(460., 620.),
+                egui::vec2(320., 500.),
+                egui::vec2(900., 620.),
+            ] {
+                for right in [false, true] {
+                    for bottom in [false, true] {
+                        let mut last = None;
+                        for _ in 0..6 {
+                            time += 0.1;
+                            let previous_viewport = ctx.content_rect();
+                            let pointer = egui::pos2(
+                                if right {
+                                    previous_viewport.right() - 16.
+                                } else {
+                                    16.
+                                },
+                                if bottom {
+                                    previous_viewport.bottom() - 16.
+                                } else {
+                                    16.
+                                },
+                            );
+                            last = Some(ctx.run_ui(
+                                egui::RawInput {
+                                    screen_rect: Some(egui::Rect::from_min_size(
+                                        egui::Pos2::ZERO,
+                                        size,
+                                    )),
+                                    time: Some(time),
+                                    events: vec![egui::Event::PointerMoved(pointer)],
+                                    ..Default::default()
+                                },
+                                |ui| {
+                                    let viewport = ui.ctx().content_rect();
+                                    let position = egui::pos2(
+                                        if right { viewport.right() - 24. } else { 8. },
+                                        if bottom { viewport.bottom() - 24. } else { 8. },
+                                    );
+                                    let response = ui.allocate_rect(
+                                        egui::Rect::from_min_size(position, egui::vec2(16., 16.)),
+                                        egui::Sense::hover(),
+                                    );
+                                    response.on_hover_text(&hint);
+                                },
+                            ));
+                            last.as_mut().unwrap().textures_delta.clear();
+                        }
+                        let output = last.unwrap();
+                        let viewport = ctx.content_rect();
+                        let mut found = false;
+                        for clipped in &output.shapes {
+                            let mut text = Vec::new();
+                            text_shapes(&clipped.shape, &mut text);
+                            for text in text.into_iter().filter(|text| text.galley.job.text == hint)
+                            {
+                                found = true;
+                                let rect = egui::Rect::from_min_size(text.pos, text.galley.size());
+                                let glyphs = text.galley.mesh_bounds.translate(text.pos.to_vec2());
+                                assert!(!text.galley.elided);
+                                assert!(text.galley.rows.len() > 1);
+                                assert!(
+                                    viewport.expand(0.5).contains_rect(rect),
+                                    "tooltip {rect:?} exceeds {viewport:?}, zoom {zoom}, right {right}, bottom {bottom}"
+                                );
+                                assert!(
+                                    clipped.clip_rect.expand(0.5).contains_rect(rect),
+                                    "tooltip is clipped: {rect:?} / {:?}",
+                                    clipped.clip_rect
+                                );
+                                assert!(
+                                    clipped.clip_rect.expand(0.5).contains_rect(glyphs),
+                                    "tooltip glyphs are clipped: {glyphs:?} / {:?}",
+                                    clipped.clip_rect
+                                );
+                            }
+                        }
+                        assert!(found, "The actual tooltip text must have been painted");
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Shared secondary navigation; wraps at smaller widths without reserving a sidebar.

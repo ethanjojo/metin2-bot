@@ -243,7 +243,7 @@ impl MetinApp {
         }
         ui.spacing_mut().item_spacing.y = 10.;
         let header = ui.horizontal(|ui| {
-            let width = (ui.available_width() - 124.).max(1.);
+            let width = (ui.available_width() - 32.).max(1.);
             let (rect, response) =
                 ui.allocate_exact_size(egui::vec2(width, 32.), egui::Sense::drag());
             widgets::icon(
@@ -261,16 +261,6 @@ impl MetinApp {
             );
             if response.drag_started() {
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
-            }
-            if widgets::plain_button(ui, "Updates")
-                .on_hover_text("Open updates without connecting a game window.")
-                .clicked()
-            {
-                self.window_chooser.open = false;
-                self.tab = Tab::Settings;
-                self.settings_page = SettingsPage::Updates;
-                ui.ctx()
-                    .send_viewport_cmd(egui::ViewportCommand::InnerSize(self.expanded_size));
             }
             if skin::native_control(ui, "close_button", "Close Companion").clicked() {
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -528,11 +518,6 @@ impl MetinApp {
                 .on_hover_text(error);
             } else {
                 ui.small(format!("{} windows", filtered.len()));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.weak("Updates automatically").on_hover_text(
-                        "The window list and visible previews update while this chooser is open.",
-                    );
-                });
             }
         });
         if let Some(target) = chosen {

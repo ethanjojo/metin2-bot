@@ -135,7 +135,10 @@ pub fn help(ui: &mut egui::Ui, hint: &str) -> egui::Response {
         ui.visuals().weak_text_color(),
     );
     if response.has_focus() {
-        response.clone().show_tooltip_text(hint);
+        response.show_tooltip_ui(|ui| {
+            ui.set_max_width(ui.spacing().tooltip_width);
+            ui.add(egui::Label::new(hint).wrap());
+        });
     }
     response
         .on_hover_text(hint)

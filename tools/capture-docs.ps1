@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string[]]$OnlyViews = @())
+param([string[]]$OnlyViews = @(), [string]$OutputDirectory = 'docs/assets', [switch]$IncludeAllPages)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
@@ -14,7 +14,7 @@ try {
     $data = Join-Path $session 'data'
     cargo run -p metin-desktop --example docs_fixture --locked -- $data
     if ($LASTEXITCODE -ne 0) { throw 'Demonstration profile creation failed.' }
-    $output = Join-Path $root 'docs/assets'
+    $output = if ([IO.Path]::IsPathRooted($OutputDirectory)) { $OutputDirectory } else { Join-Path $root $OutputDirectory }
     New-Item -ItemType Directory -Force $output | Out-Null
     $views=@(
         @{name='window-chooser';tab='run';window_case='all'},
@@ -34,17 +34,32 @@ try {
         @{name='run-break';tab='run';run='break'},
         @{name='event-history';tab='run';run='history';small=$true},
         @{name='settings';tab='settings'},
+        @{name='settings-timing';tab='settings';settings='combat';qa=$true},
+        @{name='settings-display';tab='settings';settings='appearance';qa=$true},
+        @{name='settings-diagnostics';tab='settings';settings='diagnostics';qa=$true},
+        @{name='safety-recovery';tab='safety';safety='recovery';qa=$true},
+        @{name='safety-notifications';tab='safety';safety='notifications';qa=$true},
         @{name='updates';tab='settings';updates='idle'},
         @{name='update-available';tab='settings';updates='available'},
         @{name='update-download';tab='settings';updates='downloading'},
         @{name='update-ready';tab='settings';updates='ready'},
         @{name='update-error';tab='settings';updates='failed'},
+        @{name='startup-update-check';tab='settings';updates='checking';startup_update=$true},
+        @{name='startup-update-available';tab='settings';updates='available';startup_update=$true},
+        @{name='startup-update-download';tab='settings';updates='downloading';startup_update=$true},
+        @{name='startup-update-error';tab='settings';updates='failed';startup_update=$true},
+        @{name='update-installing';tab='settings';update_helper='installing'},
+        @{name='update-driver';tab='settings';update_helper='driver'},
+        @{name='update-checking';tab='settings';update_helper='checking'},
+        @{name='update-complete';tab='settings';update_helper='complete'},
+        @{name='update-install-error';tab='settings';update_helper='failed'},
         @{name='safety';tab='safety'},
         @{name='puller';tab='actions';actions='puller'},
         @{name='out-of-target';tab='actions';actions='out-of-target'},
         @{name='periodic';tab='actions';actions='periodic'},
         @{name='visual-rules';tab='actions';actions='visual-rules'}
     )
+    if (!$IncludeAllPages) { $views = @($views | Where-Object { !$_.qa }) }
     if ($OnlyViews.Count) {
         foreach ($name in $OnlyViews) {
             if ($name -notin $views.name) { throw "Unknown documentation view: $name" }
@@ -64,6 +79,10 @@ try {
         if ($case.size_review) { $arguments += '--ui-size-review' }
         if ($case.run) { $arguments += @('--ui-run-state',$case.run) }
         if ($case.updates) { $arguments += @('--ui-updates',$case.updates) }
+        if ($case.settings) { $arguments += @('--ui-settings',$case.settings) }
+        if ($case.safety) { $arguments += @('--ui-safety',$case.safety) }
+        if ($case.startup_update) { $arguments += '--ui-startup-update' }
+        if ($case.update_helper) { $arguments += @('--ui-update-helper',$case.update_helper) }
         if ($case.small) { $arguments += '--ui-small' }
         if ($case.collapsed) { $arguments += '--ui-collapsed' }
         if ($case.window_case) { $arguments += @('--ui-window-picker',$case.window_case) }

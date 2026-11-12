@@ -75,7 +75,7 @@ pub(super) fn picker(ui: &mut egui::Ui, selected: &mut Option<SkillIconId>) -> b
                 }
             });
             ui.separator();
-            if widgets::plain_button(ui,"Automatic icon").on_hover_text("Use the captured Active icon when available, otherwise the default skill symbol. Only the display changes.").clicked() {
+            if widgets::plain_button(ui,"Automatic icon").on_hover_text("Use the captured Active icon when available, otherwise the default buff symbol. Only the display changes.").clicked() {
                 changed |= selected.take().is_some();ui.close();
             }
             ui.weak("Display only · recognition uses your captures.");

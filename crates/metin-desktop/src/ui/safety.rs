@@ -1,5 +1,4 @@
 use super::*;
-use widgets::section;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "ui-smoke", derive(clap::ValueEnum))]
@@ -39,13 +38,8 @@ impl MetinApp {
                 egui::ScrollArea::vertical()
                     .id_salt(("safety-page", self.safety_page as u8))
                     .show(ui, |ui| {
-                        widgets::icon_heading(
+                        widgets::heading(
                             ui,
-                            if self.safety_page == SafetyPage::Recovery {
-                                catalog::Artwork::Recover
-                            } else {
-                                catalog::Artwork::Notice
-                            },
                             if self.safety_page == SafetyPage::Recovery {
                                 "Recovery"
                             } else {
@@ -65,7 +59,7 @@ impl MetinApp {
     fn recovery_settings(&mut self, ui: &mut egui::Ui) {
         let config = &mut self.editor.profile.safety;
         let mut changed = false;
-        section(ui, "Stuck recovery", |ui| {
+        widgets::first_section(ui, "Stuck recovery", |ui| {
             changed|=ui.checkbox(&mut config.recovery_enabled,"Attempt limited recovery").on_hover_text("After attack, click-confirmation or search retries are exhausted: clear target with Escape, rotate the camera, then check a fresh frame. Never counts recovery as a kill or triggers loot.").changed();
             ui.add_enabled_ui(config.recovery_enabled, |ui| {
                 changed |= crate::ui_controls::numeric_u32(
@@ -436,7 +430,7 @@ impl MetinApp {
         }
     }
     fn notification_settings(&mut self, ui: &mut egui::Ui) {
-        section(ui, "Local notifications", |ui| {
+        widgets::first_section(ui, "Local notifications", |ui| {
             let config = &mut self.editor.profile.safety;
             let mut changed=ui.checkbox(&mut config.sound,"Play a sound").on_hover_text("For triggered rules, automatic stops and runtime errors. Unavailable services are reported.").changed();
             changed|=ui.checkbox(&mut config.system_notification,"Show a system notification").on_hover_text("Local OS notification. Delivery depends on desktop permissions and Do Not Disturb. No external messaging service is contacted.").changed();

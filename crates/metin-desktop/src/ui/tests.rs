@@ -542,7 +542,7 @@ fn inline_history_close_and_navigation_do_not_change_automation() {
 }
 
 #[test]
-fn run_history_keeps_three_in_overview_and_filters_full_page() {
+fn run_history_fills_available_overview_space_and_filters_full_page() {
     let (mut app, ctx, _dir) = setup();
     app.tab = Tab::Run;
     app.run_live = false;
@@ -584,7 +584,11 @@ fn run_history_keeps_three_in_overview_and_filters_full_page() {
             .collect::<Vec<_>>()
     };
     let compact = records(&output);
-    assert_eq!(compact.len(), 3);
+    assert_eq!(
+        compact.len(),
+        12,
+        "All complete records fit in the tall overview"
+    );
     assert_eq!(compact[0], "History record 11");
     let pos = text_regions(&output)
         .into_iter()
@@ -610,7 +614,7 @@ fn run_history_keeps_three_in_overview_and_filters_full_page() {
     }
     assert!(app.history_open);
     app.warnings_only = true;
-    // Inspect the full in-panel page independently from the three-event summary.
+    // Inspect the full in-panel page independently from the bounded overview.
     let render_dialog = |app: &mut MetinApp, events: Vec<egui::Event>| {
         let mut output = ctx.run_ui(
             egui::RawInput {
@@ -858,7 +862,7 @@ fn skill_buttons_move_the_selected_skill_and_keep_detail_identity() {
     let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
     let label = text_regions(&output)
         .into_iter()
-        .find(|(s, _)| s == "1. Skill 1")
+        .find(|(s, _)| s == "1. Buff 1")
         .unwrap()
         .1;
     let [up, down, trash] = skill_row_actions(&ctx, label);
@@ -878,7 +882,7 @@ fn skill_buttons_move_the_selected_skill_and_keep_detail_identity() {
     assert!(!text_regions(&output).iter().any(|(s, _)| s == "Remove"));
     let label = text_regions(&output)
         .into_iter()
-        .find(|(s, _)| s == "2. Skill 2")
+        .find(|(s, _)| s == "2. Buff 2")
         .unwrap()
         .1;
     click_position(&mut app, &ctx, skill_row_actions(&ctx, label)[2].center());
@@ -2007,7 +2011,7 @@ fn skill_row_trash_deletes_its_own_skill_and_last_skill_can_be_restored() {
     let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
     let label = text_regions(&output)
         .into_iter()
-        .find(|(s, _)| s == "1. Skill 1")
+        .find(|(s, _)| s == "1. Buff 1")
         .unwrap()
         .1;
     click_position(&mut app, &ctx, skill_row_actions(&ctx, label)[2].center());
@@ -2016,7 +2020,7 @@ fn skill_row_trash_deletes_its_own_skill_and_last_skill_can_be_restored() {
     let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
     let label = text_regions(&output)
         .into_iter()
-        .find(|(s, _)| s == "1. Skill 1")
+        .find(|(s, _)| s == "1. Buff 1")
         .unwrap()
         .1;
     click_position(&mut app, &ctx, skill_row_actions(&ctx, label)[2].center());
@@ -2025,7 +2029,7 @@ fn skill_row_trash_deletes_its_own_skill_and_last_skill_can_be_restored() {
     assert!(
         text_regions(&output)
             .iter()
-            .any(|(s, _)| s == "No skills yet")
+            .any(|(s, _)| s == "No buffs yet")
     );
     app.undo_profile();
     assert_eq!(app.editor.profile.buffs.skills[0].shortcut, "F2");
@@ -2864,4 +2868,7 @@ include!("qol_action_tests.rs");
 include!("qol_rules_tests.rs");
 include!("qol_shared_tests.rs");
 include!("update_tests.rs");
+include!("startup_update_tests.rs");
+#[path = "consistency_tests.rs"]
+mod consistency_tests;
 include!("profile_menu_tests.rs");

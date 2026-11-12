@@ -107,12 +107,12 @@ impl MetinApp {
             return;
         };
         let name = if skill.name.is_empty() {
-            format!("Skill {}", index + 1)
+            format!("Buff {}", index + 1)
         } else {
             skill.name.clone()
         };
         ui.strong(name);
-        if button(ui, Icon::Back, "Done & back to buffs", true, "Return to this skill's details. Captures are kept as unsaved profile edits; Save applies them.").clicked() {
+        if button(ui, Icon::Back, "Done & back to buffs", true, "Return to this buff's details. Captures are kept as unsaved profile edits; Save applies them.").clicked() {
             self.return_to_buffs = false;
             self.navigate(Tab::Actions);
             self.actions_page = ActionsPage::Buffs;

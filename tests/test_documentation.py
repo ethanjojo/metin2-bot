@@ -50,6 +50,8 @@ class DocumentationTests(unittest.TestCase):
             "buff-detail", "buff-icon-picker", "run-setup", "run-break",
             "profile-menu", "profile-rename", "overlay-controls", "overlay-controls-off", "size-review",
             "updates", "update-available", "update-download", "update-ready", "update-error",
+            "startup-update-check", "startup-update-available", "startup-update-download", "startup-update-error",
+            "update-installing", "update-driver", "update-checking", "update-complete", "update-install-error",
         )}
         sizes["window-chooser"] = (780, 600)
         sizes["event-history"] = (400, 500)

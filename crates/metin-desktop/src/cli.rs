@@ -34,6 +34,9 @@ impl InputDriverCommand {
     ,group(clap::ArgGroup::new("migration").args(["finish_upgrade", "migrate_data"]))
 )]
 pub struct Cli {
+    #[arg(long, hide = true, conflicts_with_all = ["migration", "data_dir", "input_driver", "self_test", "import_data", "log"])]
+    #[cfg_attr(feature = "ui-smoke", arg(conflicts_with_all = ["ui_fixture", "ui_screenshot"]))]
+    pub update_session: Option<PathBuf>,
     #[arg(long, requires_all = ["migration_report", "previous_inventory"], conflicts_with_all = ["data_dir", "input_driver", "self_test", "import_data", "log"])]
     pub finish_upgrade: Option<PathBuf>,
     #[arg(long, requires = "finish_upgrade", conflicts_with = "migrate_data")]
@@ -108,8 +111,14 @@ pub struct Cli {
     #[arg(long, requires = "ui_screenshot")]
     pub ui_settings: Option<crate::ui::SettingsPage>,
     #[cfg(feature = "ui-smoke")]
-    #[arg(long, requires = "ui_screenshot", value_parser=["idle","available","downloading","ready","failed"])]
+    #[arg(long, requires = "ui_screenshot", value_parser=["idle","checking","up-to-date","available","downloading","ready","failed"])]
     pub ui_updates: Option<String>,
+    #[cfg(feature = "ui-smoke")]
+    #[arg(long, requires_all = ["ui_screenshot", "ui_updates"])]
+    pub ui_startup_update: bool,
+    #[cfg(feature = "ui-smoke")]
+    #[arg(long, requires = "ui_screenshot", value_parser = ["verifying", "waiting", "backup", "installing", "driver", "finishing", "checking", "complete", "failed"])]
+    pub ui_update_helper: Option<String>,
     #[cfg(feature = "ui-smoke")]
     #[arg(long, requires = "ui_screenshot")]
     pub ui_safety: Option<crate::ui::SafetyPage>,
@@ -119,4 +128,30 @@ pub struct Cli {
     #[cfg(feature = "ui-smoke")]
     #[arg(long,requires_all=["ui_screenshot","ui_fixture"])]
     pub ui_run_state: Option<crate::ui::RunFixture>,
+}
+
+#[cfg(test)]
+mod update_mode_tests {
+    use super::*;
+    #[test]
+    fn update_helper_cannot_mix_with_normal_data_import_or_diagnostics() {
+        let session = "C:\\Temp\\session.json";
+        assert!(Cli::try_parse_from(["companion", "--update-session", session]).is_ok());
+        for extra in [
+            vec!["--data-dir", "C:\\Profiles"],
+            vec!["--import-data", "C:\\Import"],
+            vec!["--log", "C:\\run.log"],
+            vec!["--self-test", "--self-test-report", "C:\\test.json"],
+            vec![
+                "--input-driver",
+                "status",
+                "--input-driver-report",
+                "C:\\driver.json",
+            ],
+        ] {
+            let mut args = vec!["companion", "--update-session", session];
+            args.extend(extra);
+            assert!(Cli::try_parse_from(args).is_err());
+        }
+    }
 }

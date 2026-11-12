@@ -215,7 +215,7 @@ impl Default for UISettings {
             preview_refresh_ms: 200,
             lite_mode: false,
             pin_to_game: true,
-            check_updates_on_start: false,
+            check_updates_on_start: true,
             update_channel: crate::updates::UpdateChannel::Stable,
         }
     }

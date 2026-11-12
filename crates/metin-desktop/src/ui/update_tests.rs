@@ -1,8 +1,8 @@
 #[test]
-fn qol_update_preferences_are_opt_in_and_survive_a_settings_roundtrip() {
+fn qol_update_preferences_default_to_startup_checks_and_survive_a_settings_roundtrip() {
     let dir = tempfile::tempdir().unwrap();
     let mut settings = UISettings::load(dir.path()).unwrap();
-    assert!(!settings.check_updates_on_start);
+    assert!(settings.check_updates_on_start);
     assert_eq!(
         settings.update_channel,
         crate::updates::UpdateChannel::Stable
@@ -29,7 +29,7 @@ fn qol_updates_idle_has_an_explicit_check_without_install_authority() {
     assert!(!text.iter().any(|(text, _)| text == "Install and restart"));
     let before = app.editor.profile.clone();
     assert!(
-        app.install_update_with(&ctx, |_, _| panic!(
+        app.install_update_with(&ctx, |_, _, _| panic!(
             "An unverified file must never reach a launcher"
         ))
         .is_err()
@@ -51,7 +51,7 @@ fn qol_update_cancel_keeps_edits_and_the_verified_download() {
         app.install_update_after_decision(
             &ctx,
             |_| false,
-            |_, _| panic!("Cancelled update must not launch")
+            |_, _, _| panic!("Cancelled update must not launch")
         )
         .is_err()
     );
@@ -69,38 +69,21 @@ fn qol_update_failed_launcher_recovers_a_paused_runtime_and_keeps_profiles() {
     let (mut app, ctx, _dir) = setup();
     app.save().unwrap();
     let original = app.editor.profile.clone();
-    app.updates =
-        crate::updates::UpdateService::fixture(crate::updates::UpdateFixture::Ready).unwrap();
-    let mut file = None;
-    let result = app.install_update_with(&ctx, |path, args| {
-        assert!(path.exists());
-        assert_eq!(args[0], "/RESTARTCOMPANION=1");
-        assert!(args[1].to_string_lossy().starts_with("/COMPANIONDATADIR="));
-        let raw = args[1].to_string_lossy();
-        assert!(
-            std::path::Path::new(raw.strip_prefix("/COMPANIONDATADIR=").unwrap()).is_dir(),
-            "The exact directory passed to Setup must exist without implicit normalization"
-        );
-        #[cfg(windows)]
-        {
-            unsafe extern "system" {
-                fn GetFileAttributesW(name: *const u16) -> u32;
-            }
-            let raw = args[1].to_string_lossy();
-            let root = raw.strip_prefix("/COMPANIONDATADIR=").unwrap();
-            let wide = root.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
-            assert_ne!(
-                unsafe { GetFileAttributesW(wide.as_ptr()) },
-                u32::MAX,
-                "Setup receives the raw directory, not Rust's normalized interpretation"
-            );
-        }
-        file = Some(path.to_path_buf());
+    app.updates = crate::updates::UpdateService::fixture(crate::updates::UpdateFixture::Ready).unwrap();
+    let captured = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let capture = captured.clone();
+    app.install_update_with(&ctx, move |guard, candidate, root| {
+        assert!(guard.installer_path().exists());
+        assert!(root.is_dir());
+        assert!(!candidate.version().is_empty());
+        *capture.lock().unwrap() = Some(guard.installer_path().to_path_buf());
         Err("Fixture launch refused".into())
-    });
-    assert_eq!(result.unwrap_err(), "Fixture launch refused");
-    assert_eq!(app.editor.profile, original);
-    assert!(!file.unwrap().exists());
+    }).unwrap();
+    let deadline=std::time::Instant::now()+std::time::Duration::from_secs(3);
+    while app.update_handoff_waiting() && std::time::Instant::now()<deadline { app.sync_updates(&ctx); std::thread::yield_now(); }
+    assert_eq!(app.update_error.as_deref(),Some("Fixture launch refused"));
+    assert_eq!(app.editor.profile,original);
+    assert!(!captured.lock().unwrap().as_ref().unwrap().exists());
     assert!(!app.update_exit_pending());
     assert!(app.window_chooser.open);
     assert!(!app.snapshot.running);
@@ -112,22 +95,29 @@ fn qol_update_failed_launcher_recovers_a_paused_runtime_and_keeps_profiles() {
 fn qol_update_success_retains_verification_guard_until_close_without_game_input() {
     let (mut app, ctx, _dir) = setup();
     app.save().unwrap();
-    let original = app.editor.profile.clone();
-    app.updates =
-        crate::updates::UpdateService::fixture(crate::updates::UpdateFixture::Ready).unwrap();
-    let mut file = None;
-    app.install_update_with(&ctx, |path, _| {
-        #[cfg(windows)]
-        assert!(std::fs::OpenOptions::new().write(true).open(path).is_err());
-        file = Some(path.to_path_buf());
-        Ok(())
-    })
-    .unwrap();
+    let original=app.editor.profile.clone();
+    app.updates=crate::updates::UpdateService::fixture(crate::updates::UpdateFixture::Ready).unwrap();
+    let captured=std::sync::Arc::new(std::sync::Mutex::new(None));
+    let capture=captured.clone();
+    app.install_update_with(&ctx, move |guard, _, _| {
+        #[cfg(windows)] assert!(std::fs::OpenOptions::new().write(true).open(guard.installer_path()).is_err());
+        *capture.lock().unwrap()=Some(guard.installer_path().to_path_buf());
+        Ok(crate::update_helper::PreparedUpdate::fixture(guard,false))
+    }).unwrap();
+    assert!(!app.update_exit_pending());
+    let deadline=std::time::Instant::now()+std::time::Duration::from_secs(3);
+    while !matches!(app.update_handoff,Some(update_view::UpdateHandoff::Waiting(_))) && std::time::Instant::now()<deadline { app.sync_updates(&ctx); std::thread::yield_now(); }
+    assert!(!app.update_exit_pending(),"Parent must remain open until the independent helper acknowledges readiness");
+    assert!(app.update_handoff_waiting());
+    let file=captured.lock().unwrap().as_ref().unwrap().clone();
+    assert!(file.exists());
+    if let Some(update_view::UpdateHandoff::Waiting(helper))=&mut app.update_handoff { helper.set_fixture_ready(true); } else { panic!("Helper did not prepare"); }
+    app.sync_updates(&ctx);
     assert!(app.update_exit_pending());
-    assert!(file.as_ref().unwrap().exists());
-    assert_eq!(app.editor.profile, original);
+    assert_eq!(app.editor.profile,original);
+    assert!(file.exists());
     drop(app);
-    assert!(!file.unwrap().exists());
+    assert!(!file.exists());
 }
 
 #[test]
@@ -141,9 +131,9 @@ fn qol_ready_update_primary_action_fits_above_footer_at_minimum_width() {
     compact_settle(&mut app, &ctx, egui::vec2(400., 500.));
     let install = compact_control_rect(
         &ctx,
-        "Pause and release input, resolve unsaved edits, then open the verified installer. Driver consent remains in Setup.",
+        "Pause and release input, resolve unsaved edits, then update through the verified Companion update window.",
     );
-    let clip=ctx.data(|d|d.get_temp::<egui::Rect>(egui::Id::unique(("control-clip","Pause and release input, resolve unsaved edits, then open the verified installer. Driver consent remains in Setup.")))).unwrap();
+    let clip=ctx.data(|d|d.get_temp::<egui::Rect>(egui::Id::unique(("control-clip","Pause and release input, resolve unsaved edits, then update through the verified Companion update window.")))).unwrap();
     assert!(
         clip.contains_rect(install),
         "Install action must be fully visible: {install:?}; clip {clip:?}"

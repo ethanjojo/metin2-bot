@@ -42,6 +42,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Clippy failed.' }
           cargo test --workspace --all-targets --all-features --locked
           if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+          # Hosted Windows runner is already elevated; these tests never request UAC.
+          cargo test -p metin-desktop --lib --all-features --locked -j 2 sealed_staging_actual_acl -- --ignored --test-threads=1
+          if ($LASTEXITCODE -ne 0) { throw 'Protected update staging acceptance failed.' }
+          $compiler = ./tools/prepare_compiler.ps1
+          python tools/verify-update-progress.py --compiler $compiler --output build/update-progress-acceptance
+          if ($LASTEXITCODE -ne 0) { throw 'Installer progress callback acceptance failed.' }
+
           cargo build --workspace --release --locked
           if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
           ./target/release/companion.exe --self-test --self-test-report build/selftest-rust.json

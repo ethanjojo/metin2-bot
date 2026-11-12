@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Startup update check with Continue/Skip, preserved explicit opt-out and an in-app update progress window backed by the existing installer; manual update controls remain in Settings.
+- Canonical phase countdowns in Run, including the next search transition; bare activity artwork and complete recent-event rows fitted to the remaining space.
+- Consistent Settings/Safety headings and separators, Add buff terminology, and tooltips bounded to the viewport when resized or scaled.
+- Keep Windows capture runtime resources alive across repeated thumbnail/capture sessions, preventing premature native runtime teardown.
+- Real UAC/install/restart acceptance of the new update helper remains pending; offline fixtures and package checks do not establish that acceptance.
+
 ## 0.1.0-rc.1
 
 First public Companion release candidate for Windows x64.

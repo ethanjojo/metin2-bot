@@ -12,12 +12,12 @@ A compact Windows desktop app for visual target recognition and configurable act
 
 ## Features
 
-- **Run:** activity, countdowns, session statistics, mount confirmation and event history.
+- **Run:** bare activity artwork, countdowns to the next timed step, session statistics, mount confirmation and recent events fitted to the available space.
 - **Recognition:** searchable window thumbnails; direct region, color and icon selection over a frozen capture; movable/resizable areas and live game annotations.
 - **Actions:** ordered buffs with icon recognition, loot, mount behavior, periodic keys/clicks, visual rules, auto-puller and bounded attacks outside a selected target.
 - **Safety:** automatic stops, scheduled breaks, limited recovery, local notifications and emergency pause.
 - **Profiles:** independent calibration and action settings, with Save, Revert, Undo and Redo.
-- **Updates:** Stable/Preview channels, verified downloads and explicitly confirmed installation. Startup checks are off by default.
+- **Updates:** startup checks, Stable/Preview channels and verified downloads. Confirm an update to follow download, installation and restart in Companion's own progress window.
 
 ## Install and start
 
@@ -25,11 +25,11 @@ Requires **Windows x64**, Windows 10 build 19041 or newer, and a D3D11-capable g
 
 1. Download the setup and `SHA256SUMS.txt` from [Releases](https://github.com/ethanjojo/metin2-bot/releases) and compare the installer's SHA-256 checksum.
 2. Run setup and review its administrator, mandatory HIDMaestro driver, signing-certificate and GameInput service changes. Native dependencies are included; no installed .NET runtime is needed.
-3. Open Companion, choose a game window from the thumbnail grid and select or create a profile.
+3. Open Companion. If an update is offered, choose **Install update** or **Skip for now**, then choose a game window from the thumbnail grid and select or create a profile.
 4. In **Recognition**, select the search area, target color and a fixed HP-panel detail. Configure **Actions** and optional **Safety** limits, then save.
 5. Review readiness in **Run**. **F7** starts; **F8** pauses. Keep the selected game in the foreground.
 
-Companion starts paused. Capture selection pauses automation and waits for held inputs to release. See the [setup guide](docs/user-guide.md) for calibration, shortcuts and troubleshooting.
+Companion starts paused. First installation uses the regular setup wizard; later updates use Companion's progress window with the same installer running behind it. Windows administrator approval may still be required. Startup checking is enabled by default; an existing explicit opt-out is preserved, and **Settings → Updates** keeps manual checks and channel preferences. Capture selection pauses automation and waits for held inputs to release. See the [setup guide](docs/user-guide.md) for calibration, shortcuts and troubleshooting.
 
 **Release candidate:** the complete integrated targeting, attack, buff and mount cycle still requires live-game acceptance. App and setup are unsigned; `jojo` is product metadata, not a verified Windows publisher. Setup explains the shared driver's machine-wide changes and [removal policy](docs/user-guide.md#installation-and-hid-driver).
 
@@ -39,6 +39,11 @@ Companion starts paused. Capture selection pauses automation and waits for held 
 <a href="docs/assets/actions.png"><img src="docs/assets/actions.png" alt="Ordered buffs with shortcut, timing and icon recognition settings" width="360"></a>
 
 <a href="docs/assets/window-chooser.png"><img src="docs/assets/window-chooser.png" alt="Searchable window selection with screenshot thumbnails" width="740" loading="lazy"></a>
+
+<a href="docs/assets/startup-update-available.png"><img src="docs/assets/startup-update-available.png" alt="Startup update offer with Install update and Skip for now" width="360" loading="lazy"></a>
+<a href="docs/assets/update-installing.png"><img src="docs/assets/update-installing.png" alt="Companion update installation progress" width="360" loading="lazy"></a>
+
+*Update screenshots use offline demonstration metadata; the shown versions are illustrative.*
 
 More views and explanations are in the [user guide](docs/user-guide.md).
 

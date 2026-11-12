@@ -314,6 +314,43 @@ pub fn title(ui: &mut egui::Ui) -> TitleBar {
     title
 }
 
+/// Shared compact native title for the startup and independent update window.
+pub(crate) fn simple_title(ui: &mut egui::Ui, text: &str) -> bool {
+    let bar = title(ui);
+    let color = Color32::from_rgb(245, 235, 214);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text.into(), egui::FontId::proportional(13.), color);
+    let position = egui::pos2(
+        bar.content.left() + 24. - galley.mesh_bounds.left(),
+        bar.content.center().y - galley.mesh_bounds.center().y,
+    );
+    let scale = ui.ctx().pixels_per_point();
+    ui.painter().galley(
+        egui::pos2(
+            (position.x * scale).round() / scale,
+            (position.y * scale).round() / scale,
+        ),
+        galley,
+        color,
+    );
+    let drag = Rect::from_min_max(
+        bar.content.min,
+        egui::pos2(bar.close_rect.left(), bar.content.bottom()),
+    );
+    if ui
+        .interact(
+            drag,
+            ui.make_persistent_id("simple-title-drag"),
+            egui::Sense::drag(),
+        )
+        .drag_started()
+    {
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+    }
+    bar.close(ui, "Close Companion").clicked()
+}
+
 /// Pixel runs from the same atlas that paints the title, including DPI and tiled center.
 /// Windows clips the collapsed native surface to these runs, independent of GPU alpha support.
 pub(super) fn title_clip_runs(ctx: &egui::Context, clip: TitleClip) -> Vec<[i32; 4]> {

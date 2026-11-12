@@ -235,7 +235,7 @@ impl MetinApp {
         }
         if !profile.buffs.ready() {
             block(
-                "Finish buff recognition: set its area and the active icon for each toggle skill.",
+                "Finish buff recognition: set its area and the active icon for each toggle buff.",
                 SetupAction::Actions(ActionsPage::Buffs),
             );
         }

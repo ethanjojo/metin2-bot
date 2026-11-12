@@ -6,6 +6,9 @@ use std::fs;
 fn startup(cli: Cli) -> Result<(), String> {
     #[cfg(windows)]
     metin_platform::enable_dpi();
+    if let Some(session) = cli.update_session {
+        return metin_desktop::update_helper::run(session);
+    }
     if let Some(operation) = cli.input_driver {
         let report = cli
             .input_driver_report
@@ -188,7 +191,15 @@ fn startup(cli: Cli) -> Result<(), String> {
                 window.set_border_color(None);
                 window.set_corner_preference(CornerPreference::DoNotRound);
             }
-            let app = metin_desktop::ui::MetinApp::new(cc, root).map_err(std::io::Error::other)?;
+            #[cfg(feature = "ui-smoke")]
+            let app = if cli.ui_screenshot.is_some() {
+                metin_desktop::ui::MetinApp::new_preview(cc, root)
+            } else {
+                metin_desktop::ui::MetinApp::new(cc, root)
+            };
+            #[cfg(not(feature = "ui-smoke"))]
+            let app = metin_desktop::ui::MetinApp::new(cc, root);
+            let app = app.map_err(std::io::Error::other)?;
             #[cfg(feature = "ui-smoke")]
             let app = {
                 let mut app = app;
@@ -235,6 +246,12 @@ fn startup(cli: Cli) -> Result<(), String> {
                     if let Some(state) = cli.ui_updates.as_deref() {
                         app.prepare_updates_fixture(state)
                             .map_err(std::io::Error::other)?;
+                    }
+                    if cli.ui_startup_update {
+                        app.prepare_startup_update_fixture();
+                    }
+                    if let Some(phase) = cli.ui_update_helper.as_deref() {
+                        app.prepare_update_helper_fixture(phase);
                     }
                     if let Some(page) = cli.ui_safety {
                         app.prepare_safety_fixture(page);

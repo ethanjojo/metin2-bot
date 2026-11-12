@@ -9,6 +9,7 @@ pub mod self_test;
 pub mod storage;
 pub mod ui;
 pub mod ui_controls;
+pub mod update_helper;
 pub mod updates;
 pub const VERSION: &str = env!("COMPANION_VERSION");
 pub const PRODUCT_NAME: &str = env!("COMPANION_PRODUCT_NAME");

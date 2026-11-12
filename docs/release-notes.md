@@ -1,8 +1,10 @@
 # Companion Windows release candidate
 
-The first public Companion release candidate for Windows x64. A compact Rust/egui desktop application for local visual recognition, calibration and configurable actions.
+Companion for Windows x64: a compact Rust/egui desktop application for local visual recognition, calibration and configurable actions.
 
 ## Highlights
+
+- Window capture retains the shared Windows runtime across repeated previews; individual capture sessions still release their resources.
 
 - One resizable Metin-style panel with Run, Actions, Recognition, Safety and Settings. Searchable profiles keep Save/Revert/Undo/Redo available; Start/Pause and mount declaration stay in the footer.
 - Choose a game window from an automatically refreshed screenshot grid. Pin the panel to the selected client or collapse it to its title bar.
@@ -10,7 +12,7 @@ The first public Companion release candidate for Windows x64. A compact Rust/egu
 - Recognize targets by color and one fixed HP-panel detail. Click-through annotations show current/next targets, exclusions and optional sizes without a persistent cross at the last click.
 - Configure ordered timed/icon-based buffs, loot, mount behavior, periodic actions, visual rules, auto-puller and bounded out-of-target attacks. Animated buff icons use a short configurable Active-state hold.
 - Apply stop limits, breaks, recovery limits and local notifications. Follow activity/countdowns in Run and open searchable event history inside the same panel.
-- Check Stable or Preview updates, review notes, download with size/SHA256 verification, then explicitly Install and restart. Startup checks are opt-in and installation never resumes automation.
+- Check Stable or Preview updates at startup, or manually from Settings. Startup checking defaults on with an explicit opt-out. Install update follows verified download and real installation progress in Companion's own window; the canonical installer runs behind it, UAC remains visible when required, and restart stays paused.
 
 ## Install or upgrade
 
@@ -26,7 +28,7 @@ Companion installs under `Program Files/Companion` and keeps profiles, reference
 - Keep the selected game in the foreground. Capture/input guards remain active; this is not unattended background control of an inactive window.
 - Windows capture privacy policy may retain a capture indicator when borderless permission is unavailable or denied.
 - The complete integrated targeting, attack, buff, mount and emergency-stop cycle still requires live-game acceptance before stable release.
-- Screenshot/update UI fixtures use isolated demonstration data; they do not establish live-game or interactive updater-install acceptance.
+- Screenshot/update UI fixtures use isolated demonstration data; they do not establish live-game or interactive updater-install acceptance. Real UAC, installed update and restart acceptance for the integrated helper remain pending until an operator is available.
 
 Project-authored source is [MIT licensed](../LICENSE). Original artwork and third-party components retain their existing terms; see [notices](../THIRD_PARTY_NOTICES.md).
 

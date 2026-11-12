@@ -39,6 +39,8 @@ pub enum UpdateChannel {
 #[derive(Clone, Copy, Debug)]
 pub enum UpdateFixture {
     Idle,
+    Checking,
+    UpToDate,
     Available,
     Downloading,
     Ready,
@@ -71,8 +73,10 @@ pub enum UpdateError {
     WorkerUnavailable,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct UpdateCandidate {
+    #[serde(with = "version_string")]
     version: Version,
     version_text: String,
     notes: String,
@@ -81,6 +85,21 @@ pub struct UpdateCandidate {
     asset_name: String,
     size: u64,
     digest: [u8; 32],
+}
+
+mod version_string {
+    use super::*;
+    pub fn serialize<S: serde::Serializer>(
+        version: &Version,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&version.to_string())
+    }
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Version, D::Error> {
+        Version::parse(&String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
 }
 
 impl UpdateCandidate {
@@ -95,6 +114,51 @@ impl UpdateCandidate {
     }
     pub fn size(&self) -> u64 {
         self.size
+    }
+    pub(crate) fn digest_hex(&self) -> String {
+        self.digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+    pub(crate) fn asset_name(&self) -> &str {
+        &self.asset_name
+    }
+}
+
+/// A helper's serialized session is not execution authority. Reconfirm the
+/// exact asset against the fixed official source before accepting its hash.
+pub(crate) fn reconfirm_candidate(expected: &UpdateCandidate) -> Result<(), UpdateError> {
+    let bytes = GitHubSource::new().releases()?;
+    let current = Version::parse(crate::VERSION).map_err(|_| UpdateError::InvalidCurrentVersion)?;
+    reconfirm_from_metadata(&bytes, expected, &current)
+}
+
+fn reconfirm_from_metadata(
+    bytes: &[u8],
+    expected: &UpdateCandidate,
+    current: &Version,
+) -> Result<(), UpdateError> {
+    if bytes.len() as u64 > MAX_METADATA {
+        return Err(UpdateError::InvalidMetadata);
+    }
+    let releases: Vec<Release> =
+        serde_json::from_slice(bytes).map_err(|_| UpdateError::InvalidMetadata)?;
+    if releases
+        .into_iter()
+        .filter_map(|release| candidate_from_release(release, current, UpdateChannel::Preview))
+        .any(|actual| {
+            actual.version == expected.version
+                && actual.version_text == expected.version_text
+                && actual.asset_name == expected.asset_name
+                && actual.asset_url == expected.asset_url
+                && actual.size == expected.size
+                && actual.digest == expected.digest
+        })
+    {
+        Ok(())
+    } else {
+        Err(UpdateError::Integrity)
     }
 }
 
@@ -533,6 +597,8 @@ impl UpdateService {
         .ok_or(UpdateError::InvalidMetadata)?;
         service.state = match kind {
             UpdateFixture::Idle => UpdateState::Idle,
+            UpdateFixture::Checking => UpdateState::Checking,
+            UpdateFixture::UpToDate => UpdateState::UpToDate,
             UpdateFixture::Available => UpdateState::Available(candidate),
             UpdateFixture::Downloading => UpdateState::Downloading {
                 downloaded: 16,

@@ -48,7 +48,7 @@ impl MetinApp {
         egui::ScrollArea::vertical().id_salt(("settings-scroll",self.settings_page as u8)).show(ui,|ui| {
             let mut changed=false;
             match self.settings_page {
-                SettingsPage::Detection=>{widgets::icon_heading(ui,catalog::Artwork::Settings,"Detection","Recognition settings for the selected profile.");changed|=self.recognition_settings(ui);}
+                SettingsPage::Detection=>{widgets::heading(ui,"Detection","Recognition settings for the selected profile.");changed|=self.recognition_settings(ui);}
                 SettingsPage::Combat=>{widgets::heading(ui,"Combat & timing","Concrete timing values; detection and input guards remain independent.");changed|=self.timing_preset(ui);changed|=self.timing_settings(ui);}
                 SettingsPage::Appearance=>self.appearance_settings(ui),
                 SettingsPage::Diagnostics=>self.diagnostics_view(ui),
@@ -95,7 +95,7 @@ impl MetinApp {
             "Application-wide presentation preferences. Saved immediately.",
         );
         let mut changed = false;
-        section(ui, "Interface", |ui| {
+        widgets::first_section(ui, "Interface", |ui| {
             ui.label("UI scale");
             changed|=ui.add(egui::Slider::new(&mut self.settings.ui_scale,0.75..=1.5).step_by(0.05).show_value(true)).on_hover_text("Scales text and controls. The window can be resized; scroll areas keep settings accessible.").changed();
         });
@@ -125,7 +125,7 @@ impl MetinApp {
             "Diagnostics",
             "Build information, platform support and local diagnostic export.",
         );
-        section(ui, "Platform & build", |ui| {
+        widgets::first_section(ui, "Platform & build", |ui| {
             ui.label(format!("{} {}", crate::PRODUCT_NAME, crate::VERSION));
             egui::CollapsingHeader::new("Advanced build details").show(ui, |ui| {
                 ui.monospace(
@@ -188,7 +188,7 @@ impl MetinApp {
     }
     fn recognition_settings(&mut self, ui: &mut egui::Ui) -> bool {
         let mut changed = false;
-        section(ui, "Target recognition", |ui| {
+        widgets::first_section(ui, "Target recognition", |ui| {
             if let Some(c) = &mut self.editor.profile.color {
                 changed |= numeric_u32(
                     ui,

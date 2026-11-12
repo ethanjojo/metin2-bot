@@ -1330,7 +1330,7 @@ fn mount_declaration_does_not_need_a_frame_template_or_calibration() {
         revision: 1,
     })
     .unwrap();
-    wait(&r, |s| s.reason.contains("one to eight skills"));
+    wait(&r, |s| s.reason.contains("one to eight buffs"));
     assert!(r.latest().unwrap().frame.is_none());
     for (revision, mounted) in [(2, false), (3, true)] {
         r.send(Command::DeclareMount {

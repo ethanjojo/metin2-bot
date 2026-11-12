@@ -190,7 +190,7 @@ begin
   PreviousInventorySnapshot := ExpandConstant('{tmp}\companion-previous-inventory.json');
   if Retry then
   begin
-    if not FileCopy(SourceInventory, PreviousInventorySnapshot, False) then
+    if not CopyFile(SourceInventory, PreviousInventorySnapshot, False) then
     begin Result := 'Could not preserve the pending package inventory.'; Exit; end;
   end
   else if not SnapshotPreviousInventory(PreviousInstallDirectory, SourceInventory, PreviousInventorySnapshot) then
@@ -206,7 +206,7 @@ begin
     if not RegWriteStringValue(HKLM64, MigrationRegistryKey, 'TargetDirectory', Target) or
       not RegWriteStringValue(HKLM64, MigrationRegistryKey, 'PreviousDirectory', PreviousInstallDirectory) then
     begin Result := 'Could not record the pending installation migration.'; Exit; end;
-    if not ForceDirectories(Target) or not FileCopy(PreviousInventorySnapshot, PendingInventory, True) then
+    if not ForceDirectories(Target) or not CopyFile(PreviousInventorySnapshot, PendingInventory, True) then
     begin Result := 'Could not reserve the pending upgrade inventory.'; Exit; end;
   end;
 end;
@@ -262,6 +262,9 @@ var
   Arguments, ReportPath: String;
   Report: AnsiString;
 begin
+#ifdef CompanionUpdateProgress
+  if CurStep = ssPostInstall then WriteUpdateProgress('finishing', 0, 1);
+#endif
   if CurStep <> ssPostInstall then Exit;
   if PreviousInstallDirectory = '' then Exit;
   ReportPath := ExpandConstant('{tmp}\companion-installation-migration.json');

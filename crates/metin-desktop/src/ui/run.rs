@@ -12,14 +12,21 @@ impl MetinApp {
             self.run_history_page(ui);
             return;
         }
-        egui::ScrollArea::vertical()
+        // The history budget is relative to the unscrolled content origin.
+        // Scrolling earlier sections cannot continuously reveal more events.
+        let _scroll = egui::ScrollArea::vertical()
             .id_salt("run-scroll")
-            .show(ui, |ui| {
+            .auto_shrink([false, false])
+            .show_viewport(ui, |ui, viewport| {
+                let viewport_bottom = ui.max_rect().top() + viewport.height() - 2.;
                 self.run_activity(ui);
                 self.run_session(ui);
                 self.run_schedule(ui);
-                self.run_history(ui);
+                self.run_history(ui, viewport_bottom);
             });
+        #[cfg(test)]
+        ui.ctx()
+            .data_mut(|data| data.insert_temp(egui::Id::unique("run-scroll-id"), _scroll.id));
     }
     /// A runtime slot belongs to its applied session, never a draft or another profile.
     pub(super) fn active_skill_presentation(&self) -> Option<usize> {
@@ -62,10 +69,6 @@ impl MetinApp {
             ui.horizontal(|ui| {
                 let (rect, response) =
                     ui.allocate_exact_size(egui::vec2(48., 40.), egui::Sense::hover());
-                ui.painter()
-                    .circle_filled(rect.center(), 19., tone.gamma_multiply(0.12));
-                ui.painter()
-                    .circle_stroke(rect.center(), 19., egui::Stroke::new(1.2, tone));
                 icon.paint(
                     ui,
                     egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(32.)),
@@ -356,7 +359,7 @@ impl MetinApp {
                     ui,
                     catalog::Artwork::Skills.into(),
                     "Buffs",
-                    "Save to apply skill timers",
+                    "Save to apply buff timers",
                 ) {
                     open = Some(ScheduleLink::Event(D::Buffs, None));
                 }
@@ -401,7 +404,7 @@ impl MetinApp {
             None => {}
         }
     }
-    fn run_history(&mut self, ui: &mut egui::Ui) {
+    fn run_history(&mut self, ui: &mut egui::Ui, viewport_bottom: f32) {
         let mut destination = None;
         ui.scope(|ui| {
             ui.spacing_mut().item_spacing.y = 3.;
@@ -431,7 +434,7 @@ impl MetinApp {
                     }
                 });
             });
-            destination = self.event_rows(ui, 3, false, true);
+            destination = self.recent_event_rows(ui, viewport_bottom);
         });
 
         if let Some((target, subject)) = destination {
@@ -481,7 +484,7 @@ impl MetinApp {
             ))
             .show(ui, |ui| {
                 ui.set_width(history_width);
-                self.event_rows(ui, 200, self.warnings_only, false)
+                self.event_rows(ui, 200, self.warnings_only)
             })
             .inner;
         if let Some((target, subject)) = destination {
@@ -489,12 +492,88 @@ impl MetinApp {
             self.open_event(target, subject);
         }
     }
+    /// Measure each complete message before allocation: no truncation, partial
+    /// rows, hidden scrolling, or guessed line-height/event-count limit.
+    fn recent_event_rows(
+        &self,
+        ui: &mut egui::Ui,
+        viewport_bottom: f32,
+    ) -> Option<(metin_core::EventDestination, Option<uuid::Uuid>)> {
+        let mut destination = None;
+        for event in self.snapshot.events.iter().rev() {
+            let timestamp = ui.painter().layout_no_wrap(
+                metin_core::duration(event.at_seconds),
+                egui::FontId::monospace(11.),
+                ui.visuals().weak_text_color(),
+            );
+            let text_x = timestamp.size().x + 8.;
+            let color = if event.level == metin_core::EventLevel::Warning {
+                widgets::AMBER
+            } else {
+                ui.visuals().text_color()
+            };
+            let mut job = egui::text::LayoutJob::simple(
+                event.message.clone(),
+                egui::FontId::proportional(12.),
+                color,
+                (ui.available_width() - text_x).max(1.),
+            );
+            job.wrap.break_anywhere = false;
+            let message = ui.painter().layout_job(job);
+            let height = timestamp.size().y.max(message.size().y).max(18.);
+            if ui.cursor().top() + height > viewport_bottom {
+                break;
+            }
+            let linked = event.destination != metin_core::EventDestination::Run;
+            let (rect, response) = ui.allocate_exact_size(
+                egui::vec2(ui.available_width(), height),
+                if linked {
+                    egui::Sense::click()
+                } else {
+                    egui::Sense::hover()
+                },
+            );
+            ui.painter()
+                .galley(rect.min, timestamp, ui.visuals().weak_text_color());
+            ui.painter()
+                .galley(rect.min + egui::vec2(text_x, 0.), message, color);
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(
+                    if linked {
+                        egui::Role::Button
+                    } else {
+                        egui::Role::Label
+                    },
+                    ui.is_enabled(),
+                    format!("{} · {}", event.activity, event.message),
+                )
+            });
+            if response.clicked() && linked {
+                destination = Some((event.destination, event.subject));
+            }
+            response.on_hover_text(format!("{} · {}", event.activity, event.message));
+        }
+        if self.snapshot.events.is_empty() {
+            let text = "No events yet. Starts, pauses, target changes and actions appear here.";
+            let message = ui.painter().layout(
+                text.into(),
+                egui::FontId::proportional(12.),
+                ui.visuals().weak_text_color(),
+                ui.available_width(),
+            );
+            if ui.cursor().top() + message.size().y <= viewport_bottom {
+                let (rect, _) = ui.allocate_exact_size(message.size(), egui::Sense::hover());
+                ui.painter()
+                    .galley(rect.min, message, ui.visuals().weak_text_color());
+            }
+        }
+        destination
+    }
     fn event_rows(
         &self,
         ui: &mut egui::Ui,
         limit: usize,
         warnings_only: bool,
-        compact: bool,
     ) -> Option<(metin_core::EventDestination, Option<uuid::Uuid>)> {
         let mut destination = None;
         let mut any = false;
@@ -507,67 +586,32 @@ impl MetinApp {
             .take(limit)
         {
             any = true;
-            if compact {
-                let row = ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new(metin_core::duration(event.at_seconds))
-                            .monospace()
-                            .size(11.)
-                            .color(ui.visuals().weak_text_color()),
-                    );
-                    let text = egui::RichText::new(&event.message).size(12.).color(
+            ui.horizontal(|ui| {
+                ui.monospace(metin_core::duration(event.at_seconds));
+                let linked = event.destination != metin_core::EventDestination::Run;
+                let title_width = (ui.available_width() - if linked { 94. } else { 0. }).max(1.);
+                ui.add_sized(
+                    egui::vec2(title_width, 24.),
+                    egui::Label::new(egui::RichText::new(&event.activity).color(
                         if event.level == metin_core::EventLevel::Warning {
                             widgets::AMBER
                         } else {
                             ui.visuals().text_color()
                         },
-                    );
-                    let response = ui.add(egui::Label::new(text).truncate().sense(
-                        if event.destination == metin_core::EventDestination::Run {
-                            egui::Sense::hover()
-                        } else {
-                            egui::Sense::click()
-                        },
-                    ));
-                    if response.clicked() && event.destination != metin_core::EventDestination::Run
-                    {
-                        destination = Some((event.destination, event.subject));
-                    }
-                });
-                row.response
-                    .on_hover_text(format!("{} · {}", event.activity, event.message));
-            } else {
-                ui.horizontal(|ui| {
-                    ui.monospace(metin_core::duration(event.at_seconds));
-                    let linked = event.destination != metin_core::EventDestination::Run;
-                    let title_width =
-                        (ui.available_width() - if linked { 94. } else { 0. }).max(1.);
-                    ui.add_sized(
-                        egui::vec2(title_width, 24.),
-                        egui::Label::new(egui::RichText::new(&event.activity).color(
-                            if event.level == metin_core::EventLevel::Warning {
-                                widgets::AMBER
-                            } else {
-                                ui.visuals().text_color()
-                            },
-                        ))
-                        .truncate(),
-                    )
-                    .on_hover_text(&event.activity);
-                    if linked
-                        && widgets::plain_button(ui, "Open setup")
-                            .on_hover_text("Open the settings for this event.")
-                            .clicked()
-                    {
-                        destination = Some((event.destination, event.subject));
-                    }
-                });
-                ui.add(egui::Label::new(&event.message).wrap());
-            }
-
-            if !compact {
-                ui.separator();
-            }
+                    ))
+                    .truncate(),
+                )
+                .on_hover_text(&event.activity);
+                if linked
+                    && widgets::plain_button(ui, "Open setup")
+                        .on_hover_text("Open the settings for this event.")
+                        .clicked()
+                {
+                    destination = Some((event.destination, event.subject));
+                }
+            });
+            ui.add(egui::Label::new(&event.message).wrap());
+            ui.separator();
         }
         if !any {
             ui.label(if warnings_only {

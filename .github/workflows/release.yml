@@ -69,6 +69,9 @@ jobs:
           cargo clean -p metin-desktop
           cargo test --workspace --all-targets --all-features --locked
           if ($LASTEXITCODE -ne 0) { throw 'Rust tests failed.' }
+          cargo test -p metin-desktop --lib --all-features --locked -j 2 sealed_staging_actual_acl -- --ignored --test-threads=1
+          if ($LASTEXITCODE -ne 0) { throw 'Protected update staging acceptance failed.' }
+
       - name: Package Rust Windows installer
         shell: pwsh
         env:
@@ -77,6 +80,9 @@ jobs:
           $compiler = ./tools/prepare_compiler.ps1
           python tools/verify-update-restart.py --compiler $compiler --output build/update-restart-acceptance
           if ($LASTEXITCODE -ne 0) { throw 'Installer restart argument acceptance failed.' }
+          python tools/verify-update-progress.py --compiler $compiler --output build/update-progress-acceptance
+          if ($LASTEXITCODE -ne 0) { throw 'Installer progress callback acceptance failed.' }
+
           $crt = ./tools/find-msvc-crt.ps1
           ./tools/package-rust-windows.ps1 -Version $env:BUILD_VERSION -BuildNumber $env:GITHUB_RUN_NUMBER -CompilerPath $compiler -CrtDirectory $crt -OutputDirectory dist/release
       - name: Hosted install, upgrade, self-test and uninstall

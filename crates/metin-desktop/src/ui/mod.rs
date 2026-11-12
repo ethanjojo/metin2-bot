@@ -20,6 +20,7 @@ mod shell;
 mod size_review;
 mod skill_icon;
 pub(crate) mod skin;
+mod startup_update;
 mod state;
 mod update_view;
 pub(crate) mod widgets;
@@ -142,6 +143,9 @@ pub struct MetinApp {
     updates: crate::updates::UpdateService,
     update_handoff: Option<update_view::UpdateHandoff>,
     update_fixture: bool,
+    startup_update_open: bool,
+    update_install_requested: Option<crate::updates::UpdateCandidate>,
+    update_error: Option<String>,
     units: Vec<bool>,
     icon_textures: std::collections::HashMap<String, egui::TextureHandle>,
     click_preview: Option<(
@@ -161,10 +165,23 @@ pub struct MetinApp {
     icon_sheet: bool,
     #[cfg(feature = "ui-smoke")]
     profile_menu_fixture: bool,
+    #[cfg(feature = "ui-smoke")]
+    update_helper_fixture: Option<String>,
 }
 impl MetinApp {
     pub fn new(cc: &eframe::CreationContext<'_>, root: PathBuf) -> Result<Self, String> {
-        let app = Self::from_context(&cc.egui_ctx, root)?;
+        Self::new_with_startup(cc, root, true)
+    }
+    #[cfg(feature = "ui-smoke")]
+    pub fn new_preview(cc: &eframe::CreationContext<'_>, root: PathBuf) -> Result<Self, String> {
+        Self::new_with_startup(cc, root, false)
+    }
+    fn new_with_startup(
+        cc: &eframe::CreationContext<'_>,
+        root: PathBuf,
+        check_startup: bool,
+    ) -> Result<Self, String> {
+        let app = Self::from_context_with_startup(&cc.egui_ctx, root, check_startup)?;
         #[cfg(windows)]
         let app = {
             let mut app = app;
@@ -175,6 +192,13 @@ impl MetinApp {
         Ok(app)
     }
     pub fn from_context(context: &egui::Context, root: PathBuf) -> Result<Self, String> {
+        Self::from_context_with_startup(context, root, !cfg!(test))
+    }
+    fn from_context_with_startup(
+        context: &egui::Context,
+        root: PathBuf,
+        check_startup: bool,
+    ) -> Result<Self, String> {
         crate::storage::validate_data_directory(&root).map_err(|e| e.to_string())?;
         let mut store = ProfileStore::open(&root.join("profiles")).map_err(|e| e.to_string())?;
         store
@@ -201,6 +225,9 @@ impl MetinApp {
                 .map_err(|e| e.to_string())?,
             update_handoff: None,
             update_fixture: false,
+            startup_update_open: check_startup && settings.check_updates_on_start,
+            update_install_requested: None,
+            update_error: None,
             root,
             store,
             settings,
@@ -277,10 +304,12 @@ impl MetinApp {
             icon_sheet: false,
             #[cfg(feature = "ui-smoke")]
             profile_menu_fixture: false,
+            #[cfg(feature = "ui-smoke")]
+            update_helper_fixture: None,
         };
         app.apply_appearance(context)?;
         context.set_zoom_factor(app.settings.ui_scale);
-        if app.settings.check_updates_on_start {
+        if app.settings.check_updates_on_start && check_startup {
             let _ = app.updates.check(app.settings.update_channel);
         }
         Ok(app)
@@ -781,6 +810,11 @@ impl MetinApp {
             egui::CentralPanel::default().show(ui, icons::sheet);
             return;
         }
+        #[cfg(feature = "ui-smoke")]
+        if let Some(phase) = self.update_helper_fixture.clone() {
+            crate::update_helper::status_preview(ui, &phase);
+            return;
+        }
         skin::background(ui, self.collapsed);
         self.sync(ui.ctx());
         self.sync_updates(ui.ctx());
@@ -794,13 +828,29 @@ impl MetinApp {
             // complete native surface here, not only when the title is drawn.
             self.sync_title_clip(ui.ctx(), None);
         }
+        if self.startup_update_open {
+            egui::CentralPanel::default().show(ui, |ui| self.startup_update_view(ui));
+            self.window_frame(ui);
+            if ui.input(|i| i.viewport().close_requested()) {
+                self.runtime.stop();
+                if self.update_handoff_waiting()
+                    || (!self.update_exit_pending() && !self.discard_or_save())
+                {
+                    ui.ctx()
+                        .send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                }
+            }
+            return;
+        }
         if self.window_chooser.open {
             egui::CentralPanel::default().show(ui, |ui| self.window_chooser_view(ui));
             self.window_frame(ui);
             self.sync_preview_demand();
             if ui.input(|i| i.viewport().close_requested()) {
                 self.runtime.stop();
-                if !self.update_exit_pending() && !self.discard_or_save() {
+                if self.update_handoff_waiting()
+                    || (!self.update_exit_pending() && !self.discard_or_save())
+                {
                     ui.ctx()
                         .send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 }
@@ -888,7 +938,9 @@ impl MetinApp {
         if ui.input(|i| i.viewport().close_requested()) {
             self.cancel_size_review();
             self.runtime.stop();
-            if !self.update_exit_pending() && !self.discard_or_save() {
+            if self.update_handoff_waiting()
+                || (!self.update_exit_pending() && !self.discard_or_save())
+            {
                 ui.ctx()
                     .send_viewport_cmd(egui::ViewportCommand::CancelClose);
             }

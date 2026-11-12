@@ -85,6 +85,7 @@ var
   RemoveSharedDriver: Boolean;
 
 #include "update-restart.iss"
+#include "update-progress.iss"
 #include "installation-migration.iss"
 
 function DriverDisclosure(): String;
@@ -97,6 +98,7 @@ end;
 
 function InitializeSetup(): Boolean;
 begin
+  InitializeUpdateProgress();
   PreviousInstallDirectory := RegisteredInstallationDirectory();
   Log(DriverDisclosure());
   Result := True;
@@ -154,6 +156,7 @@ end;
 procedure InstallInputDriver();
 begin
   try
+    WriteUpdateProgress('driver', 0, 1);
     ManageDriver('install');
     ManageDriver('status');
   except

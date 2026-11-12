@@ -282,7 +282,15 @@ fn profile_menu_keyboard_keeps_a_long_list_visible_and_accepts_the_focused_profi
         draw_at_size(&mut app, &ctx, &mut vec![], size);
     }
     let (id, rect, clip) = row("Profile 16");
-    assert_eq!(ctx.memory(|m| m.focused()), Some(id), "Actual row focus: {:?}", profiles.iter().find(|p| Some(row(&p.name).0) == ctx.memory(|m| m.focused())).map(|p| &p.name));
+    assert_eq!(
+        ctx.memory(|m| m.focused()),
+        Some(id),
+        "Actual row focus: {:?}",
+        profiles
+            .iter()
+            .find(|p| Some(row(&p.name).0) == ctx.memory(|m| m.focused()))
+            .map(|p| &p.name)
+    );
     assert!(
         rect.top() >= clip.top() - 1. && rect.bottom() <= clip.bottom() + 1.,
         "Focused profile must scroll into view"
@@ -534,12 +542,22 @@ fn compact_chrome_fills_header_and_keeps_footer_clear_of_window_frame() {
                 size.y - primary.bottom() >= 9. && primary.left() >= 9.,
                 "Start must clear the outer frame: {primary:?} / {size:?}"
             );
-            let footer: egui::Rect = ctx.data(|d| d.get_temp(egui::Id::unique("shell-footer"))).unwrap();
-            assert!(primary.top() - footer.top() <= 6., "Idle footer must not reserve an empty message row: {primary:?}, {footer:?}");
+            let footer: egui::Rect = ctx
+                .data(|d| d.get_temp(egui::Id::unique("shell-footer")))
+                .unwrap();
+            assert!(
+                primary.top() - footer.top() <= 6.,
+                "Idle footer must not reserve an empty message row: {primary:?}, {footer:?}"
+            );
             app.show_feedback("Saved", false);
             compact_settle(&mut app, &ctx, size);
-            let with_notice: egui::Rect = ctx.data(|d| d.get_temp(egui::Id::unique("shell-primary"))).unwrap();
-            assert_eq!(with_notice, primary, "Messages must not move Start or the mount control");
+            let with_notice: egui::Rect = ctx
+                .data(|d| d.get_temp(egui::Id::unique("shell-primary")))
+                .unwrap();
+            assert_eq!(
+                with_notice, primary,
+                "Messages must not move Start or the mount control"
+            );
             app.feedback = None;
         }
         app.collapsed = true;
@@ -1617,5 +1635,152 @@ fn compact_skill_bars_use_regular_intervals_and_fresh_presence_without_editing()
             .any(|(text, _)| text.contains("01:00") && text.contains("paused"))
     );
     assert_eq!(app.editor.profile, before);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn recent_activity_uses_only_whole_rows_and_fills_available_height() {
+    let (mut app, ctx, _dir) = setup();
+    app.snapshot = Arc::new(RuntimeSnapshot {
+        running: true,
+        events: (0..30)
+            .map(|i| metin_core::RunEvent {
+                id: i,
+                message: format!("Recent event {i:02}"),
+                ..Default::default()
+            })
+            .collect(),
+        ..Default::default()
+    });
+    let mut counts = Vec::new();
+    for size in [egui::vec2(400., 390.), egui::vec2(460., 700.)] {
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                ..Default::default()
+            },
+            |ui| app.run_view(ui),
+        );
+        output.textures_delta.clear();
+        let rows = text_regions(&output)
+            .into_iter()
+            .filter(|(text, _)| text.starts_with("Recent event"))
+            .collect::<Vec<_>>();
+        assert!(
+            rows.iter()
+                .all(|(_, rect)| rect.bottom() <= size.y - 2. && rect.right() <= size.x)
+        );
+        assert!(rows.iter().any(|(text, _)| text == "Recent event 29"));
+        counts.push(rows.len());
+    }
+    assert!(
+        counts[1] > counts[0] && counts[1] > 3,
+        "Counts must follow actual available height: {counts:?}"
+    );
+    let message =
+        "A complete warning with a detailed reason and an actionable next step. ".repeat(3);
+    app.snapshot = Arc::new(RuntimeSnapshot {
+        running: true,
+        events: (0..20)
+            .map(|i| metin_core::RunEvent {
+                id: i,
+                message: format!("{message}{i}"),
+                ..Default::default()
+            })
+            .collect(),
+        ..Default::default()
+    });
+    let size = egui::vec2(400., 480.);
+    let mut output = ctx.run_ui(
+        egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+            ..Default::default()
+        },
+        |ui| app.run_view(ui),
+    );
+    output.textures_delta.clear();
+    let rows = text_regions(&output)
+        .into_iter()
+        .filter(|(text, _)| text.starts_with("A complete warning"))
+        .collect::<Vec<_>>();
+    assert!(!rows.is_empty());
+    assert!(
+        rows.iter()
+            .all(|(_, rect)| rect.height() > 20. && rect.bottom() <= size.y - 2.)
+    );
+    assert!(rows.iter().any(|(text, _)| text == &format!("{message}19")));
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn recent_activity_does_not_load_more_rows_when_other_run_sections_scroll() {
+    let (mut app, ctx, _dir) = setup();
+    app.snapshot = Arc::new(RuntimeSnapshot {
+        running: true,
+        action_timers: (0..30)
+            .map(|i| metin_core::ActionTimer {
+                key: metin_core::ScheduledKey::Periodic(uuid::Uuid::new_v4()),
+                name: format!("Scheduled action {i}"),
+                remaining_seconds: Some(20.),
+            })
+            .collect(),
+        events: (0..30)
+            .map(|i| metin_core::RunEvent {
+                id: i,
+                message: format!("Overflow event {i}"),
+                ..Default::default()
+            })
+            .collect(),
+        ..Default::default()
+    });
+    for frame in 0..8 {
+        let events = if frame == 2 {
+            vec![
+                egui::Event::PointerMoved(egui::pos2(200., 200.)),
+                egui::Event::MouseWheel {
+                    phase: egui::TouchPhase::Move,
+                    source: egui::MouseWheelSource::Unknown,
+                    unit: egui::MouseWheelUnit::Point,
+                    delta: egui::vec2(0., -3000.),
+                    modifiers: Default::default(),
+                },
+            ]
+        } else {
+            vec![]
+        };
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                time: Some(frame as f64),
+                events,
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(400., 400.),
+                )),
+                ..Default::default()
+            },
+            |ui| app.run_view(ui),
+        );
+        output.textures_delta.clear();
+        if frame == 7 {
+            let id = ctx
+                .data(|d| d.get_temp::<egui::Id>(egui::Id::unique("run-scroll-id")))
+                .unwrap();
+            assert!(
+                egui::scroll_area::State::load(&ctx, id)
+                    .unwrap()
+                    .clamped_offset()
+                    .y
+                    > 0.,
+                "Fixture must actually scroll preceding Run sections"
+            );
+        }
+
+        assert!(
+            !text_regions(&output)
+                .iter()
+                .any(|(text, _)| text.starts_with("Overflow event")),
+            "No spare Run height: scrolling must not continuously reveal new recent events"
+        );
+    }
     app.runtime.shutdown().unwrap();
 }

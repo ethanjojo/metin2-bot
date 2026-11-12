@@ -25,7 +25,7 @@ use windows::{
             Dxgi::{Common::DXGI_FORMAT_B8G8R8A8_UNORM, IDXGIDevice},
         },
         System::{
-            Com::{CO_MTA_USAGE_COOKIE, CoDecrementMTAUsage, CoIncrementMTAUsage},
+            Com::CoIncrementMTAUsage,
             Performance::{QueryPerformanceCounter, QueryPerformanceFrequency},
             WinRT::{
                 Direct3D11::{CreateDirect3D11DeviceFromDXGIDevice, IDirect3DDxgiInterfaceAccess},
@@ -94,15 +94,27 @@ fn error(e: windows::core::Error) -> PlatformError {
         "Window capture failed: {e}. The selected window must support Windows Graphics Capture; desktop capture is never substituted."
     ))
 }
-// MTA usage cookies may be balanced on another thread (Microsoft contract).
-struct Apartment(usize);
-impl Drop for Apartment {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = CoDecrementMTAUsage(CO_MTA_USAGE_COOKIE(self.0 as _));
-        }
-    }
+/// windows-core caches agile capture factories for the process lifetime. Keep
+/// their implicit MTA alive for that same lifetime, including between thumbnail
+/// workers; tearing it down per capture can unload GraphicsCapture.dll while
+/// cached factories/native asynchronous cleanup still reference its code.
+///
+/// One successful cookie is intentionally retained until process exit, matching
+/// windows-core's own factory-cache MTA initialization. Individual sessions,
+/// frame pools and D3D resources still close and release normally in Drop.
+fn ensure_capture_apartment() -> Result<()> {
+    static CAPTURE_MTA: OnceLock<Result<usize>> = OnceLock::new();
+    CAPTURE_MTA
+        .get_or_init(|| unsafe {
+            CoIncrementMTAUsage()
+                .map(|cookie| cookie.0 as usize)
+                .map_err(error)
+        })
+        .as_ref()
+        .map(|_| ())
+        .map_err(Clone::clone)
 }
+
 #[derive(Default)]
 struct ReadbackTexture(Option<([u32; 2], ID3D11Texture2D)>);
 impl ReadbackTexture {
@@ -157,8 +169,6 @@ pub(super) struct WindowCapture {
     // Device and context are fixed for this capture's lifetime, so dropping or
     // recreating the capture also drops its device-specific readback texture.
     readback: ReadbackTexture,
-    // Declared last so interfaces are released before COM is uninitialized.
-    _apartment: Apartment,
 }
 impl Drop for WindowCapture {
     fn drop(&mut self) {
@@ -168,7 +178,7 @@ impl Drop for WindowCapture {
 }
 impl WindowCapture {
     pub(super) fn new(target: TargetToken) -> Result<Self> {
-        let apartment = Apartment(unsafe { CoIncrementMTAUsage().map_err(error)?.0 as usize });
+        ensure_capture_apartment()?;
         if !GraphicsCaptureSession::IsSupported().map_err(error)? {
             return Err(PlatformError(
                 "Windows Graphics Capture is unavailable on this system.".into(),
@@ -228,7 +238,6 @@ impl WindowCapture {
             context,
             size,
             readback: ReadbackTexture::default(),
-            _apartment: apartment,
         })
     }
     pub(super) fn frame(
@@ -466,6 +475,45 @@ fn source_instant(ticks: i64, (now, current): (Instant, i64)) -> Result<Instant>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn capture_apartment_outlives_sequential_and_concurrent_capture_scopes() {
+        use windows::Win32::System::Com::{
+            APTTYPE_CURRENT, APTTYPE_MTA, APTTYPEQUALIFIER_NONE, CoGetApartmentType,
+        };
+        fn capture_scope_then_check_mta() {
+            // A capture may finish and its worker may retire, but the WinRT
+            // factory cache still exists. This test never captures any window.
+            {
+                ensure_capture_apartment().unwrap();
+            }
+            let mut apartment = APTTYPE_CURRENT;
+            let mut qualifier = APTTYPEQUALIFIER_NONE;
+            unsafe { CoGetApartmentType(&mut apartment, &mut qualifier) }
+                .expect("Capture factory support must outlive one capture scope");
+            assert_eq!(apartment, APTTYPE_MTA);
+        }
+        for _ in 0..3 {
+            std::thread::spawn(|| {
+                for _ in 0..20 {
+                    capture_scope_then_check_mta();
+                }
+            })
+            .join()
+            .unwrap();
+        }
+        let workers = (0..8)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    for _ in 0..64 {
+                        capture_scope_then_check_mta();
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+        for worker in workers {
+            worker.join().unwrap();
+        }
+    }
     #[test]
     #[ignore = "briefly shows a nonactivating owned window for actual Windows borderless capture QA"]
     fn owned_window_capture_requests_borderless_and_keeps_fresh_capture_working() {

@@ -1,5 +1,42 @@
 use super::*;
 
+#[test]
+fn helper_rechecks_the_exact_official_asset_and_never_trusts_a_serialized_hash() {
+    let current = Version::new(0, 1, 0);
+    let official = serde_json::to_vec(&vec![release("0.2.0", false)]).unwrap();
+    let candidate = parse_releases(&official, &current, UpdateChannel::Stable)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        reconfirm_from_metadata(&official, &candidate, &current),
+        Ok(())
+    );
+    for field in ["version_text", "asset_name", "asset_url", "size", "digest"] {
+        let mut forged = serde_json::to_value(&candidate).unwrap();
+        forged[field] = match field {
+            "size" => 4.into(),
+            "digest" => serde_json::to_value([0_u8; 32]).unwrap(),
+            _ => "forged".into(),
+        };
+        let forged: UpdateCandidate = serde_json::from_value(forged).unwrap();
+        assert_eq!(
+            reconfirm_from_metadata(&official, &forged, &current),
+            Err(UpdateError::Integrity),
+            "{field}"
+        );
+    }
+    assert_eq!(
+        reconfirm_from_metadata(b"[]", &candidate, &current),
+        Err(UpdateError::Integrity)
+    );
+    let newer =
+        serde_json::to_vec(&vec![release("0.3.0", false), release("0.2.0", false)]).unwrap();
+    assert_eq!(
+        reconfirm_from_metadata(&newer, &candidate, &current),
+        Ok(())
+    );
+}
+
 fn release(version: &str, preview: bool) -> serde_json::Value {
     serde_json::json!({
         "tag_name":format!("v{version}"), "draft":false, "prerelease":preview,

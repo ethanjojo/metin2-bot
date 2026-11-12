@@ -19,6 +19,10 @@ use std::{
 };
 use uuid::Uuid;
 
+// The same deadlines govern both arming behavior and its UI countdown.
+const ARM_START_DELAY: Duration = Duration::from_secs(3);
+const ARM_FOCUS_TIMEOUT: Duration = Duration::from_secs(12);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionKey {
     pub profile_id: Uuid,
@@ -756,10 +760,10 @@ fn run(
                     next_sample = Instant::now();
                 }
                 if let Some(since) = armed
-                    && since.elapsed() >= Duration::from_secs(12)
+                    && since.elapsed() >= ARM_FOCUS_TIMEOUT
                 {
                     armed = None;
-                    a.controller.pause(now,"The game did not reach stable focus within 12 s. Activate it and press F7.");
+                    a.controller.pause(now, format!("The game did not reach stable focus within {} s. Activate it and press F7.", ARM_FOCUS_TIMEOUT.as_secs()));
                 }
                 if !a.controller.running {
                     executor
@@ -819,7 +823,7 @@ fn run(
                     .poll_attack(backend.as_mut(), &stop, generation)
                     .map_err(|e| e.to_string())?;
                 let now = captured.captured_at.duration_since(origin).as_secs_f64();
-                if armed.is_some_and(|since| since.elapsed() >= Duration::from_secs(3))
+                if armed.is_some_and(|since| since.elapsed() >= ARM_START_DELAY)
                     && focus_since
                         .is_some_and(|since| since.elapsed() >= Duration::from_millis(500))
                     && captured.geometry.foreground
@@ -1056,7 +1060,11 @@ fn run(
                 a.controller.state.clone()
             };
             snapshot.reason = if armed.is_some() {
-                "Waiting for stable game focus. Start delay: 3 s; timeout: 12 s.".into()
+                format!(
+                    "Waiting for stable game focus. Start delay: {} s; timeout: {} s.",
+                    ARM_START_DELAY.as_secs(),
+                    ARM_FOCUS_TIMEOUT.as_secs()
+                )
             } else {
                 a.controller.reason.clone()
             };
@@ -1071,18 +1079,7 @@ fn run(
         snapshot.arming = armed.is_some();
         if let Some(started) = armed {
             snapshot.update_activity(None, true, false, now);
-            let elapsed = started.elapsed().as_secs_f64();
-            snapshot.activity_progress = Some(metin_core::ActivityProgress {
-                label: if elapsed < 3. {
-                    "Starting"
-                } else {
-                    "Waiting for game focus"
-                }
-                .into(),
-                elapsed_seconds: elapsed,
-                remaining_seconds: (elapsed < 3.).then_some((3. - elapsed).max(0.)),
-                total_seconds: (elapsed < 3.).then_some(3.),
-            });
+            snapshot.activity_progress = Some(arming_progress(started.elapsed()));
         }
         if snapshot.geometry.is_none()
             || snapshot
@@ -1123,9 +1120,44 @@ fn run(
     Ok(())
 }
 
+fn arming_progress(elapsed: Duration) -> metin_core::ActivityProgress {
+    let (label, stage_elapsed, stage_duration) = if elapsed < ARM_START_DELAY {
+        ("Starting", elapsed, ARM_START_DELAY)
+    } else {
+        (
+            "Waiting for game focus",
+            elapsed.saturating_sub(ARM_START_DELAY),
+            ARM_FOCUS_TIMEOUT.saturating_sub(ARM_START_DELAY),
+        )
+    };
+    metin_core::ActivityProgress {
+        label: label.into(),
+        elapsed_seconds: stage_elapsed.as_secs_f64(),
+        remaining_seconds: Some(stage_duration.saturating_sub(stage_elapsed).as_secs_f64()),
+        total_seconds: Some(stage_duration.as_secs_f64()),
+    }
+}
+
 #[cfg(test)]
 mod schedule_tests {
     use super::*;
+    #[test]
+    fn arming_countdown_switches_from_start_delay_to_remaining_focus_timeout() {
+        for (elapsed, label, stage_elapsed, remaining, total) in [
+            (0., "Starting", 0., 3., 3.),
+            (2.5, "Starting", 2.5, 0.5, 3.),
+            (3., "Waiting for game focus", 0., 9., 9.),
+            (6.5, "Waiting for game focus", 3.5, 5.5, 9.),
+            (12., "Waiting for game focus", 9., 0., 9.),
+            (13., "Waiting for game focus", 10., 0., 9.),
+        ] {
+            let progress = arming_progress(Duration::from_secs_f64(elapsed));
+            assert_eq!(progress.label, label);
+            assert_eq!(progress.remaining_seconds, Some(remaining));
+            assert_eq!(progress.total_seconds, Some(total));
+            assert_eq!(progress.elapsed_seconds, stage_elapsed);
+        }
+    }
     #[test]
     fn presentation_clears_active_skill_for_arming_errors_and_detachment() {
         let mut profile = Profile::create("Presentation");
