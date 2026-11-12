@@ -24,6 +24,8 @@ pub enum StorageError {
     Invalid(String),
 }
 pub type Result<T> = std::result::Result<T, StorageError>;
+mod portable;
+pub use portable::ProfilePackage;
 mod migration;
 pub use migration::{
     DataDirectory, migration_protected_paths, prepare_data_directory, prepare_data_directory_at,
@@ -161,6 +163,7 @@ pub struct UISettings {
     pub pin_to_game: bool,
     pub check_updates_on_start: bool,
     pub update_channel: crate::updates::UpdateChannel,
+    pub panel_positions: Vec<crate::placement::SavedPanelPosition>,
 }
 /// Consume obsolete persisted hints only when loading existing user data.
 /// Serialization has one source of truth and never writes these hints again.
@@ -179,6 +182,7 @@ struct StoredUISettings {
     pin_to_game: bool,
     check_updates_on_start: bool,
     update_channel: crate::updates::UpdateChannel,
+    panel_positions: Vec<crate::placement::SavedPanelPosition>,
 }
 impl Default for StoredUISettings {
     fn default() -> Self {
@@ -193,6 +197,7 @@ impl Default for StoredUISettings {
             pin_to_game: settings.pin_to_game,
             check_updates_on_start: settings.check_updates_on_start,
             update_channel: settings.update_channel,
+            panel_positions: settings.panel_positions,
         }
     }
 }
@@ -205,6 +210,7 @@ impl From<StoredUISettings> for UISettings {
             pin_to_game: s.pin_to_game,
             check_updates_on_start: s.check_updates_on_start,
             update_channel: s.update_channel,
+            panel_positions: s.panel_positions,
         }
     }
 }
@@ -217,6 +223,7 @@ impl Default for UISettings {
             pin_to_game: true,
             check_updates_on_start: true,
             update_channel: crate::updates::UpdateChannel::Stable,
+            panel_positions: Vec::new(),
         }
     }
 }
@@ -235,6 +242,7 @@ impl UISettings {
         if !self.ui_scale.is_finite()
             || !(0.75..=1.5).contains(&self.ui_scale)
             || !(100..=5000).contains(&self.preview_refresh_ms)
+            || !crate::placement::valid_positions(&self.panel_positions)
         {
             return Err(invalid("Invalid UI scale or preview refresh interval."));
         }

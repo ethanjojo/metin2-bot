@@ -45,10 +45,15 @@ pub struct SelectionRequest {
 pub struct ControlPanelLink {
     pub window: usize,
     pub target: TargetToken,
+    pub offset: Option<crate::placement::PanelOffset>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum OverlayEvent {
+    PanelMoved {
+        target: TargetToken,
+        offset: crate::placement::PanelOffset,
+    },
     Selected {
         id: u64,
         region: Option<Region>,
@@ -287,6 +292,9 @@ impl GameOverlay {
         None
     }
     pub fn hide(&self) {}
+    pub fn panel_position(&self) -> Option<(TargetToken, crate::placement::PanelOffset)> {
+        None
+    }
     pub fn set_control_panel(&self, _link: Option<ControlPanelLink>) -> Result<(), String> {
         Ok(())
     }

@@ -199,6 +199,7 @@ impl MetinApp {
         Ok(())
     }
     pub(super) fn open_window_chooser(&mut self) {
+        self.remember_latest_panel_position();
         self.cancel_size_review();
         self.size_change = None;
         self.runtime.stop();

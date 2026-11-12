@@ -38,7 +38,9 @@ fn header_profile_actions_stay_visible_aligned_and_fixed_across_clean_and_dirty_
         "An exceptionally long profile name that must truncate without moving actions".into();
     app.editor.record();
     compact_settle(&mut app, &ctx, size);
-    assert_eq!(header_profile_geometry(&ctx), clean);
+    let dirty_geometry = header_profile_geometry(&ctx);
+    assert_eq!(&dirty_geometry[1..], &clean[1..], "Unsaved changes must not move Undo/Redo/Revert/Save");
+    assert!(dirty_geometry[0].width() < clean[0].width(), "The changes badge uses space beside the profile name");
     compact_click_at(&mut app, &ctx, size, clean[1].center());
     assert!(!app.editor.dirty());
     assert!(!egui::Popup::is_any_open(&ctx));

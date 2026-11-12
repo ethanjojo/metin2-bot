@@ -154,7 +154,10 @@ fn draw_at_size(
             events: std::mem::take(events),
             ..Default::default()
         },
-        |ui| app.render(ui),
+        |ui| {
+            app.background_tick(ui.ctx());
+            app.render(ui);
+        },
     );
     assert!(!output.shapes.is_empty());
     output.textures_delta.clear();
@@ -449,6 +452,7 @@ fn run_schedule_links_open_the_exact_action_skill_and_safety_page() {
     let snapshot = Arc::new(RuntimeSnapshot {
         key: app.key(),
         revision: app.revision,
+        applied_revision: Some(app.revision),
         mounted: Some(false),
         running: true,
         recoveries: 1,
@@ -1002,6 +1006,7 @@ fn screenshot_request_survives_a_discarded_layout_pass() {
                 ui.ctx()
                     .request_discard("Exercise multi-pass screenshot capture");
             }
+            app.background_tick(ui.ctx());
             app.render(ui);
         },
     );
@@ -1254,7 +1259,10 @@ fn review_hover_position(app: &mut MetinApp, ctx: &egui::Context, pos: egui::Pos
                 },
                 ..Default::default()
             },
-            |ui| app.render(ui),
+            |ui| {
+                app.background_tick(ui.ctx());
+                app.render(ui);
+            },
         );
         texts.extend(text_regions(&output).into_iter().map(|(text, _)| text));
         output.textures_delta.clear();
@@ -1771,16 +1779,40 @@ fn refinement_row_trash_removes_that_mask_and_preserves_other_selection_and_undo
     }
     app.edit_area(EditMode::Mask(Some(2)));
     click_row_trash(&mut app, &ctx, "Excluded area 1");
-    assert_eq!(app.editor.profile.masks, vec![masks[1], masks[2]]);
+    assert_eq!(
+        app.editor
+            .profile
+            .masks
+            .iter()
+            .map(|a| a.region)
+            .collect::<Vec<_>>(),
+        vec![masks[1], masks[2]]
+    );
     assert!(app.mode == EditMode::Mask(Some(1)));
     assert_eq!(app.editor.region(app.mode), Some(masks[2]));
     app.undo_profile();
-    assert_eq!(app.editor.profile.masks, masks);
+    assert_eq!(
+        app.editor
+            .profile
+            .masks
+            .iter()
+            .map(|a| a.region)
+            .collect::<Vec<_>>(),
+        masks
+    );
     app.edit_area(EditMode::Mask(Some(1)));
     click_row_trash(&mut app, &ctx, "Excluded area 2");
     assert!(!app.editing);
     assert!(app.mode == EditMode::Mask(None));
-    assert_eq!(app.editor.profile.masks, vec![masks[0], masks[2]]);
+    assert_eq!(
+        app.editor
+            .profile
+            .masks
+            .iter()
+            .map(|a| a.region)
+            .collect::<Vec<_>>(),
+        vec![masks[0], masks[2]]
+    );
     app.runtime.shutdown().unwrap();
 }
 
@@ -2164,7 +2196,7 @@ fn actions_subpages_and_safety_preserve_edits_and_expose_all_controls() {
     assert_eq!(app.actions_page, ActionsPage::Loot);
     click_label(&mut app, &ctx, "Automatic loot");
     assert!(app.editor.profile.loot.enabled);
-    click_label(&mut app, &ctx, "Actions");
+    back_to_action_catalog(&mut app, &ctx);
     click_label(&mut app, &ctx, "Mount");
     let output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(800., 560.));
     assert!(
@@ -2306,7 +2338,7 @@ fn remaining_pages_are_reachable_and_keep_profile_values_across_navigation() {
     assert_eq!(app.editor.profile.periodic_actions.len(), 1);
     assert_eq!(app.editor.profile.periodic_actions[0].name, "New action");
     click_label(&mut app, &ctx, "Enable this action");
-    click_label(&mut app, &ctx, "Actions");
+    back_to_action_catalog(&mut app, &ctx);
     click_label(&mut app, &ctx, "Auto-puller");
     click_label(&mut app, &ctx, "Automatic puller");
     click_label(&mut app, &ctx, "Combat start");
@@ -2320,8 +2352,8 @@ fn remaining_pages_are_reachable_and_keep_profile_values_across_navigation() {
         click_label(&mut app, &ctx, label);
     }
     assert!(app.editor.profile.periodic_actions[0].enabled);
-    click_label(&mut app, &ctx, "Actions");
-    click_label(&mut app, &ctx, "Actions");
+    back_to_action_catalog(&mut app, &ctx);
+    back_to_action_catalog(&mut app, &ctx);
     click_label(&mut app, &ctx, "Visual rules");
     click_label(&mut app, &ctx, "Add rule");
     assert!(!app.editor.profile.safety.rules[0].enabled);
@@ -2472,7 +2504,7 @@ fn combat_options_show_only_relevant_fields_and_record_space() {
             .iter()
             .any(|(t, _)| t == "Repeat interval (s)")
     );
-    click_label(&mut app, &ctx, "Actions");
+    back_to_action_catalog(&mut app, &ctx);
     click_label(&mut app, &ctx, "Out-of-target attack");
     click_label(&mut app, &ctx, "Attack after a target ends");
     click_label(&mut app, &ctx, "Space");
@@ -2872,3 +2904,18 @@ include!("startup_update_tests.rs");
 #[path = "consistency_tests.rs"]
 mod consistency_tests;
 include!("profile_menu_tests.rs");
+include!("profile_transfer_tests.rs");
+include!("workflow_qol_tests.rs");
+include!("excluded_area_tests.rs");
+
+fn back_to_action_catalog(app: &mut MetinApp, ctx: &egui::Context) {
+    let output = draw_at_size(app, ctx, &mut vec![], egui::vec2(1280., 820.));
+    let point = text_regions(&output)
+        .into_iter()
+        .filter(|(text, _)| text == "Actions")
+        .max_by(|a, b| a.1.top().total_cmp(&b.1.top()))
+        .unwrap()
+        .1
+        .center();
+    click_position(app, ctx, point);
+}

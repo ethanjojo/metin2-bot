@@ -168,19 +168,6 @@ impl MetinApp {
             self.visual_detail = false;
             return;
         }
-        if button(
-            ui,
-            Icon::Back,
-            "Back to Visual rules",
-            true,
-            "Return to the rule list without discarding edits.",
-        )
-        .clicked()
-        {
-            self.visual_detail = false;
-            self.binding = None;
-            return;
-        }
         self.selected_safety = self
             .selected_safety
             .min(self.editor.profile.safety.rules.len() - 1);

@@ -321,14 +321,18 @@ pub fn tab(
         info.selected = Some(selected);
         info
     });
-    ui.painter().text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        label,
+    let color = Color32::from_gray(238);
+    let mut job = egui::text::LayoutJob::simple_singleline(
+        label.into(),
         egui::FontId::proportional(12.),
-        Color32::from_gray(238),
+        color,
     );
-    response.on_hover_text(hint)
+    job.wrap.max_width = (rect.width() - 8.).max(1.);
+    job.wrap.max_rows = 1;
+    let galley = ui.painter().layout_job(job);
+    ui.painter()
+        .galley(rect.center() - galley.size() / 2., galley, color);
+    response.on_hover_text(format!("{label}\n{hint}"))
 }
 
 pub use super::select::{ComboBox, combo_trigger};

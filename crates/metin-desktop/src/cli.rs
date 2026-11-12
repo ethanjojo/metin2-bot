@@ -85,6 +85,12 @@ pub struct Cli {
     pub ui_profile_rename: bool,
     #[cfg(feature = "ui-smoke")]
     #[arg(long,requires_all=["ui_screenshot","ui_fixture"])]
+    pub ui_qol: Option<crate::ui::QolFixture>,
+    #[cfg(feature = "ui-smoke")]
+    #[arg(long, requires = "ui_screenshot")]
+    pub ui_zoom: Option<f32>,
+    #[cfg(feature = "ui-smoke")]
+    #[arg(long,requires_all=["ui_screenshot","ui_fixture"])]
     pub ui_window_picker: Option<crate::ui::WindowPickerFixture>,
     #[cfg(feature = "ui-smoke")]
     #[arg(long,requires_all=["ui_screenshot","ui_fixture"])]

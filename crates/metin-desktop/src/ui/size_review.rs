@@ -60,12 +60,15 @@ impl MetinApp {
             .ok_or("A review fixture needs source pixels.")?;
         self.set_window_picker_fixture(WindowPickerFixture::Selected);
         self.editor.profile.frame_size = Some([frame.width, frame.height + 15]);
-        self.editor.profile.masks.push(metin_core::Region {
-            left: 0.1,
-            top: 0.96,
-            right: 0.3,
-            bottom: 0.995,
-        });
+        self.editor.profile.masks.push(
+            metin_core::Region {
+                left: 0.1,
+                top: 0.96,
+                right: 0.3,
+                bottom: 0.995,
+            }
+            .into(),
+        );
         self.editor.mark_saved(self.editor.profile.clone());
         let target = self.target.expect("selected fixture");
         let mut snapshot = (*self.window_fixture.as_ref().expect("fixture").snapshot).clone();

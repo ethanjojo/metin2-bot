@@ -120,7 +120,7 @@ fn size_review_rows_fit_the_minimum_width_with_all_edit_and_remove_controls() {
             top: 0.9,
             right: 0.3,
             bottom: 0.99
-        };
+        }.into();
         3
     ];
     app.editor

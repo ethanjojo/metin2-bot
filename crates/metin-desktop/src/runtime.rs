@@ -11,7 +11,7 @@ use metin_vision::{BuffDetector, CandidateTracker};
 use std::{
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc::{self, SyncSender, TrySendError},
     },
     thread::{self, JoinHandle},
@@ -22,11 +22,61 @@ use uuid::Uuid;
 // The same deadlines govern both arming behavior and its UI countdown.
 const ARM_START_DELAY: Duration = Duration::from_secs(3);
 const ARM_FOCUS_TIMEOUT: Duration = Duration::from_secs(12);
+const START_CANCELLED_REASON: &str =
+    "Start cancelled by Pause/F8. Check the game and press Start again when ready.";
+// A recoverable update failure can replace the worker while the GUI survives.
+// Request identities therefore outlive any one worker/session.
+static NEXT_START_REQUEST: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionKey {
     pub profile_id: Uuid,
     pub target: TargetToken,
+}
+/// A global F7 press is a request for the visible UI's save/validate/start path.
+/// The worker never decides that an old applied profile represents the draft.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StartRequest {
+    pub id: u64,
+    pub key: SessionKey,
+    pub revision: u64,
+    pub generation: u64,
+    pub requested_at: Instant,
+}
+impl StartRequest {
+    pub fn matches(self, key: Option<SessionKey>, revision: u64, generation: u64) -> bool {
+        key == Some(self.key)
+            && revision == self.revision
+            && generation == self.generation
+            && Instant::now()
+                .checked_duration_since(self.requested_at)
+                .is_some_and(|age| age <= Duration::from_secs(2))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PauseCause {
+    FocusLost,
+    WindowChanged,
+    StaleFrame,
+    CaptureInterrupted,
+    RuntimeFailure,
+}
+impl PauseCause {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::FocusLost => "Game lost focus",
+            Self::WindowChanged => "Game window changed",
+            Self::StaleFrame => "No fresh game image",
+            Self::CaptureInterrupted => "Capture interrupted",
+            Self::RuntimeFailure => "Runtime interrupted",
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PauseInfo {
+    pub cause: PauseCause,
+    pub details: String,
 }
 pub enum Command {
     TestNotification {
@@ -80,6 +130,10 @@ pub enum Command {
 pub struct RuntimeSnapshot {
     pub key: Option<SessionKey>,
     pub revision: u64,
+    /// A connection/mount acknowledgement is not proof of applied profile data.
+    pub applied_revision: Option<u64>,
+    pub start_request: Option<StartRequest>,
+    pub pause_info: Option<PauseInfo>,
     /// Worker-owned start gate for the current session's calibration draft review.
     pub calibration_review: bool,
     pub frame: Option<Frame>,
@@ -108,6 +162,7 @@ pub struct RuntimeSnapshot {
     pub attack_remaining: Option<f64>,
     pub activity_progress: Option<metin_core::ActivityProgress>,
     pub buff_presence: Vec<metin_core::Presence>,
+    pub buff_last_active_age_seconds: Vec<Option<f64>>,
     pub safety_scores: Vec<(Uuid, f64)>,
     pub recoveries: u32,
     pub notification_status: String,
@@ -120,6 +175,9 @@ impl Default for RuntimeSnapshot {
         Self {
             key: None,
             revision: 0,
+            applied_revision: None,
+            start_request: None,
+            pause_info: None,
             calibration_review: false,
             frame: None,
             geometry: None,
@@ -146,6 +204,7 @@ impl Default for RuntimeSnapshot {
             attack_remaining: None,
             activity_progress: None,
             buff_presence: Vec::new(),
+            buff_last_active_age_seconds: Vec::new(),
             safety_scores: vec![],
             recoveries: 0,
             notification_status: "No notifications sent.".into(),
@@ -272,9 +331,12 @@ impl RuntimeHandle {
             // queue still leaves input cancelled without claiming a data reset.
             self.stop.stop();
         }
+        self.enqueue(command, self.stop.generation())
+    }
+    fn enqueue(&self, command: Command, generation: u64) -> Result<(), String> {
         self.sender
             .try_send(Envelope {
-                generation: self.stop.generation(),
+                generation,
                 command,
             })
             .map_err(|e| match e {
@@ -284,6 +346,19 @@ impl RuntimeHandle {
     }
     pub fn stop(&self) {
         self.stop.stop();
+    }
+    pub fn stop_if_current(&self, expected: u64) -> Result<u64, String> {
+        self.stop
+            .stop_if_current(expected)
+            .ok_or_else(|| START_CANCELLED_REASON.into())
+    }
+    /// Preserve the caller's exact authority through queueing. In particular,
+    /// never stamp an Arm with the newer generation of an intervening F8.
+    pub fn arm_in_generation(&self, key: SessionKey, expected: u64) -> Result<(), String> {
+        if self.stop.cancelled(expected) {
+            return Err(START_CANCELLED_REASON.into());
+        }
+        self.enqueue(Command::Arm { key }, expected)
     }
     pub fn stop_generation(&self) -> u64 {
         self.stop.generation()
@@ -321,6 +396,7 @@ struct Attached {
     tracker: CandidateTracker,
     buffs: BuffDetector,
     revision: u64,
+    applied_revision: Option<u64>,
     preview: bool,
     calibration_review: bool,
     snapshot_requested: bool,
@@ -350,6 +426,7 @@ impl Attached {
             controller,
             template,
             revision,
+            applied_revision: None,
             preview: false,
             calibration_review: false,
             snapshot_requested: false,
@@ -380,6 +457,22 @@ fn recognition_for_capture<T: Default>(
             Ok(T::default())
         }
         Err(error) => Err(error.to_string()),
+    }
+}
+
+fn pause_after_failure(controller: &mut Controller, now: f64, error: &str, during_start: bool) {
+    let prior_event = controller.events.back().map(|event| event.id);
+    controller.pause_on_runtime_error(now, error);
+    if during_start {
+        // Repeating a failed explicit Start still needs a new event/alert,
+        // whereas ordinary paused repair captures must remain silent.
+        if controller.events.back().map(|event| event.id) == prior_event {
+            controller.event("Start interrupted", error, true);
+        }
+        if let Some(event) = controller.events.back_mut() {
+            event.notify = true;
+            event.destination = metin_core::EventDestination::Calibration;
+        }
     }
 }
 
@@ -416,6 +509,8 @@ fn run(
         let now = origin.elapsed().as_secs_f64();
         let mut generation = stop.generation();
         if observed_generation != generation {
+            snapshot.start_request = None;
+            snapshot.pause_info = None;
             observed_generation = generation;
             armed = None;
             if let Some(a) = &mut attached {
@@ -439,6 +534,8 @@ fn run(
                 // Retire cancellation received while the channel was asleep
                 // before applying a valid command from the new generation.
                 if generation != current_generation {
+                    snapshot.start_request = None;
+                    snapshot.pause_info = None;
                     generation = current_generation;
                     observed_generation = generation;
                     armed = None;
@@ -481,7 +578,14 @@ fn run(
                             snapshot.targets_revision += 1;
                         }
                         Command::Connect { key, revision } => {
+                            snapshot.applied_revision = None;
+                            if let Some(attached) = &mut attached {
+                                attached.applied_revision = None;
+                            }
+                            snapshot.start_request = None;
+                            snapshot.pause_info = None;
                             snapshot.buff_presence.clear();
+                            snapshot.buff_last_active_age_seconds.clear();
                             armed = None;
                             if attached.as_ref().is_some_and(|a| a.key == key) {
                                 executor
@@ -539,6 +643,7 @@ fn run(
                             let was_active = a.calibration_review;
                             a.calibration_review = active;
                             if active {
+                                snapshot.start_request = None;
                                 armed = None;
                                 focus_since = None;
                                 a.controller.pause(now, CALIBRATION_REVIEW_REASON);
@@ -567,7 +672,14 @@ fn run(
                             target,
                             revision,
                         } => {
+                            snapshot.applied_revision = None;
+                            if let Some(attached) = &mut attached {
+                                attached.applied_revision = None;
+                            }
+                            snapshot.start_request = None;
+                            snapshot.pause_info = None;
                             snapshot.buff_presence.clear();
+                            snapshot.buff_last_active_age_seconds.clear();
                             profile.validate().map_err(|e| e.to_string())?;
                             let key = SessionKey {
                                 profile_id: profile.id,
@@ -619,10 +731,15 @@ fn run(
                                     Controller::new(*profile)
                                 };
                             controller.running = false;
-                            attached = Some(Attached::new(key, controller, template, revision)?);
+                            let mut configured =
+                                Attached::new(key, controller, template, revision)?;
+                            configured.applied_revision = Some(revision);
+                            attached = Some(configured);
                             next_sample = Instant::now();
                         }
                         Command::Arm { key } => {
+                            snapshot.start_request = None;
+                            snapshot.pause_info = None;
                             let a = attached
                                 .as_ref()
                                 .filter(|a| a.key == key)
@@ -630,8 +747,13 @@ fn run(
                             if a.calibration_review {
                                 return Err(CALIBRATION_REVIEW_REASON.into());
                             }
+                            if a.applied_revision != Some(a.revision) {
+                                return Err(
+                                    "Apply the profile configuration before starting.".into()
+                                );
+                            }
                             if !a.controller.profile.ready() {
-                                return Err("Complete the calibration before starting.".into());
+                                return Err("Complete calibration before starting.".into());
                             }
                             if !backend.capabilities().automation_ready() {
                                 return Err(backend.capabilities().reason);
@@ -662,6 +784,10 @@ fn run(
                                 "Mount state declared; check the game before resuming.",
                             );
                             a.controller.buffs.mounted = Some(mounted);
+                            a.applied_revision = a
+                                .applied_revision
+                                .filter(|applied| *applied == a.revision)
+                                .map(|_| revision);
                             a.revision = revision;
                         }
                         Command::ResetSession { key } => {
@@ -676,6 +802,7 @@ fn run(
                             a.controller.reset_session(now);
                             a.snapshot_requested = false;
                             snapshot.buff_presence.clear();
+                            snapshot.buff_last_active_age_seconds.clear();
                             snapshot.activity_progress = None;
                         }
                         Command::ClearHistory { key } => {
@@ -701,6 +828,11 @@ fn run(
                     Ok(())
                 })();
                 if let Err(error) = result {
+                    snapshot.start_request = None;
+                    snapshot.pause_info = Some(PauseInfo {
+                        cause: PauseCause::RuntimeFailure,
+                        details: error.clone(),
+                    });
                     backend.stop_capture();
                     snapshot.arming = armed.is_some();
                     snapshot.state = "Error".into();
@@ -718,10 +850,13 @@ fn run(
         }
         let hotkeys = backend.hotkeys();
         if let Some(a) = &mut attached {
+            let mut failure_cause = PauseCause::RuntimeFailure;
             let result = (|| -> Result<(), String> {
                 a.controller.tick(origin.elapsed().as_secs_f64());
                 let events = hotkeys.map_err(|e| e.to_string())?;
                 if events.stop {
+                    snapshot.start_request = None;
+                    snapshot.pause_info = None;
                     stop.stop();
                     a.controller.pause(now, "Emergency stop (F8).");
                     armed = None;
@@ -739,23 +874,38 @@ fn run(
                     focus_since = None;
                 }
                 if a.controller.running && !state.foreground {
+                    snapshot.pause_info = Some(PauseInfo {
+                        cause: PauseCause::FocusLost,
+                        details: "The selected game is no longer in the foreground. Inputs have been released; check the window before starting again.".into(),
+                    });
                     a.controller.pause_on_runtime_error(
                         now,
-                        "Game lost focus. Press F7 in the game to resume.",
+                        "Game lost focus. Check the selected window before starting again.",
                     );
                     armed = None;
                 }
-                if events.toggle && !events.stop && state.foreground && !a.calibration_review {
-                    armed = None;
-                    if a.controller.running {
+                if events.toggle && !events.stop && !a.calibration_review {
+                    if a.controller.running || armed.is_some() {
+                        armed = None;
+                        snapshot.start_request = None;
+                        snapshot.pause_info = None;
                         a.controller.pause(now, "Paused (F7).");
                     } else {
-                        if !a.controller.profile.ready() {
-                            return Err("Complete calibration before starting.".into());
-                        }
-                        start_controller(&mut a.controller, now)?;
-                        a.tracker.reset();
-                        a.buffs.reset();
+                        let start_request_id = NEXT_START_REQUEST
+                            .try_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
+                                value.checked_add(1)
+                            })
+                            .map_err(
+                                |_| "Start request identity exhausted; restart the application.",
+                            )?
+                            + 1;
+                        snapshot.start_request = Some(StartRequest {
+                            id: start_request_id,
+                            key: a.key,
+                            revision: a.revision,
+                            generation,
+                            requested_at: Instant::now(),
+                        });
                     }
                     next_sample = Instant::now();
                 }
@@ -809,7 +959,10 @@ fn run(
                             tracing::debug!(%error, "Retrying capture while arming");
                             return Ok(());
                         }
-                        Err(error) => return Err(error.to_string()),
+                        Err(error) => {
+                            failure_cause = PauseCause::CaptureInterrupted;
+                            return Err(error.to_string());
+                        }
                     };
                 if captured.captured_at.elapsed() > Duration::from_millis(500) {
                     snapshot.geometry = None;
@@ -817,25 +970,29 @@ fn run(
                         focus_since = None;
                         return Ok(());
                     }
+                    failure_cause = PauseCause::StaleFrame;
                     return Err("The game frame is stale. Waiting for a fresh capture is required before input.".into());
                 }
                 executor
                     .poll_attack(backend.as_mut(), &stop, generation)
                     .map_err(|e| e.to_string())?;
                 let now = captured.captured_at.duration_since(origin).as_secs_f64();
+                // Check dimensions before recognition throughout the complete
+                // start countdown, so a resized client's references cannot fail
+                // first with a misleading template-size error.
+                if (a.controller.running || armed.is_some())
+                    && a.controller.profile.frame_size
+                        != Some([captured.frame.width, captured.frame.height])
+                {
+                    failure_cause = PauseCause::WindowChanged;
+                    return Err("The game dimensions changed. Recalibrate before resuming.".into());
+                }
                 if armed.is_some_and(|since| since.elapsed() >= ARM_START_DELAY)
                     && focus_since
                         .is_some_and(|since| since.elapsed() >= Duration::from_millis(500))
                     && captured.geometry.foreground
                     && captured.geometry == backend.inspect().map_err(|e| e.to_string())?
                 {
-                    if a.controller.profile.frame_size
-                        != Some([captured.frame.width, captured.frame.height])
-                    {
-                        return Err(
-                            "The game dimensions changed. Recalibrate before resuming.".into()
-                        );
-                    }
                     start_controller(&mut a.controller, origin.elapsed().as_secs_f64())?;
                     a.tracker.reset();
                     a.buffs.reset();
@@ -843,11 +1000,6 @@ fn run(
                     snapshot.released_generation = None;
                 }
                 let p = &a.controller.profile;
-                if a.controller.running
-                    && p.frame_size != Some([captured.frame.width, captured.frame.height])
-                {
-                    return Err("The game dimensions changed. Recalibrate before resuming.".into());
-                }
                 let allow_repair = !a.controller.running && armed.is_none();
                 let mut recognition_diagnostics = Vec::new();
                 let panel_match = recognition_for_capture(
@@ -897,6 +1049,7 @@ fn run(
                     .poll_attack(backend.as_mut(), &stop, generation)
                     .map_err(|e| e.to_string())?;
                 snapshot.buff_presence = states.clone();
+                snapshot.buff_last_active_age_seconds = a.buffs.last_active_ages(now);
                 let mut observation = metin_core::Observation {
                     ready: p.ready(),
                     candidates: stable,
@@ -909,13 +1062,19 @@ fn run(
                 if a.controller.running
                     && captured.captured_at.elapsed() > Duration::from_millis(500)
                 {
+                    failure_cause = PauseCause::StaleFrame;
                     return Err("The game frame became stale during recognition. Resume with a fresh capture.".into());
                 }
-                if a.controller.running
-                    && (!captured.geometry.foreground
-                        || backend.inspect().map_err(|e| e.to_string())? != captured.geometry)
-                {
-                    return Err("Window geometry or focus changed after capture.".into());
+                if a.controller.running {
+                    let verified = backend.inspect().map_err(|e| e.to_string())?;
+                    if !captured.geometry.foreground || !verified.foreground {
+                        failure_cause = PauseCause::FocusLost;
+                        return Err("Game focus changed after capture. Activate the selected game before starting again.".into());
+                    }
+                    if verified != captured.geometry {
+                        failure_cause = PauseCause::WindowChanged;
+                        return Err("Game window geometry changed after capture. Review its position and calibration before starting again.".into());
+                    }
                 }
                 if a.controller.running {
                     // WGC also sees client pixels behind the control panel or
@@ -1000,16 +1159,26 @@ fn run(
             })();
             let failed = result.is_err();
             if let Err(error) = result {
+                snapshot.pause_info = Some(PauseInfo {
+                    cause: failure_cause,
+                    details: error.clone(),
+                });
+                snapshot.start_request = None;
                 backend.stop_capture();
                 snapshot.geometry = None;
                 snapshot.released_generation = None;
-                a.controller
-                    .pause_on_runtime_error(origin.elapsed().as_secs_f64(), error);
+                pause_after_failure(
+                    &mut a.controller,
+                    origin.elapsed().as_secs_f64(),
+                    &error,
+                    armed.is_some(),
+                );
                 armed = None;
                 let _ = executor.release(backend.as_mut());
             }
             snapshot.key = Some(a.key);
             snapshot.revision = a.revision;
+            snapshot.applied_revision = a.applied_revision;
             snapshot.calibration_review = a.calibration_review;
             snapshot.running = a.controller.running;
             snapshot.update_activity(
@@ -1077,6 +1246,25 @@ fn run(
             snapshot.next_target = None;
         }
         snapshot.arming = armed.is_some();
+        if snapshot.applied_revision != Some(snapshot.revision) {
+            snapshot.candidates.clear();
+            snapshot.selected_target = None;
+            snapshot.next_target = None;
+            snapshot.panel_score = 0.;
+            snapshot.panel_match = None;
+            snapshot.buff_presence.clear();
+            snapshot.buff_last_active_age_seconds.clear();
+            snapshot.safety_scores.clear();
+            snapshot.timers.clear();
+            snapshot.action_timers.clear();
+            snapshot.active_skill = None;
+            snapshot.activity_progress = None;
+        }
+        if snapshot.start_request.is_some_and(|request| {
+            !request.matches(snapshot.key, snapshot.revision, stop.generation())
+        }) {
+            snapshot.start_request = None;
+        }
         if let Some(started) = armed {
             snapshot.update_activity(None, true, false, now);
             snapshot.activity_progress = Some(arming_progress(started.elapsed()));
@@ -1087,6 +1275,7 @@ fn run(
                 .is_none_or(|at| at.elapsed() > Duration::from_millis(500))
         {
             snapshot.buff_presence.clear();
+            snapshot.buff_last_active_age_seconds.clear();
             if let Some(a) = &mut attached {
                 a.buffs.reset();
             }
@@ -1141,6 +1330,63 @@ fn arming_progress(elapsed: Duration) -> metin_core::ActivityProgress {
 #[cfg(test)]
 mod schedule_tests {
     use super::*;
+    #[test]
+    fn arm_envelope_keeps_exact_authority_when_f8_follows_the_enqueue_check() {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let runtime = RuntimeHandle {
+            sender,
+            stop: StopToken::default(),
+            shutdown_flag: Arc::new(AtomicBool::new(false)),
+            latest: Arc::new(Mutex::new(Arc::new(RuntimeSnapshot::default()))),
+            thread: Mutex::new(None),
+        };
+        let key = SessionKey {
+            profile_id: Uuid::new_v4(),
+            target: TargetToken {
+                handle: 1,
+                pid: 2,
+                created: 3,
+            },
+        };
+        let ticket = runtime.stop_generation();
+        runtime.arm_in_generation(key, ticket).unwrap();
+        runtime.stop();
+        let envelope = receiver.try_recv().unwrap();
+        assert_eq!(envelope.generation, ticket);
+        assert!(runtime.stop.cancelled(envelope.generation));
+        assert!(matches!(envelope.command,Command::Arm {key:queued} if queued==key));
+        assert!(runtime.arm_in_generation(key, ticket).is_err());
+        assert!(receiver.try_recv().is_err());
+    }
+    #[test]
+    fn explicit_start_failures_notify_once_per_attempt_while_paused_repair_stays_silent() {
+        let mut controller = Controller::new(Profile::create("Failure presentation"));
+        pause_after_failure(
+            &mut controller,
+            0.,
+            "Template is larger than search region.",
+            false,
+        );
+        assert!(!controller.events.back().unwrap().notify);
+        let before = controller.events.back().unwrap().id;
+        pause_after_failure(
+            &mut controller,
+            1.,
+            "Template is larger than search region.",
+            true,
+        );
+        assert!(controller.events.back().unwrap().notify);
+        assert!(controller.events.back().unwrap().id > before);
+        let first = controller.events.back().unwrap().id;
+        pause_after_failure(
+            &mut controller,
+            2.,
+            "Template is larger than search region.",
+            true,
+        );
+        assert!(controller.events.back().unwrap().id > first);
+        assert!(controller.events.back().unwrap().notify);
+    }
     #[test]
     fn arming_countdown_switches_from_start_delay_to_remaining_focus_timeout() {
         for (elapsed, label, stage_elapsed, remaining, total) in [

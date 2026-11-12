@@ -112,6 +112,7 @@ struct Shared {
     selecting: AtomicBool,
     annotation: AtomicUsize,
     control_panel: Mutex<Option<ControlPanelLink>>,
+    panel_position: Mutex<Option<(TargetToken, crate::placement::PanelOffset)>>,
 }
 
 /// A bounded, nonblocking adapter. Dropping it closes all windows and joins its worker.
@@ -123,6 +124,14 @@ pub struct GameOverlay {
 }
 
 impl GameOverlay {
+    /// Latest worker-owned preferred offset, including moves not yet debounced.
+    pub fn panel_position(&self) -> Option<(TargetToken, crate::placement::PanelOffset)> {
+        *self
+            .shared
+            .panel_position
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+    }
     pub fn new() -> Result<Self, String> {
         let (commands, incoming) = mpsc::sync_channel(2);
         let (outgoing, events) = mpsc::sync_channel(2);
@@ -133,6 +142,7 @@ impl GameOverlay {
             selecting: AtomicBool::new(false),
             annotation: AtomicUsize::new(0),
             control_panel: Mutex::new(None),
+            panel_position: Mutex::new(None),
         });
         let state = shared.clone();
         let worker = thread::Builder::new()
@@ -408,8 +418,11 @@ impl Selection {
 
 struct PinnedPanel {
     link: ControlPanelLink,
-    right_offset: i64,
-    top_offset: i64,
+    offset: crate::placement::PanelOffset,
+    saved_offset: crate::placement::PanelOffset,
+    changed_at: Option<Instant>,
+    work_area: Option<[i32; 4]>,
+    size: Option<[u32; 2]>,
     geometry: Option<(i32, i32, u32, u32)>,
     position: Option<[i32; 2]>,
     pending_position_until: Option<Instant>,
@@ -432,8 +445,11 @@ impl PinnedPanel {
     fn new(link: ControlPanelLink) -> Self {
         Self {
             link,
-            right_offset: 12,
-            top_offset: 12,
+            offset: link.offset.unwrap_or_default(),
+            saved_offset: link.offset.unwrap_or_default(),
+            changed_at: None,
+            work_area: None,
+            size: None,
             geometry: None,
             position: None,
             pending_position_until: None,
@@ -520,7 +536,32 @@ impl PinnedPanel {
                 return;
             }
             let bounds = (target.left, target.top, target.width, target.height);
+            let target_rect = [
+                target.left,
+                target.top,
+                (i64::from(target.left) + i64::from(target.width))
+                    .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+                (i64::from(target.top) + i64::from(target.height))
+                    .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32,
+            ];
+            let size = [
+                (rect.right - rect.left).max(1) as u32,
+                (rect.bottom - rect.top).max(1) as u32,
+            ];
+            let dpi = GetDpiForWindow(window).max(96);
+            let monitor_area = |bounds: RECT| {
+                let monitor = MonitorFromRect(&bounds, MONITOR_DEFAULTTONEAREST);
+                let mut info: MONITORINFO = zeroed();
+                info.cbSize = size_of::<MONITORINFO>() as u32;
+                (GetMonitorInfoW(monitor, &mut info) != 0).then_some([
+                    info.rcWork.left,
+                    info.rcWork.top,
+                    info.rcWork.right,
+                    info.rcWork.bottom,
+                ])
+            };
             if self.geometry == Some(bounds) {
+                let size_changed = self.size != Some(size);
                 if self.position == Some([rect.left, rect.top]) {
                     self.pending_position_until = None;
                 } else if self
@@ -535,19 +576,37 @@ impl PinnedPanel {
                     .position
                     .is_some_and(|position| position != [rect.left, rect.top])
                 {
-                    self.right_offset =
-                        i64::from(target.left) + i64::from(target.width) - i64::from(rect.right);
-                    self.top_offset = i64::from(rect.top) - i64::from(target.top);
+                    self.offset = crate::placement::panel_offset(
+                        target_rect,
+                        [rect.left, rect.top, rect.right, rect.bottom],
+                        dpi,
+                    );
+                    self.changed_at = Some(Instant::now());
                     self.position = Some([rect.left, rect.top]);
                 }
-                return;
+                let work = monitor_area(rect);
+                if !size_changed && work == self.work_area {
+                    return;
+                }
+                self.work_area = work;
             }
-            let x = (i64::from(target.left) + i64::from(target.width)
-                - i64::from(rect.right - rect.left)
-                - self.right_offset)
-                .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
-            let y = (i64::from(target.top) + self.top_offset)
-                .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32;
+            let unbounded = crate::placement::place_panel(
+                target_rect,
+                size,
+                self.offset,
+                dpi,
+                [i32::MIN, i32::MIN, i32::MAX, i32::MAX],
+            );
+            let desired_rect = RECT {
+                left: unbounded[0],
+                top: unbounded[1],
+                right: unbounded[0].saturating_add(size[0] as i32),
+                bottom: unbounded[1].saturating_add(size[1] as i32),
+            };
+            let Some(work) = monitor_area(desired_rect) else {
+                return;
+            };
+            let [x, y] = crate::placement::place_panel(target_rect, size, self.offset, dpi, work);
             SetWindowPos(
                 window,
                 null_mut(),
@@ -558,6 +617,8 @@ impl PinnedPanel {
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS,
             );
             self.position = Some([x, y]);
+            self.size = Some(size);
+            self.work_area = Some(work);
             self.pending_position_until = Some(Instant::now() + Duration::from_millis(200));
             self.geometry = Some(bounds);
         }
@@ -610,6 +671,27 @@ impl Worker {
         {
             unsafe {
                 panel.sync();
+            }
+            *self
+                .shared
+                .panel_position
+                .lock()
+                .unwrap_or_else(|error| error.into_inner()) =
+                Some((panel.link.target, panel.offset));
+            if panel
+                .changed_at
+                .is_some_and(|time| time.elapsed() >= Duration::from_millis(350))
+                && panel.offset != panel.saved_offset
+                && self
+                    .events
+                    .try_send(OverlayEvent::PanelMoved {
+                        target: panel.link.target,
+                        offset: panel.offset,
+                    })
+                    .is_ok()
+            {
+                panel.saved_offset = panel.offset;
+                panel.changed_at = None;
             }
         }
     }
@@ -1615,6 +1697,7 @@ mod tests {
                 selecting: AtomicBool::new(false),
                 annotation: AtomicUsize::new(0),
                 control_panel: Mutex::new(None),
+                panel_position: Mutex::new(None),
             });
             let worker = Worker::new(shared, tx).unwrap();
             let during = AreDpiAwarenessContextsEqual(
@@ -1667,6 +1750,7 @@ mod tests {
             selecting: AtomicBool::new(false),
             annotation: AtomicUsize::new(0),
             control_panel: Mutex::new(None),
+            panel_position: Mutex::new(None),
         });
         unsafe {
             let mut worker = Worker::new(shared, tx).unwrap();
@@ -2133,6 +2217,7 @@ mod tests {
             selecting: AtomicBool::new(true),
             annotation: AtomicUsize::new(0),
             control_panel: Mutex::new(None),
+            panel_position: Mutex::new(None),
         });
         unsafe {
             let mut worker = Worker::new(shared, tx).unwrap();
@@ -2176,6 +2261,7 @@ mod tests {
             selecting: AtomicBool::new(false),
             annotation: AtomicUsize::new(0),
             control_panel: Mutex::new(None),
+            panel_position: Mutex::new(None),
         });
         unsafe {
             let worker = Worker::new(shared, tx).unwrap();
@@ -2255,6 +2341,7 @@ mod tests {
             selecting: AtomicBool::new(false),
             annotation: AtomicUsize::new(0),
             control_panel: Mutex::new(None),
+            panel_position: Mutex::new(None),
         });
         unsafe {
             let fixture = Worker::new(shared, tx).unwrap();
@@ -2307,6 +2394,7 @@ mod tests {
                 .set_control_panel(Some(ControlPanelLink {
                     window: panel as usize,
                     target: token,
+                    offset: None,
                 }))
                 .unwrap();
             wait_fixture(|| {
@@ -2354,6 +2442,48 @@ mod tests {
                 let mut rect = zeroed();
                 GetWindowRect(panel, &mut rect) != 0 && [rect.left, rect.top] == [460, 270]
             });
+            // Expanding a strip near the bottom must keep every control reachable.
+            let mut monitor: MONITORINFO = zeroed();
+            monitor.cbSize = size_of::<MONITORINFO>() as u32;
+            assert_ne!(
+                GetMonitorInfoW(
+                    MonitorFromWindow(panel, MONITOR_DEFAULTTONEAREST),
+                    &mut monitor
+                ),
+                0
+            );
+            SetWindowPos(
+                panel,
+                null_mut(),
+                460,
+                monitor.rcWork.bottom - 48,
+                200,
+                42,
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+            pump_fixture_for(Duration::from_millis(400));
+            let preferred_before_expand = overlay.panel_position().expect("preferred strip offset");
+            SetWindowPos(
+                panel,
+                null_mut(),
+                0,
+                0,
+                200,
+                480,
+                SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+            pump_fixture_for(Duration::from_millis(400));
+            let mut expanded: RECT = zeroed();
+            assert_ne!(GetWindowRect(panel, &mut expanded), 0);
+            assert!(
+                expanded.bottom <= monitor.rcWork.bottom,
+                "Expanded panel must be re-clamped into the monitor work area"
+            );
+            assert_eq!(
+                overlay.panel_position(),
+                Some(preferred_before_expand),
+                "Automatic reflow must not overwrite the preferred position used on shutdown"
+            );
             ShowWindow(target, SW_MINIMIZE);
             wait_fixture(|| IsWindowVisible(panel) == 0);
             ShowWindow(target, SW_SHOWNOACTIVATE);
@@ -2371,6 +2501,7 @@ mod tests {
                 .set_control_panel(Some(ControlPanelLink {
                     window: panel as usize,
                     target: token,
+                    offset: None,
                 }))
                 .unwrap();
             pump_fixture_for(Duration::from_millis(100));
@@ -2395,6 +2526,7 @@ mod tests {
                 .set_control_panel(Some(ControlPanelLink {
                     window: panel as usize,
                     target: token,
+                    offset: None,
                 }))
                 .unwrap();
             pump_fixture_for(Duration::from_millis(100));
@@ -2468,6 +2600,7 @@ mod tests {
             selecting: AtomicBool::new(false),
             annotation: AtomicUsize::new(0),
             control_panel: Mutex::new(None),
+            panel_position: Mutex::new(None),
         });
         let seconds = std::env::var("METIN_OVERLAY_FIXTURE_SECONDS")
             .ok()
@@ -2648,6 +2781,9 @@ mod tests {
                 thread::sleep(Duration::from_millis(16));
             };
             let report = match &event {
+                OverlayEvent::PanelMoved { target, offset } => {
+                    serde_json::json!({"result":"panel_moved","target":format!("{target:?}"),"offset":offset})
+                }
                 OverlayEvent::Selected { id, region, point } => {
                     serde_json::json!({"result":"selected","id":id,"kind":format!("{kind:?}"),"region":region,"point":point,"pixels":region.map(|r|r.pixels(width,height)),"width":width,"height":height})
                 }

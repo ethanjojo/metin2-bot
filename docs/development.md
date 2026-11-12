@@ -232,3 +232,17 @@ Window capture retains one implicit MTA usage cookie for the process, matching w
 For a complete visual pass, use `./tools/capture-docs.ps1 -OutputDirectory build/ui-refresh-qa -IncludeAllPages`. The extra Settings/Safety pages remain QA artifacts; copy only documented views to `docs/assets`. Screenshot constructors suppress automatic network checks; update views use explicit inert fixtures.
 
 The installer progress channel is a bounded newline-framed append-only stream (`installer-progress.jsonl`): the installer opens it with `FILE_APPEND_DATA` and explicit read/write/delete sharing. Inno's convenience file writer requires exclusive access and must not be used for this channel. Readers consume only the newest complete line, keep the previous valid record during partial appends, and enforce 4 KiB records / 64 KiB stream limits. The native callback fixture retains a real shared reader throughout all writes to catch sharing regressions.
+
+
+### QoL state ownership
+
+Global F7 creates a short-lived StartRequest bound to session, revision and stop generation. The same GUI start method handles F7 and the primary button: validate the current draft, save only when dirty, then Arm. Process-wide request IDs prevent replays across worker replacement; requests expire after 2 seconds and cannot survive stale generations. F8/release remains worker-owned and immediate. Runtime synchronization runs from eframe App::logic, which is also ticked while the native window is hidden/minimized; it does not depend on painting.
+
+Read-only recognition checks use the same matcher as live recognition and accept only a newly requested, current-revision, same-target, correctly sized image. Named ExcludedArea objects own both name and region; plain legacy regions deserialize into named objects and serialize only in the canonical form. Portable profile packages use a bounded schema JSON document, not archive extraction. Their import validates settings/assets before storing a fresh identity through ProfileStore.
+
+PinnedPanel retains DPI-normalized client-relative offsets. UI settings own bounded process/title/instance-keyed saved positions. The native worker emits stable drag updates; settings writes are debounced, while monitor/size reflow preserves the preferred offset. Standalone geometry, settings roundtrip and the explicit owned-window pin fixture cover placement, including bottom-edge collapse/expand.
+
+
+Save & Start keeps the original cancellation generation through disk writes. A compare/exchange permits only its own apply-stop to advance that ticket; F8 cancels it. Saved changes can still be applied paused after cancellation, but Arm is enqueued with the exact accepted generation and cannot be restamped to supersede a later stop. The worker separately acknowledges applied_revision; Connect alone never authorizes old controller settings, and mount confirmation cannot promote a pending configuration. Raw repair images and mount acknowledgement remain available while derived vision and timers wait for that acknowledgement.
+
+Pinned position writes remain debounced, but shutdown reads the worker's latest preferred offset before flushing UI settings, so a recent drag is not lost merely because its notification timer has not expired. Monitor clamping and expand/collapse reflow never replace that preferred offset.

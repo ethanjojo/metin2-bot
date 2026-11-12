@@ -34,6 +34,7 @@ impl MetinApp {
             && self.snapshot.key.is_some()
             && self.snapshot.key == self.key()
             && self.snapshot.revision == self.revision
+            && self.snapshot.applied_revision == Some(self.revision)
             && !self.editor.dirty())
         .then_some(self.snapshot.active_skill)
         .flatten()
@@ -110,17 +111,60 @@ impl MetinApp {
                                     )
                                 })
                             });
-                        let subtitle = countdown.as_deref().unwrap_or(&self.snapshot.reason);
-                        ui.add(
-                            egui::Label::new(egui::RichText::new(subtitle).size(12.)).truncate(),
-                        )
-                        .on_hover_text(&self.snapshot.reason);
+                        let pause = self
+                            .snapshot
+                            .pause_info
+                            .as_ref()
+                            .filter(|_| !self.snapshot.running && !self.snapshot.arming);
+                        let subtitle = countdown.as_deref().unwrap_or_else(|| {
+                            pause.map_or(self.snapshot.reason.as_str(), |info| info.cause.label())
+                        });
+                        ui.add(egui::Label::new(egui::RichText::new(subtitle).size(12.)).wrap())
+                            .on_hover_text(&self.snapshot.reason);
                     },
                 );
             });
+            if let Some(info) = self
+                .snapshot
+                .pause_info
+                .clone()
+                .filter(|_| !self.snapshot.running && !self.snapshot.arming)
+            {
+                ui.add(egui::Label::new(&info.details).wrap());
+                let action = match info.cause {
+                    crate::runtime::PauseCause::WindowChanged => "Review recognition",
+                    crate::runtime::PauseCause::RuntimeFailure => "Open diagnostics",
+                    _ => "Check window",
+                };
+                if widgets::plain_button(ui, action).clicked() {
+                    match info.cause {
+                        crate::runtime::PauseCause::WindowChanged => {
+                            self.navigate(Tab::Calibration)
+                        }
+                        crate::runtime::PauseCause::RuntimeFailure => {
+                            self.navigate(Tab::Settings);
+                            self.settings_page = SettingsPage::Diagnostics;
+                        }
+                        _ => self.open_window_chooser(),
+                    }
+                }
+                egui::CollapsingHeader::new("Details")
+                    .id_salt("run-pause-details")
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::Label::new(format!(
+                                "{} · revision {} · frame {}",
+                                info.cause.label(),
+                                self.snapshot.revision,
+                                self.snapshot.frame_id
+                            ))
+                            .wrap(),
+                        );
+                    });
+            }
             ui.horizontal(|ui| {
                 if !self.snapshot.running && !self.snapshot.arming && self.start_blocker().is_none() {
-                    widgets::badge(ui, "Ready", widgets::GREEN);
+                    widgets::badge(ui, "Setup complete", widgets::GREEN);
                 } else if self.snapshot.schedule.break_ends_in.is_none() && self.snapshot.attack_remaining.is_none() {
                     let targets = self.snapshot.candidates.len();
                     ui.label(egui::RichText::new(format!("{targets} found")).small().color(ui.visuals().weak_text_color()))
@@ -274,6 +318,22 @@ impl MetinApp {
             .is_some_and(|response| response.clicked())
             {
                 open = Some(ScheduleLink::Actions);
+            }
+            if self.snapshot.key != self.key()
+                || self.key().is_none()
+                || self.snapshot.applied_revision != Some(self.revision)
+                || self.editor.dirty()
+            {
+                ui.add(
+                    egui::Label::new(
+                        egui::RichText::new(
+                            "Start will apply the profile before showing live action timers.",
+                        )
+                        .small(),
+                    )
+                    .wrap(),
+                );
+                return;
             }
             for timer in &self.snapshot.action_timers {
                 let puller = timer.key == metin_core::ScheduledKey::Puller;

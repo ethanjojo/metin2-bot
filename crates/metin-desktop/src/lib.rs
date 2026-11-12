@@ -25,3 +25,4 @@ pub fn build_info() -> serde_json::Value {
 }
 
 pub mod notifications;
+pub mod placement;

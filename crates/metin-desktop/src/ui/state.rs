@@ -112,6 +112,8 @@ impl MetinApp {
         self.selected_safety = 0;
         self.visual_detail = false;
         self.selected_periodic = None;
+        self.actions_detail = false;
+        self.buff_detail = false;
         self.icon_textures.clear();
         if let Err(error) = self.configure() {
             self.error = Some(error);
@@ -330,29 +332,6 @@ impl MetinApp {
     }
     pub(super) fn navigate(&mut self, tab: Tab) {
         if self.tab != tab {
-            if tab == Tab::Actions {
-                self.actions_page = if self
-                    .editor
-                    .profile
-                    .loot
-                    .validate(&self.editor.profile)
-                    .is_err()
-                {
-                    ActionsPage::Loot
-                } else if self.editor.profile.buffs.enabled && self.declared_mount().is_none() {
-                    ActionsPage::Mount
-                } else if self.editor.profile.buffs.validate().is_err()
-                    || !self.editor.profile.buffs.ready()
-                {
-                    ActionsPage::Buffs
-                } else if let Err(issue) =
-                    metin_core::validate_scheduled_setup(&self.editor.profile)
-                {
-                    scheduled_page(issue.group)
-                } else {
-                    self.actions_page
-                };
-            }
             if tab == Tab::Settings && !self.snapshot.capabilities.automation_ready() {
                 self.settings_page = SettingsPage::Diagnostics;
             }

@@ -30,6 +30,15 @@ try {
         @{name='collapsed';tab='run';collapsed=$true},
         @{name='profile-menu';tab='run';run='looting';profile_menu=$true},
         @{name='profile-rename';tab='run';run='looting';profile_menu=$true;rename=$true},
+        @{name='unsaved-changes';tab='run';run='looting';qol='changes'},
+        @{name='profile-import';tab='run';run='looting';qol='import'},
+        @{name='recognition-check';tab='calibration';qol='recognition'},
+        @{name='buff-recognition-check';tab='actions';actions='buffs';buff_detail=$true;qol='recognition'},
+        @{name='run-paused';tab='run';run='stopped';qol='paused'},
+        @{name='ui-scale-150';tab='settings';settings='appearance';zoom=1.5;small=$true;qa=$true},
+        @{name='changes-small-150';tab='run';run='looting';qol='changes';zoom=1.5;small=$true;qa=$true},
+        @{name='import-small-150';tab='run';run='looting';qol='import';zoom=1.5;small=$true;qa=$true},
+        @{name='buff-check-small-150';tab='actions';actions='buffs';buff_detail=$true;qol='recognition';zoom=1.5;small=$true;qa=$true},
         @{name='run-setup';tab='run';run='uncalibrated'},
         @{name='run-break';tab='run';run='break'},
         @{name='event-history';tab='run';run='history';small=$true},
@@ -76,6 +85,8 @@ try {
         if ($case.buff_icon_picker) { $arguments += '--ui-buff-icon-picker' }
         if ($case.profile_menu) { $arguments += '--ui-profile-menu' }
         if ($case.rename) { $arguments += '--ui-profile-rename' }
+        if ($case.qol) { $arguments += @('--ui-qol',$case.qol) }
+        if ($case.zoom) { $arguments += @('--ui-zoom',([string]$case.zoom).Replace(',','.')) }
         if ($case.size_review) { $arguments += '--ui-size-review' }
         if ($case.run) { $arguments += @('--ui-run-state',$case.run) }
         if ($case.updates) { $arguments += @('--ui-updates',$case.updates) }

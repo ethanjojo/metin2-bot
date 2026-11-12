@@ -260,12 +260,15 @@ mod tests {
             right: 1.,
             bottom: 1.,
         });
-        profile.masks.push(Region {
-            left: 0.34,
-            top: 0.1,
-            right: 0.46,
-            bottom: 0.4,
-        });
+        profile.masks.push(
+            Region {
+                left: 0.34,
+                top: 0.1,
+                right: 0.46,
+                bottom: 0.4,
+            }
+            .into(),
+        );
         profile.color = Some(metin_core::ColorConfig {
             hue_tolerance: 4,
             saturation_tolerance: 20,

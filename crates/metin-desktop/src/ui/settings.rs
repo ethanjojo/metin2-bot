@@ -97,7 +97,24 @@ impl MetinApp {
         let mut changed = false;
         widgets::first_section(ui, "Interface", |ui| {
             ui.label("UI scale");
-            changed|=ui.add(egui::Slider::new(&mut self.settings.ui_scale,0.75..=1.5).step_by(0.05).show_value(true)).on_hover_text("Scales text and controls. The window can be resized; scroll areas keep settings accessible.").changed();
+            let mut percent = (self.settings.ui_scale * 100.).round() as u32;
+            let scale_controls = ui.horizontal(|ui| {
+                ui.spacing_mut().slider_width = (ui.available_width()-160.).max(50.);
+                changed |= ui.add(egui::Slider::new(&mut percent,75..=150).step_by(5.).suffix(" %")).on_hover_text("Scales text and controls from 75% to 150%. The window can be resized; scroll areas keep settings accessible.").changed();
+                if widgets::button(ui,widgets::Icon::Revert,"100%",percent != 100,"Reset UI scale to 100%").clicked() {
+                    percent = 100;
+                    changed = true;
+                }
+            }).response;
+            #[cfg(feature = "ui-smoke")]
+            if self.smoke.is_some() && self.settings.ui_scale > 1. {
+                scale_controls.scroll_to_me(Some(egui::Align::Center));
+            }
+            #[cfg(not(feature = "ui-smoke"))]
+            let _ = scale_controls;
+            if changed {
+                self.settings.ui_scale = percent as f32 / 100.;
+            }
         });
         section(ui, "Overlay rendering", |ui| {
             changed|=ui.checkbox(&mut self.settings.lite_mode,"Lite Mode").on_hover_text("Draws overlay changes at most once per second. Freshness checks remain active; detection sampling, scheduling and input safety are unchanged.").changed();

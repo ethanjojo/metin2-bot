@@ -29,7 +29,7 @@ pub fn detect_candidates_excluding(
     let mut masks: Vec<_> = profile
         .masks
         .iter()
-        .map(|r| r.pixels(image.width, image.height))
+        .map(|area| area.region.pixels(image.width, image.height))
         .collect();
     if let Some(found) = matched_detail {
         masks.push(found.bounds());
@@ -180,7 +180,11 @@ impl TemplateMatch {
     }
 }
 
-fn match_template(image: &Frame, template: &Frame, grayscale: bool) -> Result<TemplateMatch> {
+pub(crate) fn match_template(
+    image: &Frame,
+    template: &Frame,
+    grayscale: bool,
+) -> Result<TemplateMatch> {
     if template.width > image.width || template.height > image.height {
         return Err(crate::VisionError::Invalid(
             "Template is larger than search region.".into(),

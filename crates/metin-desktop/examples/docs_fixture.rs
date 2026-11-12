@@ -84,7 +84,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     profile.id = uuid::Uuid::from_u128(1);
     profile.frame_size = Some([960, 600]);
     profile.region = Some(region([70, 110, 730, 405]));
-    profile.masks = vec![region([820, 25, 125, 140]), region([290, 525, 380, 60])];
+    profile.masks = vec![
+        metin_core::ExcludedArea::new("Minimap", region([820, 25, 125, 140])),
+        metin_core::ExcludedArea::new("Chat", region([290, 525, 380, 60])),
+    ];
     profile.color = Some(ColorConfig::default());
     profile.template_region = Some(region([344, 30, 24, 24]));
     profile.buffs.enabled = true;

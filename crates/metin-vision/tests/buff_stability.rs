@@ -45,6 +45,23 @@ fn fixture() -> (BuffConfig, Frame, Frame, Frame) {
 fn detector(config: BuffConfig, frame: &Frame) -> BuffDetector {
     BuffDetector::new(config, [frame.width, frame.height], 0.25).unwrap()
 }
+#[test]
+fn read_only_diagnostic_uses_actual_appearance_thresholds_without_extending_active_hold() {
+    let (config, active, inactive, weak) = fixture();
+    let diagnostic = metin_vision::inspect_buff(&active, &config, 0).unwrap();
+    assert!(diagnostic.active_match);
+    assert!(diagnostic.active_score.unwrap() >= metin_vision::BUFF_MATCH_THRESHOLD);
+    let uncertain = metin_vision::inspect_buff(&weak, &config, 0).unwrap();
+    assert!(!uncertain.active_match && !uncertain.inactive_match);
+    assert!(uncertain.active_score.unwrap() < metin_vision::BUFF_MATCH_THRESHOLD);
+    let inactive_check = metin_vision::inspect_buff(&inactive, &config, 0).unwrap();
+    assert!(inactive_check.inactive_match);
+    let mut detector = detector(config, &active);
+    detector.observe(&active, 0.).unwrap();
+    assert_eq!(detector.last_active_ages(0.7), vec![Some(0.7)]);
+    detector.reset();
+    assert_eq!(detector.last_active_ages(0.8), vec![None]);
+}
 
 #[test]
 fn zero_disables_hold_and_custom_duration_is_per_skill() {

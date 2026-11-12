@@ -321,6 +321,7 @@ fn active_buff_artwork_rejects_other_sessions_revisions_and_draft_order() {
     app.snapshot = Arc::new(RuntimeSnapshot {
         key: app.key(),
         revision: app.revision,
+        applied_revision: Some(app.revision),
         activity: metin_core::ActivityKind::Buffing,
         active_skill: Some(1),
         ..Default::default()
@@ -718,7 +719,7 @@ fn compact_actions_list_and_skill_details_preserve_profile_through_back_navigati
     assert!(app.buff_detail);
     let output = compact_settle(&mut app, &ctx, size);
     assert!(text_regions(&output).iter().any(|(text, _)| text == "Aura"));
-    compact_click(&mut app, &ctx, size, "Back to Buffs");
+    compact_click(&mut app, &ctx, size, "Buffs");
     assert!(!app.buff_detail);
     // The back row is in the content panel; the tab carries the same label.
     let output = compact_settle(&mut app, &ctx, size);
@@ -1005,6 +1006,7 @@ fn compact_running_overview_shows_schedule_and_recent_events_without_scrolling()
     let snapshot = Arc::new(RuntimeSnapshot {
         key: app.key(),
         revision: app.revision,
+        applied_revision: Some(app.revision),
         running: true,
         state: "Looting".into(),
         activity_progress: Some(metin_core::ActivityProgress {
@@ -1438,6 +1440,7 @@ fn compact_run_schedule_truncates_long_names_without_losing_click_targets() {
         snapshot: Arc::new(RuntimeSnapshot {
             key: app.key(),
             revision: app.revision,
+        applied_revision: Some(app.revision),
             running: true,
             state: "Searching".into(),
             action_timers: vec![metin_core::ActionTimer {
@@ -1607,6 +1610,7 @@ fn compact_skill_bars_use_regular_intervals_and_fresh_presence_without_editing()
     let mut snapshot = RuntimeSnapshot {
         key: app.key(),
         revision: app.revision,
+        applied_revision: Some(app.revision),
         timers: vec![Some(60.), None],
         buff_presence: vec![metin_core::Presence::Unknown, metin_core::Presence::Active],
         captured_at: Some(std::time::Instant::now()),
@@ -1715,7 +1719,9 @@ fn recent_activity_uses_only_whole_rows_and_fills_available_height() {
 #[test]
 fn recent_activity_does_not_load_more_rows_when_other_run_sections_scroll() {
     let (mut app, ctx, _dir) = setup();
+    app.target=Some(window_catalog()[0].token);
     app.snapshot = Arc::new(RuntimeSnapshot {
+        key:app.key(),revision:app.revision,applied_revision:Some(app.revision),
         running: true,
         action_timers: (0..30)
             .map(|i| metin_core::ActionTimer {

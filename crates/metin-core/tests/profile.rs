@@ -1,6 +1,42 @@
 use metin_core::{Profile, Region, Shortcut};
 
 #[test]
+fn legacy_exclusions_gain_names_without_changing_geometry() {
+    let mut saved = serde_json::to_value(Profile::create("Existing profile")).unwrap();
+    let regions = serde_json::json!([
+        {"left":0.1,"top":0.2,"right":0.3,"bottom":0.4},
+        {"left":0.5,"top":0.6,"right":0.7,"bottom":0.8}
+    ]);
+    saved["masks"] = regions.clone();
+    let migrated = Profile::from_json(&saved.to_string()).unwrap();
+    let canonical = serde_json::to_value(&migrated).unwrap();
+    assert_eq!(canonical["masks"][0]["name"], "Excluded area 1");
+    assert_eq!(canonical["masks"][1]["name"], "Excluded area 2");
+    assert_eq!(canonical["masks"][0]["region"], regions[0]);
+    assert_eq!(canonical["masks"][1]["region"], regions[1]);
+    assert_eq!(
+        Profile::from_json(&canonical.to_string()).unwrap(),
+        migrated
+    );
+}
+
+#[test]
+fn named_exclusions_reject_blank_control_and_oversized_names() {
+    let mut saved = serde_json::to_value(Profile::create("Named exclusions")).unwrap();
+    for name in [
+        "".to_owned(),
+        " ".to_owned(),
+        "Chat\nwindow".to_owned(),
+        "a".repeat(81),
+    ] {
+        saved["masks"] = serde_json::json!([{"name":name,"region":{"left":0.1,"top":0.2,"right":0.3,"bottom":0.4}}]);
+        assert!(Profile::from_json(&saved.to_string()).is_err(), "{name:?}");
+    }
+    saved["masks"][0]["name"] = serde_json::json!("Chat");
+    assert!(Profile::from_json(&saved.to_string()).is_ok());
+}
+
+#[test]
 fn display_icons_allow_only_the_complete_four_class_catalog() {
     let mut count = 0;
     for id in 0..=u16::MAX {
@@ -121,12 +157,15 @@ fn saved_hp_search_bounds_are_discarded_without_changing_other_configuration() {
         right: 0.2,
         bottom: 0.2,
     });
-    canonical.masks.push(Region {
-        left: 0.7,
-        top: 0.7,
-        right: 0.9,
-        bottom: 0.9,
-    });
+    canonical.masks.push(
+        Region {
+            left: 0.7,
+            top: 0.7,
+            right: 0.9,
+            bottom: 0.9,
+        }
+        .into(),
+    );
     canonical.panel.threshold = 0.93;
     canonical.panel.stable_frames = 4;
     canonical.validate().unwrap();

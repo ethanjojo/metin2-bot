@@ -1,5 +1,43 @@
 use metin_core::{Profile, Region};
 use metin_desktop::editor::{EditMode, Editor};
+
+#[test]
+fn named_exclusion_rename_geometry_edit_delete_and_undo_preserve_identity() {
+    let mut editor = Editor::new(metin_core::Profile::create("Named exclusions"), None);
+    editor.freeze(distinctive_frame(0)).unwrap();
+    editor
+        .set_region(EditMode::Mask(None), area(0.1, 0.1, 0.2, 0.2))
+        .unwrap();
+    editor
+        .set_region(EditMode::Mask(None), area(0.3, 0.3, 0.4, 0.4))
+        .unwrap();
+    editor.rename_excluded_area(0, "  Minimap  ").unwrap();
+    assert_eq!(editor.profile.masks[0].name, "Minimap");
+    editor
+        .set_region(EditMode::Mask(Some(0)), area(0.2, 0.2, 0.3, 0.3))
+        .unwrap();
+    assert_eq!(editor.profile.masks[0].name, "Minimap");
+    assert_eq!(
+        editor.region(EditMode::Mask(Some(0))),
+        Some(area(0.2, 0.2, 0.3, 0.3))
+    );
+    editor.delete(EditMode::Mask(Some(0))).unwrap();
+    assert_eq!(editor.profile.masks[0].name, "Excluded area 2");
+    editor.undo();
+    assert_eq!(editor.profile.masks[0].name, "Minimap");
+    assert_eq!(editor.profile.masks[1].name, "Excluded area 2");
+    let before = editor.profile.clone();
+    for name in ["", "Chat\nbox", &"a".repeat(81)] {
+        assert!(editor.rename_excluded_area(0, name).is_err());
+        assert_eq!(editor.profile, before);
+    }
+    editor.undo();
+    assert_eq!(editor.profile.masks[0].name, "Minimap");
+    editor.undo();
+    assert_eq!(editor.profile.masks[0].name, "Excluded area 1");
+    editor.redo();
+    assert_eq!(editor.profile.masks[0].name, "Minimap");
+}
 use metin_platform::Frame;
 fn distinctive_frame(shift: u8) -> Frame {
     Frame::new(

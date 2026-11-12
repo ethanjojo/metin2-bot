@@ -146,10 +146,6 @@ impl MetinApp {
                 let response = widgets::tab(ui, label, width, selected, hint);
                 if response.clicked() {
                     self.history_open = false;
-                    if tab == Tab::Actions {
-                        self.actions_detail = false;
-                        self.buff_detail = false;
-                    }
                     self.navigate(tab);
                 }
             }
@@ -169,7 +165,7 @@ impl MetinApp {
             } else if let Some(blocker) = &blocker {
                 blocker.message.as_str()
             } else if dirty {
-                "Save all profile edits and start after the three-second countdown. F7 starts the currently applied profile; it does not save these edits."
+                "Save all profile edits and start after the three-second countdown. F7 performs the same Save & Start action."
             } else {
                 "Start after the three-second countdown. F7 also starts."
             };
@@ -183,10 +179,7 @@ impl MetinApp {
             if response.clicked() {
                 if busy { self.runtime.stop(); }
                 else {
-                    match self.save() {
-                        Ok(()) => if let Some(key) = self.key() { self.send(Command::Arm { key }); },
-                        Err(error) => self.error = Some(error),
-                    }
+                    if let Err(error) = self.start_profile() { self.error = Some(error); }
                 }
             }
             self.footer_mount_switch(ui);

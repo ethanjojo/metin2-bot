@@ -22,7 +22,6 @@ impl MetinApp {
                 return;
             }
             let Some(index)=self.selected_periodic.and_then(|id|self.editor.profile.periodic_actions.iter().position(|action|action.id==id))else{self.selected_periodic=None;return;};
-            if button(ui,Icon::Back,"Back to Periodic",true,"Return to the action list; edits are retained.").clicked(){self.selected_periodic=None;self.binding=None;return;}
             let id=self.editor.profile.periodic_actions[index].id;
             let title=self.editor.profile.periodic_actions[index].name.clone();
             widgets::icon_heading(ui,widgets::Icon::Clock,&title,"Configure the input before enabling. Periodic actions wait for a safe state between targets.");

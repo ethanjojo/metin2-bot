@@ -1,5 +1,6 @@
 use super::*;
 use widgets::{Icon, button};
+mod excluded_areas;
 impl MetinApp {
     pub(super) fn calibration_view(&mut self, ui: &mut egui::Ui) {
         if self.editor.is_recalibrating() {
@@ -40,17 +41,11 @@ impl MetinApp {
                     if mode==EditMode::Template && let Some(image)=self.editor.template.clone() {
                         self.reference_thumbnail(ui, &image);
                         ui.small(format!("Fixed detail · {} × {} px",image.width,image.height));
+                        self.recognition_check_controls(ui, recognition_check::RecognitionSubject::HpPanel);
                     }
                 }
                 ui.separator(); ui.strong("Excluded areas");
-                for index in 0..self.editor.profile.masks.len() {
-                    let mut remove=false;
-                    ui.horizontal(|ui| {
-                        if ui.selectable_label(self.mode==EditMode::Mask(Some(index)),format!("Excluded area {}",index+1)).clicked() {self.edit_area(EditMode::Mask(Some(index)));}
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center),|ui| {remove=widgets::small_icon_button(ui,Icon::Trash,true,"Delete this excluded area. Undo restores it.").clicked();});
-                    });
-                    if remove {self.delete_area(EditMode::Mask(Some(index)));break;}
-                }
+                self.excluded_areas(ui);
                 if button(ui,Icon::Plus,"Draw excluded area",self.editor.profile.masks.len()<30,"Draw an excluded rectangle directly over a fresh game image.").clicked() {self.edit_area(EditMode::Mask(None));}
                 ui.separator();
                 let overlay = ui.vertical(|ui| self.overlay_controls(ui)).response;

@@ -61,6 +61,9 @@ impl Editor {
     pub(crate) fn saved_profile(&self) -> &Profile {
         &self.saved.profile
     }
+    pub(crate) fn template_changed(&self) -> bool {
+        self.template != self.saved.template
+    }
     /// A committed metadata rename must not save or undo unrelated draft edits.
     pub(crate) fn apply_saved_name(&mut self, name: &str) {
         self.profile.name = name.into();
@@ -139,6 +142,19 @@ impl Editor {
     pub fn can_redo(&self) -> bool {
         self.index + 1 < self.history.len()
     }
+    pub fn rename_excluded_area(&mut self, index: usize, name: &str) -> Result<()> {
+        let area = self
+            .profile
+            .masks
+            .get(index)
+            .ok_or("The excluded area no longer exists.")?;
+        let mut renamed = area.clone();
+        renamed.name = name.trim().to_owned();
+        renamed.validate().map_err(|error| error.to_string())?;
+        self.profile.masks[index] = renamed;
+        self.record();
+        Ok(())
+    }
     /// Attach source pixels without ever retiring calibration implicitly.
     pub fn freeze(&mut self, frame: Frame) -> Result<()> {
         let size = [frame.width, frame.height];
@@ -195,7 +211,7 @@ impl Editor {
                 .and_then(|r| r.reference.as_ref())
                 .and_then(|r| r.region),
             EditMode::World => self.profile.region,
-            EditMode::Mask(Some(i)) => self.profile.masks.get(i).copied(),
+            EditMode::Mask(Some(i)) => self.profile.masks.get(i).map(|area| area.region),
             EditMode::Template => self.profile.template_region,
             EditMode::BuffArea => self.profile.buffs.icon_region,
             EditMode::BuffIcon { index, inactive } => self
@@ -288,9 +304,15 @@ impl Editor {
                         .masks
                         .get_mut(i)
                         .ok_or("The mask no longer exists.")?;
-                    *slot = region;
+                    slot.region = region;
                 } else {
-                    profile.masks.push(region);
+                    let name = (1..)
+                        .map(|n| format!("Excluded area {n}"))
+                        .find(|name| !profile.masks.iter().any(|area| &area.name == name))
+                        .expect("finite excluded area list");
+                    profile
+                        .masks
+                        .push(metin_core::ExcludedArea::new(name, region));
                 }
             }
             EditMode::Template => {

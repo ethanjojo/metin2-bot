@@ -3,6 +3,7 @@ mod actions;
 mod buffs;
 mod calibration;
 mod catalog;
+mod changes;
 mod feedback;
 mod forms;
 pub(crate) mod icons;
@@ -11,7 +12,9 @@ mod mount;
 mod native_chrome;
 mod overlay;
 mod periodic;
+mod placement;
 mod profiles;
+mod recognition_check;
 mod run;
 mod safety;
 mod select;
@@ -25,6 +28,7 @@ mod state;
 mod update_view;
 pub(crate) mod widgets;
 mod window_selection;
+mod workflow;
 use crate::{
     editor::{EditMode, Editor},
     runtime::{Command, RuntimeHandle, RuntimeSnapshot, SessionKey},
@@ -40,6 +44,8 @@ use state::SetupAction;
 use std::{path::PathBuf, sync::Arc};
 #[cfg(feature = "ui-smoke")]
 pub use window_selection::WindowPickerFixture;
+#[cfg(feature = "ui-smoke")]
+pub use workflow::QolFixture;
 #[cfg(feature = "ui-smoke")]
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
 pub enum BuffCaptureFixture {
@@ -101,6 +107,8 @@ pub struct MetinApp {
     window_fixture: Option<window_selection::WindowFixture>,
     revision: u64,
     preview_demand: Option<(SessionKey, bool, u64)>,
+    last_start_request: u64,
+    recognition_check: recognition_check::RecognitionCheck,
     tab: Tab,
     mode: EditMode,
     editing: bool,
@@ -121,6 +129,8 @@ pub struct MetinApp {
     overlay_preview: Option<overlay::RecognitionPreview>,
     window_refresh_at: std::time::Instant,
     panel_link: Option<crate::game_overlay::ControlPanelLink>,
+    placement_key: Option<(TargetToken, crate::placement::WindowPlacementKey)>,
+    placement_save_due: Option<std::time::Instant>,
     settings_page: settings::SettingsPage,
     selected_periodic: Option<uuid::Uuid>,
     selected_safety: usize,
@@ -250,6 +260,8 @@ impl MetinApp {
             window_fixture: None,
             revision: 0,
             preview_demand: None,
+            last_start_request: 0,
+            recognition_check: recognition_check::RecognitionCheck::default(),
             tab: Tab::Run,
             mode: EditMode::World,
             editing: false,
@@ -270,6 +282,8 @@ impl MetinApp {
             overlay_preview: None,
             window_refresh_at: std::time::Instant::now(),
             panel_link: None,
+            placement_key: None,
+            placement_save_due: None,
             settings_page: settings::SettingsPage::Detection,
             selected_periodic: None,
             selected_safety: 0,
@@ -402,6 +416,7 @@ impl MetinApp {
                 let mut snapshot = (*fixture.snapshot).clone();
                 snapshot.key = key;
                 snapshot.revision = self.revision;
+                snapshot.applied_revision = Some(self.revision);
                 snapshot.frame = self.editor.frozen.clone();
                 snapshot.captured_at = Some(std::time::Instant::now());
                 snapshot.timers = self
@@ -506,6 +521,7 @@ impl MetinApp {
             target,
         });
         snapshot.revision = self.revision;
+        snapshot.applied_revision = Some(self.revision);
         snapshot.mounted = c.buffs.mounted;
         snapshot.frame = self.editor.frozen.clone();
         snapshot.captured_at = Some(std::time::Instant::now());
@@ -561,15 +577,26 @@ impl MetinApp {
         }
     }
     fn configure(&mut self) -> Result<(), String> {
+        self.configure_in_generation(None).map(|_| ())
+    }
+    fn configure_in_generation(&mut self, expected: Option<u64>) -> Result<Option<u64>, String> {
         if self.editor.is_recalibrating() {
             return Err(
                 "Confirm or cancel the calibration review before applying settings.".into(),
             );
         }
         let Some(target) = self.target else {
-            return Ok(());
+            return Ok(Some(self.runtime.stop_generation()));
         };
-        self.runtime.stop();
+        let ticket = expected.and_then(|generation| self.runtime.stop_if_current(generation).ok());
+        let cancelled = expected.is_some() && ticket.is_none();
+        let generation = if let Some(ticket) = ticket {
+            ticket
+        } else {
+            // A cancelled start still applies an explicitly saved profile paused.
+            self.runtime.stop();
+            self.runtime.stop_generation()
+        };
         self.preview_demand = None;
         self.revision += 1;
         self.runtime.send(Command::Connect {
@@ -580,16 +607,20 @@ impl MetinApp {
             revision: self.revision,
         })?;
         if self.editor.profile.validate().is_err() {
-            return Ok(());
+            return Ok((!cancelled).then_some(generation));
         }
         self.runtime.send(Command::Configure {
             profile: Box::new(self.editor.profile.clone()),
             template: self.editor.template.clone(),
             target,
             revision: self.revision,
-        })
+        })?;
+        Ok((!cancelled).then_some(generation))
     }
     fn save(&mut self) -> Result<(), String> {
+        self.save_in_generation(None).map(|_| ())
+    }
+    fn save_in_generation(&mut self, expected: Option<u64>) -> Result<Option<u64>, String> {
         if self.editor.is_recalibrating() {
             return Err("Confirm or cancel the calibration review before saving.".into());
         }
@@ -628,11 +659,16 @@ impl MetinApp {
         }
         self.editor.mark_saved(saved);
         self.profiles = self.store.list().map_err(|e| e.to_string())?;
-        self.configure()?;
+        let generation = self.configure_in_generation(expected)?;
         self.show_feedback("Saved", false);
-        Ok(())
+        Ok(generation)
     }
     fn discard_or_save(&mut self) -> bool {
+        #[cfg(feature = "ui-smoke")]
+        if self.smoke.is_some() && self.smoke_requested {
+            // A completed screenshot fixture discards only its synthetic draft.
+            return true;
+        }
         if self.editor.is_recalibrating() {
             self.error =
                 Some("Confirm or cancel the calibration review before switching profiles.".into());
@@ -698,6 +734,8 @@ impl MetinApp {
         }
         self.reconcile_windows();
         self.sync_size_review();
+        self.poll_recognition_check(_context);
+        self.consume_start_request();
         if self.pending_review_end.is_some() {
             _context.request_repaint_after(std::time::Duration::from_millis(40));
         }
@@ -816,12 +854,9 @@ impl MetinApp {
             return;
         }
         skin::background(ui, self.collapsed);
-        self.sync(ui.ctx());
-        self.sync_updates(ui.ctx());
         if !self.window_chooser.open && !self.collapsed {
             self.expanded_size = ui.ctx().content_rect().size();
         }
-        self.sync_game_overlay(ui.ctx());
         #[cfg(windows)]
         if !self.collapsed {
             // Chooser/target-loss routes return before the toolbar: restore the
@@ -948,6 +983,9 @@ impl MetinApp {
     }
 }
 impl eframe::App for MetinApp {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.background_tick(ctx);
+    }
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         // Expanded mode paints its own board; collapsed mode is only the atlas strip.
         [0.; 4]
@@ -965,6 +1003,8 @@ impl eframe::App for MetinApp {
         self.render(ui);
     }
     fn on_exit(&mut self) {
+        self.remember_latest_panel_position();
+        self.flush_panel_position(true);
         self.updates.cancel();
         self.cancel_size_review();
         self.cancel_overlay_capture();

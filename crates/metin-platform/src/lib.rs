@@ -43,8 +43,58 @@ impl StopToken {
     pub fn stop(&self) {
         self.0.fetch_add(1, Ordering::SeqCst);
     }
+    /// Cancel input only while the caller's start intent is still current.
+    /// A concurrent emergency stop wins instead of being hidden by this stop.
+    pub fn stop_if_current(&self, expected: u64) -> Option<u64> {
+        let next = expected.checked_add(1)?;
+        self.0
+            .compare_exchange(expected, next, Ordering::SeqCst, Ordering::SeqCst)
+            .ok()
+            .map(|_| next)
+    }
     pub fn cancelled(&self, generation: u64) -> bool {
         self.generation() != generation
+    }
+}
+
+#[cfg(test)]
+mod stop_token_tests {
+    use super::*;
+    #[test]
+    fn competing_start_intents_cannot_both_claim_the_same_generation() {
+        let stop = StopToken::default();
+        let barrier = Arc::new(std::sync::Barrier::new(3));
+        let results = std::thread::scope(|scope| {
+            let first = scope.spawn(|| {
+                barrier.wait();
+                stop.stop_if_current(0)
+            });
+            let second = scope.spawn(|| {
+                barrier.wait();
+                stop.stop_if_current(0)
+            });
+            barrier.wait();
+            [first.join().unwrap(), second.join().unwrap()]
+        });
+        assert_eq!(results.iter().filter(|ticket| ticket.is_some()).count(), 1);
+        assert_eq!(stop.generation(), 1);
+    }
+    #[test]
+    fn conditional_stop_cannot_overwrite_a_concurrent_pause_and_returns_its_own_ticket() {
+        let stop = StopToken::default();
+        let before = stop.generation();
+        stop.stop();
+        assert_eq!(stop.stop_if_current(before), None);
+        assert_eq!(stop.generation(), before + 1);
+        let ticket = stop.stop_if_current(before + 1).unwrap();
+        assert_eq!(ticket, before + 2);
+        assert_eq!(stop.stop_if_current(before + 1), None);
+        stop.clone().stop();
+        assert!(stop.cancelled(ticket));
+        assert_eq!(stop.stop_if_current(ticket), None);
+        stop.0.store(u64::MAX, Ordering::SeqCst);
+        assert_eq!(stop.stop_if_current(u64::MAX), None);
+        assert_eq!(stop.generation(), u64::MAX);
     }
 }
 

@@ -266,6 +266,10 @@ fn startup(cli: Cli) -> Result<(), String> {
                     if cli.ui_profile_menu {
                         app.prepare_profile_menu_fixture(cli.ui_profile_rename);
                     }
+                    if cli.ui_qol.is_some() || cli.ui_zoom.is_some() {
+                        app.prepare_qol_fixture(&cc.egui_ctx, cli.ui_qol, cli.ui_zoom)
+                            .map_err(std::io::Error::other)?;
+                    }
                     app.request_screenshot(path, cli.ui_tab);
                 }
                 app

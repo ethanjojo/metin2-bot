@@ -162,6 +162,9 @@ impl MetinApp {
         }
         for event in events {
             match event {
+                OverlayEvent::PanelMoved { target, offset } => {
+                    self.remember_panel_position(target, offset);
+                }
                 OverlayEvent::Selected { id, region, point } => {
                     let Some(pending) = self.pending_overlay.take() else {
                         continue;
@@ -245,6 +248,8 @@ impl MetinApp {
                 .into_iter()
                 .map(|area| (area.region, area.label))
                 .collect()
+        } else if let Some(area) = self.highlighted_exclusion(ctx) {
+            vec![area]
         } else if self.show_regions && self.tab == Tab::Calibration {
             let region = if self.mode == EditMode::Template {
                 panel
@@ -259,8 +264,18 @@ impl MetinApp {
             } else {
                 self.editor.region(self.mode)
             };
+            let label = match self.mode {
+                EditMode::Mask(Some(index)) => self
+                    .editor
+                    .profile
+                    .masks
+                    .get(index)
+                    .map(|area| area.name.clone())
+                    .unwrap_or_else(|| tool_name(self.mode).into()),
+                _ => tool_name(self.mode).into(),
+            };
             region
-                .map(|region| vec![(region, tool_name(self.mode).into())])
+                .map(|region| vec![(region, label)])
                 .unwrap_or_default()
         } else {
             Vec::new()
@@ -453,6 +468,13 @@ impl MetinApp {
 
     fn capture_label(&self, mode: EditMode) -> String {
         match mode {
+            EditMode::Mask(Some(index)) => self
+                .editor
+                .profile
+                .masks
+                .get(index)
+                .map(|area| area.name.clone())
+                .unwrap_or_else(|| tool_name(mode).into()),
             EditMode::BuffIcon { index, inactive } => {
                 let name = self
                     .editor
@@ -495,15 +517,36 @@ impl MetinApp {
         let RawWindowHandle::Win32(handle) = handle.as_raw() else {
             return;
         };
-        let desired = self
+        let mut desired = self
             .target
             .filter(|_| self.pinned && !self.window_chooser.open)
             .map(|target| crate::game_overlay::ControlPanelLink {
                 window: handle.hwnd.get() as usize,
                 target,
+                offset: None,
             });
-        if self.panel_link == desired {
+        if self.panel_link.map(|link| (link.window, link.target))
+            == desired.map(|link| (link.window, link.target))
+        {
             return;
+        }
+        self.remember_latest_panel_position();
+        if let Some(link) = &mut desired {
+            if self.placement_key.as_ref().map(|(target, _)| *target) != Some(link.target) {
+                self.placement_key =
+                    crate::placement::placement_key(link.target, &self.snapshot.targets)
+                        .map(|key| (link.target, key));
+            }
+            link.offset = self
+                .placement_key
+                .as_ref()
+                .and_then(|(_, key)| {
+                    self.settings
+                        .panel_positions
+                        .iter()
+                        .find(|position| &position.key == key)
+                })
+                .map(|position| position.offset);
         }
         if desired.is_some()
             && let Err(error) = self.ensure_overlay()

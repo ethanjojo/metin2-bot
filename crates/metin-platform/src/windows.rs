@@ -34,6 +34,60 @@ fn confirm_input_state(mut read: impl FnMut() -> bool, down: bool) -> Result<()>
 fn hwnd(token: TargetToken) -> HWND {
     token.handle as HWND
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CaptureProblem {
+    Cancelled,
+    WindowChanged,
+    FocusChanged,
+    TimedOut,
+    StaleSource,
+}
+impl CaptureProblem {
+    fn message(self) -> &'static str {
+        match self {
+            Self::Cancelled => "Capture cancelled; no game input was sent.",
+            Self::WindowChanged => {
+                "Window geometry changed during capture. Check its position, size and visibility before starting."
+            }
+            Self::FocusChanged => {
+                "Game focus changed during capture. Activate the selected game and start again."
+            }
+            Self::TimedOut => {
+                "Window capture timed out before a valid image was available. Check that the selected game is visible and responding."
+            }
+            Self::StaleSource => {
+                "The captured game image is too old. A fresh image is required before input."
+            }
+        }
+    }
+}
+fn capture_problem(
+    before: TargetState,
+    after: TargetState,
+    cancelled: bool,
+    timed_out: bool,
+    stale: bool,
+) -> Option<CaptureProblem> {
+    if cancelled {
+        Some(CaptureProblem::Cancelled)
+    } else if before.target != after.target
+        || before.left != after.left
+        || before.top != after.top
+        || before.width != after.width
+        || before.height != after.height
+        || before.visible != after.visible
+    {
+        Some(CaptureProblem::WindowChanged)
+    } else if before.foreground != after.foreground {
+        Some(CaptureProblem::FocusChanged)
+    } else if timed_out {
+        Some(CaptureProblem::TimedOut)
+    } else if stale {
+        Some(CaptureProblem::StaleSource)
+    } else {
+        None
+    }
+}
 struct OwnedHandle(HANDLE);
 impl Drop for OwnedHandle {
     fn drop(&mut self) {
@@ -343,20 +397,25 @@ impl PlatformBackend for WindowsBackend {
         stop: &StopToken,
         generation: u64,
     ) -> Result<CapturedFrame> {
-        if stop.cancelled(generation) || Instant::now() > deadline {
-            return Err(PlatformError("Capture cancelled.".into()));
+        if stop.cancelled(generation) {
+            return Err(PlatformError(CaptureProblem::Cancelled.message().into()));
+        }
+        if Instant::now() > deadline {
+            return Err(PlatformError(CaptureProblem::TimedOut.message().into()));
         }
         let requested = Instant::now();
         let before = self.inspect()?;
-        if !before.visible
-            || before.width == 0
-            || before.height == 0
-            || before.width > 16384
-            || before.height > 16384
-        {
+        if !before.visible {
             return Err(PlatformError(
-                "The selected window is hidden, minimized or has invalid dimensions.".into(),
+                "The selected game window is not visible. Restore it before capturing.".into(),
             ));
+        }
+        if before.width == 0 || before.height == 0 || before.width > 16384 || before.height > 16384
+        {
+            return Err(PlatformError(format!(
+                "The selected window has invalid capture dimensions: {} × {} pixels.",
+                before.width, before.height
+            )));
         }
         if self.capture.is_none() {
             self.capture = Some(window_capture::WindowCapture::new(before.target)?);
@@ -374,14 +433,14 @@ impl PlatformBackend for WindowsBackend {
             }
         };
         let after = self.inspect()?;
-        if before != after
-            || stop.cancelled(generation)
-            || Instant::now() > deadline
-            || captured_at.elapsed() > window_capture::MAX_FRAME_AGE
-        {
-            return Err(PlatformError(
-                "Window geometry/focus changed, the source frame became stale, or capture timed out.".into(),
-            ));
+        if let Some(problem) = capture_problem(
+            before,
+            after,
+            stop.cancelled(generation),
+            Instant::now() > deadline,
+            captured_at.elapsed() > window_capture::MAX_FRAME_AGE,
+        ) {
+            return Err(PlatformError(problem.message().into()));
         }
         if bytes.iter().copied().max().unwrap_or(0) < 8 {
             return Err(PlatformError("The game frame is black.".into()));
@@ -528,7 +587,61 @@ mod window_capture;
 
 #[cfg(test)]
 mod input_confirmation_tests {
-    use super::confirm_input_state;
+    use super::*;
+    #[test]
+    fn capture_failure_reports_the_actual_guard_in_priority_order() {
+        let before = TargetState {
+            target: TargetToken {
+                handle: 1,
+                pid: 2,
+                created: 3,
+            },
+            left: -100,
+            top: 50,
+            width: 200,
+            height: 300,
+            visible: true,
+            foreground: true,
+        };
+        let focus = TargetState {
+            foreground: false,
+            ..before
+        };
+        let geometry = TargetState {
+            width: 201,
+            ..focus
+        };
+        assert_eq!(capture_problem(before, before, false, false, false), None);
+        assert_eq!(
+            capture_problem(before, geometry, true, true, true),
+            Some(CaptureProblem::Cancelled)
+        );
+        assert_eq!(
+            capture_problem(before, geometry, false, true, true),
+            Some(CaptureProblem::WindowChanged)
+        );
+        assert_eq!(
+            capture_problem(before, focus, false, true, true),
+            Some(CaptureProblem::FocusChanged)
+        );
+        assert_eq!(
+            capture_problem(before, before, false, true, true),
+            Some(CaptureProblem::TimedOut)
+        );
+        assert_eq!(
+            capture_problem(before, before, false, false, true),
+            Some(CaptureProblem::StaleSource)
+        );
+        for problem in [
+            CaptureProblem::Cancelled,
+            CaptureProblem::WindowChanged,
+            CaptureProblem::FocusChanged,
+            CaptureProblem::TimedOut,
+            CaptureProblem::StaleSource,
+        ] {
+            assert!(!problem.message().contains(" or "), "{}", problem.message());
+        }
+    }
     #[test]
     fn release_waits_for_win32_after_hid_class_acknowledgement() {
         let mut reads = 0;

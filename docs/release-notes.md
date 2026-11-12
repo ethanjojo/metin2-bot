@@ -4,6 +4,11 @@ Companion for Windows x64: a compact Rust/egui desktop application for local vis
 
 ## Highlights
 
+- Specific Run pause causes, recovery links and configuration readiness; F7 and the main button share validated Save & Start, including while minimized. F8 cancels pending starts even during saving, and input requires the acknowledged current configuration.
+- Review exact unsaved changes, return to the last Actions detail through breadcrumbs, and adjust UI scale as 75–150%. Pinned client-relative panel positions survive reconnects and remain accessible after monitor/size changes.
+- Duplicate profiles or export/import one bounded `.companion-profile` package with settings and images, fresh identity and explicit preview. Named excluded areas retain geometry through rename, edit and undo, including legacy profile loading.
+- Inspect HP/buff recognition on a fresh read-only snapshot with real matcher scores, reference/current previews and evidence-age explanations.
+
 - Window capture retains the shared Windows runtime across repeated previews; individual capture sessions still release their resources.
 
 - One resizable Metin-style panel with Run, Actions, Recognition, Safety and Settings. Searchable profiles keep Save/Revert/Undo/Redo available; Start/Pause and mount declaration stay in the footer.

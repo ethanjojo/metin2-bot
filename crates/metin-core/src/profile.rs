@@ -324,13 +324,65 @@ impl BuffConfig {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct ExcludedArea {
+    pub name: String,
+    pub region: Region,
+}
+impl ExcludedArea {
+    pub fn new(name: impl Into<String>, region: Region) -> Self {
+        Self {
+            name: name.into(),
+            region,
+        }
+    }
+    pub fn validate(&self) -> Result<()> {
+        require(
+            !self.name.trim().is_empty()
+                && self.name.chars().count() <= 80
+                && !self.name.chars().any(char::is_control),
+            "Excluded area names must contain 1–80 characters without control characters.",
+        )?;
+        self.region.validate()
+    }
+}
+impl From<Region> for ExcludedArea {
+    fn from(region: Region) -> Self {
+        Self::new("Excluded area", region)
+    }
+}
+
+fn deserialize_exclusions<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Vec<ExcludedArea>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StoredArea {
+        Named(ExcludedArea),
+        Legacy(Region),
+    }
+    Vec::<StoredArea>::deserialize(deserializer).map(|areas| {
+        areas
+            .into_iter()
+            .enumerate()
+            .map(|(index, area)| match area {
+                StoredArea::Named(area) => area,
+                StoredArea::Legacy(region) => {
+                    ExcludedArea::new(format!("Excluded area {}", index + 1), region)
+                }
+            })
+            .collect()
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Profile {
     pub id: Uuid,
     pub name: String,
     #[serde(default)]
     pub region: Option<Region>,
-    #[serde(default)]
-    pub masks: Vec<Region>,
+    #[serde(default, deserialize_with = "deserialize_exclusions")]
+    pub masks: Vec<ExcludedArea>,
     #[serde(default)]
     pub color: Option<ColorConfig>,
     #[serde(default)]
@@ -446,11 +498,10 @@ impl Profile {
             "Profile name must contain 1–80 characters.",
         )?;
         require(self.masks.len() <= 30, "Configure at most 30 masks.")?;
-        for r in self
-            .masks
-            .iter()
-            .chain([self.region, self.template_region].iter().flatten())
-        {
+        for area in &self.masks {
+            area.validate()?;
+        }
+        for r in [self.region, self.template_region].iter().flatten() {
             r.validate()?;
         }
         if let Some(size) = self.frame_size {

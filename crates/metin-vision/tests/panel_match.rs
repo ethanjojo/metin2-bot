@@ -106,12 +106,15 @@ fn matched_detail_exclusion_removes_only_the_recognized_client_pixels() {
     let remaining = detect_candidates_excluding(&image, &profile, Some(&found)).unwrap();
     assert_eq!(remaining.len(), 1);
     assert_eq!([remaining[0].x, remaining[0].y], [80, 35]);
-    profile.masks.push(Region {
-        left: 0.6,
-        top: 0.5,
-        right: 0.9,
-        bottom: 0.9,
-    });
+    profile.masks.push(
+        Region {
+            left: 0.6,
+            top: 0.5,
+            right: 0.9,
+            bottom: 0.9,
+        }
+        .into(),
+    );
     let explicit_only = detect_candidates(&image, &profile).unwrap();
     assert_eq!(explicit_only.len(), 1);
     assert_eq!([explicit_only[0].x, explicit_only[0].y], [10, 10]);

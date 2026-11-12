@@ -95,7 +95,7 @@ impl Editor {
                         EditMode::World => "Search area".into(),
                         EditMode::Template => "Target HP detail".into(),
                         EditMode::BuffArea => "Buff detection area".into(),
-                        EditMode::Mask(Some(i)) => format!("Excluded area {}", i + 1),
+                        EditMode::Mask(Some(i)) => self.profile.masks[i].name.clone(),
                         EditMode::BuffIcon { index, inactive } => format!(
                             "Skill {} {} icon",
                             index + 1,
@@ -160,7 +160,7 @@ fn remap_regions(profile: &mut Profile, old: [u32; 2], new: [u32; 2]) {
         convert(slot);
     }
     for slot in &mut profile.masks {
-        convert(slot);
+        convert(&mut slot.region);
     }
     for skill in &mut profile.buffs.skills {
         for icon in [&mut skill.icon, &mut skill.inactive_icon]

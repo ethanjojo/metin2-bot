@@ -222,6 +222,201 @@ fn hotkey_capabilities_are_initialized_before_a_window_is_selected() {
     assert!(controls.lock().unwrap().calls.is_empty());
     r.shutdown().unwrap();
 }
+#[test]
+fn f7_requests_the_ui_start_path_without_starting_the_applied_profile() {
+    let (runtime, controls) = runtime();
+    configure(&runtime, profile(), token(1), false, 1);
+    controls.lock().unwrap().toggle = true;
+    wait_raw(&runtime, |snapshot| snapshot.start_request.is_some());
+    let request = runtime.latest().unwrap().start_request.unwrap();
+    assert!(request.matches(runtime.latest().unwrap().key, 1, runtime.stop_generation()));
+    assert!(!request.matches(runtime.latest().unwrap().key, 2, runtime.stop_generation()));
+    assert!(!request.matches(
+        runtime.latest().unwrap().key,
+        1,
+        runtime.stop_generation() + 1
+    ));
+    assert!(!request.matches(
+        Some(SessionKey {
+            target: token(2),
+            ..request.key
+        }),
+        1,
+        runtime.stop_generation()
+    ));
+    assert!(
+        !metin_desktop::runtime::StartRequest {
+            requested_at: Instant::now() - Duration::from_secs(3),
+            ..request
+        }
+        .matches(runtime.latest().unwrap().key, 1, runtime.stop_generation())
+    );
+    std::thread::sleep(Duration::from_millis(150));
+    assert!(!runtime.latest().unwrap().running && !runtime.latest().unwrap().arming);
+    assert!(controls.lock().unwrap().calls.is_empty());
+    runtime.stop();
+    wait_raw(&runtime, |snapshot| snapshot.start_request.is_none());
+    controls.lock().unwrap().toggle = true;
+    wait_raw(&runtime, |snapshot| snapshot.start_request.is_some());
+    assert!(runtime.latest().unwrap().start_request.unwrap().id > request.id);
+    configure(&runtime, profile(), token(2), false, 2);
+    assert!(runtime.latest().unwrap().start_request.is_none());
+    runtime.shutdown().unwrap();
+    let (replacement, controls) = self::runtime();
+    configure(&replacement, profile(), token(1), false, 1);
+    controls.lock().unwrap().toggle = true;
+    wait_raw(&replacement, |snapshot| snapshot.start_request.is_some());
+    assert!(replacement.latest().unwrap().start_request.unwrap().id > request.id);
+    replacement.shutdown().unwrap();
+}
+#[test]
+fn save_start_ticket_cannot_supersede_a_pause_before_or_after_its_own_stop() {
+    let (runtime, controls) = runtime();
+    let profile = profile();
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile, key.target, false, 1);
+    let before_save = runtime.stop_generation();
+    runtime.stop();
+    let paused = runtime.stop_generation();
+    assert!(runtime.stop_if_current(before_save).is_err());
+    assert_eq!(
+        runtime.stop_generation(),
+        paused,
+        "A cancelled save may not create a newer generation"
+    );
+    assert!(runtime.arm_in_generation(key, before_save).is_err());
+    let own_ticket = runtime.stop_if_current(paused).unwrap();
+    assert_eq!(own_ticket, paused + 1);
+    runtime.stop();
+    assert!(runtime.arm_in_generation(key, own_ticket).is_err());
+    wait_raw(&runtime, |snapshot| {
+        snapshot.released_generation == Some(runtime.stop_generation())
+    });
+    assert!(!runtime.latest().unwrap().arming && !runtime.latest().unwrap().running);
+    assert!(
+        controls
+            .lock()
+            .unwrap()
+            .calls
+            .iter()
+            .all(|(_, down)| !*down)
+    );
+    assert!(controls.lock().unwrap().clicks.is_empty());
+    runtime.shutdown().unwrap();
+}
+#[test]
+fn current_save_start_ticket_uses_the_existing_arm_countdown() {
+    let (runtime, controls) = runtime();
+    let profile = profile();
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile, key.target, false, 1);
+    let ticket = runtime.stop_if_current(runtime.stop_generation()).unwrap();
+    runtime.arm_in_generation(key, ticket).unwrap();
+    wait_raw(&runtime, |snapshot| snapshot.arming);
+    assert!(!runtime.latest().unwrap().running);
+    runtime.stop();
+    wait_raw(&runtime, |snapshot| !snapshot.arming);
+    assert!(
+        controls
+            .lock()
+            .unwrap()
+            .calls
+            .iter()
+            .all(|(_, down)| !*down)
+    );
+    assert!(controls.lock().unwrap().clicks.is_empty());
+    runtime.shutdown().unwrap();
+}
+#[test]
+fn connected_revision_cannot_arm_retained_configuration_until_it_is_applied() {
+    let (runtime, controls) = runtime();
+    let mut profile = candidate_profile();
+    profile.buffs.skills.push(Default::default());
+    controls.lock().unwrap().colored_candidates = true;
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile.clone(), key.target, false, 1);
+    assert_eq!(runtime.latest().unwrap().applied_revision, Some(1));
+    runtime
+        .send(Command::SetPreview { key, enabled: true })
+        .unwrap();
+    wait_raw(&runtime, |snapshot| {
+        snapshot.candidates.len() == 2 && snapshot.timers.len() == 1
+    });
+    let old_frame = runtime.latest().unwrap().frame_id;
+    runtime.send(Command::Connect { key, revision: 2 }).unwrap();
+    wait_raw(&runtime, |snapshot| snapshot.revision == 2);
+    assert_eq!(runtime.latest().unwrap().applied_revision, None);
+    assert_eq!(runtime.latest().unwrap().mounted, Some(false));
+    runtime.send(Command::Snapshot { key }).unwrap();
+    wait_raw(&runtime, |snapshot| {
+        snapshot.frame_id > old_frame && snapshot.geometry.is_some()
+    });
+    let pending = runtime.latest().unwrap();
+    assert!(
+        pending.frame.is_some(),
+        "Raw repair captures remain available"
+    );
+    assert!(
+        pending.candidates.is_empty()
+            && pending.timers.is_empty()
+            && pending.panel_match.is_none()
+            && pending.buff_presence.is_empty(),
+        "Old derived recognition/timers cannot represent an unapplied revision"
+    );
+    runtime.send(Command::Arm { key }).unwrap();
+    wait_raw(&runtime, |snapshot| {
+        snapshot.reason.contains("Apply the profile configuration")
+    });
+    assert!(!runtime.latest().unwrap().arming && !runtime.latest().unwrap().running);
+    controls.lock().unwrap().toggle = true;
+    wait_raw(&runtime, |snapshot| snapshot.start_request.is_some());
+    assert!(runtime.latest().unwrap().start_request.unwrap().matches(
+        Some(key),
+        2,
+        runtime.stop_generation()
+    ));
+    runtime
+        .send(Command::DeclareMount {
+            key,
+            mounted: true,
+            revision: 3,
+        })
+        .unwrap();
+    wait_raw(&runtime, |snapshot| {
+        snapshot.revision == 3 && snapshot.mounted == Some(true)
+    });
+    assert_eq!(
+        runtime.latest().unwrap().applied_revision,
+        None,
+        "A mount declaration cannot acknowledge profile configuration"
+    );
+    configure(&runtime, profile, key.target, true, 3);
+    assert_eq!(runtime.latest().unwrap().applied_revision, Some(3));
+    runtime
+        .arm_in_generation(key, runtime.stop_generation())
+        .unwrap();
+    wait_raw(&runtime, |snapshot| snapshot.arming);
+    runtime.stop();
+    wait_raw(&runtime, |snapshot| !snapshot.arming);
+    assert!(
+        controls
+            .lock()
+            .unwrap()
+            .calls
+            .iter()
+            .all(|(_, down)| !*down)
+    );
+    runtime.shutdown().unwrap();
+}
 fn profile() -> Profile {
     let mut p = Profile::from_json(include_str!(
         "../../../tests/parity/profiles/calibrated.json"
@@ -249,7 +444,9 @@ fn configure(r: &RuntimeHandle, p: Profile, target: TargetToken, mounted: bool, 
         revision,
     })
     .unwrap();
-    wait(r, |s| s.key == Some(key) && s.revision == revision);
+    wait(r, |s| {
+        s.key == Some(key) && s.revision == revision && s.applied_revision == Some(revision)
+    });
     if new_session {
         // Fixtures declare their own current state explicitly; Configure no
         // longer supplies a persisted state belonging to another character.
@@ -263,6 +460,31 @@ fn configure(r: &RuntimeHandle, p: Profile, target: TargetToken, mounted: bool, 
     }
 }
 fn wait(r: &RuntimeHandle, predicate: impl Fn(&metin_desktop::runtime::RuntimeSnapshot) -> bool) {
+    // These safety scenarios exercise the controller after a normal UI start.
+    // Explicitly model the UI acknowledgement now that F7 only requests it.
+    let deadline = Instant::now() + Duration::from_secs(7);
+    let mut acknowledged = None;
+    while Instant::now() < deadline {
+        let snapshot = r.latest().unwrap();
+        if let Some(request) = snapshot.start_request
+            && acknowledged != Some(request.id)
+            && request.matches(snapshot.key, snapshot.revision, r.stop_generation())
+        {
+            r.send(Command::Arm { key: request.key }).unwrap();
+            acknowledged = Some(request.id);
+        }
+        if predicate(&snapshot) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let last = r.latest().unwrap();
+    panic!("Worker condition timed out: {} {}", last.state, last.reason);
+}
+fn wait_raw(
+    r: &RuntimeHandle,
+    predicate: impl Fn(&metin_desktop::runtime::RuntimeSnapshot) -> bool,
+) {
     let deadline = Instant::now() + Duration::from_secs(4);
     while Instant::now() < deadline {
         if predicate(&r.latest().unwrap()) {
@@ -365,16 +587,22 @@ fn calibration_review_blocks_arm_and_f7_but_keeps_snapshot_and_preview_available
     wait(&runtime, |snapshot| snapshot.calibration_review);
     assert!(!runtime.latest().unwrap().arming);
     assert!(!runtime.latest().unwrap().running);
+    let before_snapshot = runtime.latest().unwrap().frame_id;
     runtime.send(Command::Arm { key }).unwrap();
     runtime.send(Command::Snapshot { key }).unwrap();
-    wait(&runtime, |snapshot| snapshot.frame_id > 0);
+    wait(&runtime, |snapshot| {
+        snapshot.frame_id > before_snapshot && snapshot.released_generation.is_some()
+    });
     assert!(!runtime.latest().unwrap().arming);
     assert!(!runtime.latest().unwrap().running);
+    let before_preview = runtime.latest().unwrap().frame_id;
     controls.lock().unwrap().toggle = true;
     runtime
         .send(Command::SetPreview { key, enabled: true })
         .unwrap();
-    wait(&runtime, |snapshot| snapshot.frame_id > 2);
+    wait(&runtime, |snapshot| {
+        snapshot.frame_id > before_preview && snapshot.released_generation.is_some()
+    });
     let snapshot = runtime.latest().unwrap();
     assert!(snapshot.calibration_review);
     assert!(!snapshot.running && !snapshot.arming);
@@ -534,6 +762,8 @@ fn calibration_review_resets_on_reconnect_and_session_replacement() {
     runtime.send(Command::Connect { key, revision: 2 }).unwrap();
     wait(&runtime, |snapshot| snapshot.revision == 2);
     assert!(!runtime.latest().unwrap().calibration_review);
+    assert_eq!(runtime.latest().unwrap().applied_revision, None);
+    configure(&runtime, profile.clone(), key.target, false, 2);
     runtime.send(Command::Arm { key }).unwrap();
     wait(&runtime, |snapshot| snapshot.arming);
     runtime
@@ -913,6 +1143,7 @@ fn session_reset_interrupts_a_blocking_rotation_before_its_hold_finishes() {
     };
     configure(&runtime, profile, key.target, false, 1);
     controls.lock().unwrap().toggle = true;
+    wait(&runtime, |snapshot| snapshot.running);
     let deadline = Instant::now() + Duration::from_secs(4);
     while !controls.lock().unwrap().calls.contains(&(0x45, true)) {
         assert!(Instant::now() < deadline, "Rotation never started");
@@ -1138,14 +1369,16 @@ fn stale_capture_cannot_start_armed_input_or_trigger_a_running_action() {
             target: token(1),
         };
         configure(&r, p, token(1), false, 1);
-        controls.lock().unwrap().stale_capture = true;
         if arm {
+            controls.lock().unwrap().stale_capture = true;
             r.send(Command::Arm { key }).unwrap();
             std::thread::sleep(Duration::from_millis(3300));
             assert!(r.latest().unwrap().arming);
             assert!(!r.latest().unwrap().running);
         } else {
             controls.lock().unwrap().toggle = true;
+            wait(&r, |s| s.running);
+            controls.lock().unwrap().stale_capture = true;
             wait(&r, |s| !s.running && s.reason.contains("stale"));
         }
         assert!(controls.lock().unwrap().calls.iter().all(|(_, down)| !down));
@@ -1342,7 +1575,7 @@ fn mount_declaration_does_not_need_a_frame_template_or_calibration() {
         wait(&r, |s| s.revision == revision && s.mounted == Some(mounted));
     }
     controls.lock().unwrap().toggle = true;
-    wait(&r, |s| s.reason.contains("Complete calibration"));
+    wait(&r, |s| s.reason.contains("Apply the profile configuration"));
     let c = controls.lock().unwrap();
     assert_eq!(c.captures, 0);
     assert!(c.calls.iter().all(|(_, down)| !down));
@@ -1358,17 +1591,19 @@ fn mount_declaration_does_not_need_a_frame_template_or_calibration() {
 }
 
 #[test]
-fn reconnecting_same_session_preserves_acknowledged_mount_and_applied_profile() {
+fn reconnecting_same_session_preserves_mount_but_requires_profile_apply_before_start() {
     let (r, controls) = runtime();
     let p = profile();
     let key = SessionKey {
         profile_id: p.id,
         target: token(1),
     };
-    configure(&r, p, token(1), true, 1);
+    configure(&r, p.clone(), token(1), true, 1);
     r.send(Command::Connect { key, revision: 2 }).unwrap();
     wait(&r, |s| s.revision == 2);
     assert_eq!(r.latest().unwrap().mounted, Some(true));
+    assert_eq!(r.latest().unwrap().applied_revision, None);
+    configure(&r, p, token(1), true, 2);
     controls.lock().unwrap().toggle = true;
     wait(&r, |s| s.running);
     r.shutdown().unwrap();
@@ -1530,12 +1765,15 @@ fn hp_matching_tracks_all_connected_client_corners_independent_of_target_area_an
         right: 0.6,
         bottom: 0.6,
     });
-    p.masks.push(metin_core::Region {
-        left: 0.,
-        top: 0.,
-        right: 1.,
-        bottom: 1.,
-    });
+    p.masks.push(
+        metin_core::Region {
+            left: 0.,
+            top: 0.,
+            right: 1.,
+            bottom: 1.,
+        }
+        .into(),
+    );
     let key = SessionKey {
         profile_id: p.id,
         target: token(1),

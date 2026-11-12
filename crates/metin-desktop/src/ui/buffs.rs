@@ -30,19 +30,6 @@ impl MetinApp {
             egui::ScrollArea::vertical()
                 .id_salt("buff-detail")
                 .show(ui, |ui| {
-                    if button(
-                        ui,
-                        Icon::Back,
-                        "Back to Buffs",
-                        true,
-                        "Return to the buff order without discarding edits.",
-                    )
-                    .clicked()
-                    {
-                        self.buff_detail = false;
-                        self.binding = None;
-                        return;
-                    }
                     self.selected_skill = self
                         .selected_skill
                         .min(self.editor.profile.buffs.skills.len() - 1);
@@ -200,6 +187,9 @@ impl MetinApp {
             || self.snapshot.revision != self.revision
         {
             return ("Save to apply".into(), None);
+        }
+        if self.snapshot.applied_revision != Some(self.revision) {
+            return ("Applying configuration".into(), None);
         }
         if skill.mode == metin_core::BuffMode::Inactive {
             let presence = self
@@ -364,8 +354,10 @@ impl MetinApp {
                     changed = true;
                 }
             });
-            let applied =
-                !self.editor.dirty() && self.snapshot.key == self.key() && self.key().is_some();
+            let applied = !self.editor.dirty()
+                && self.snapshot.key == self.key()
+                && self.key().is_some()
+                && self.snapshot.applied_revision == Some(self.revision);
             let (timing, fraction) = self.skill_timing(index);
             ui.label(&timing);
             let (strip, _) =
@@ -418,6 +410,7 @@ impl MetinApp {
             widgets::field(ui, "Detection area", |ui| {
                 if widgets::plain_button(ui,if self.editor.profile.buffs.icon_region.is_some(){"Edit area"}else{"Select area"}).on_hover_text("Icon capture derives this area automatically. Expand it to include every possible buff position.").clicked(){self.edit_area(EditMode::BuffArea);}
             });
+            self.recognition_check_controls(ui, recognition_check::RecognitionSubject::Buff(index));
         }
         widgets::collapsing_summary(
             ui,

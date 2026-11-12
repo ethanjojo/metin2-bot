@@ -59,22 +59,7 @@ impl MetinApp {
                 });
             return;
         }
-        let nested_detail = (self.actions_page == ActionsPage::Buffs && self.buff_detail)
-            || (self.actions_page == ActionsPage::Periodic && self.selected_periodic.is_some())
-            || (self.actions_page == ActionsPage::VisualRules && self.visual_detail);
-        if !nested_detail
-            && widgets::button(
-                ui,
-                widgets::Icon::Back,
-                "Actions",
-                true,
-                "Back to all actions",
-            )
-            .clicked()
-        {
-            self.actions_detail = false;
-            self.buff_detail = false;
-            self.binding = None;
+        if self.actions_breadcrumbs(ui) {
             return;
         }
         ui.add_space(6.);
