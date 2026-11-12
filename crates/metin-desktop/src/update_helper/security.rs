@@ -273,6 +273,164 @@ mod windows {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use std::os::windows::io::FromRawHandle;
+        use windows_sys::Win32::{
+            Foundation::{GENERIC_WRITE, INVALID_HANDLE_VALUE},
+            Storage::FileSystem::{CREATE_NEW, CreateFileW, FILE_ATTRIBUTE_NORMAL},
+        };
+
+        fn user_owned_fixture(path: &Path, user: &str) {
+            // Set ownership at creation. A later OWNER_SECURITY_INFORMATION
+            // update deliberately deactivates OWNER_RIGHTS ACEs on Windows.
+            let owner = descriptor(&format!("O:{user}")).unwrap();
+            let attributes = SECURITY_ATTRIBUTES {
+                nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+                lpSecurityDescriptor: owner.0,
+                bInheritHandle: 0,
+            };
+            let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+            let handle = unsafe {
+                CreateFileW(
+                    wide.as_ptr(),
+                    GENERIC_WRITE,
+                    0,
+                    &attributes,
+                    CREATE_NEW,
+                    FILE_ATTRIBUTE_NORMAL,
+                    null_mut(),
+                )
+            };
+            assert_ne!(
+                handle,
+                INVALID_HANDLE_VALUE,
+                "{}",
+                std::io::Error::last_os_error()
+            );
+            let mut file = unsafe { fs::File::from_raw_handle(handle) };
+            std::io::Write::write_all(&mut file, b"original child data").unwrap();
+        }
+
+        fn fixture_security(path: &Path) -> Allocation {
+            let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+            let mut security = null_mut();
+            assert_eq!(
+                unsafe {
+                    GetNamedSecurityInfoW(
+                        wide.as_ptr(),
+                        SE_FILE_OBJECT,
+                        OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                        null_mut(),
+                        null_mut(),
+                        null_mut(),
+                        null_mut(),
+                        &mut security,
+                    )
+                },
+                0
+            );
+            Allocation(security)
+        }
+
+        fn owner_rights_flags(security: &Allocation, user: &str) -> u8 {
+            let mut owner = null_mut();
+            let mut defaulted = 0;
+            assert_ne!(
+                unsafe { GetSecurityDescriptorOwner(security.0, &mut owner, &mut defaulted) },
+                0
+            );
+            assert_eq!(sid_string(owner).unwrap(), user);
+            let mut present = 0;
+            let mut acl = null_mut();
+            assert_ne!(
+                unsafe {
+                    GetSecurityDescriptorDacl(security.0, &mut present, &mut acl, &mut defaulted)
+                },
+                0
+            );
+            assert_ne!(present, 0);
+            for index in 0..u32::from(unsafe { (*acl).AceCount }) {
+                let mut raw = null_mut();
+                assert_ne!(unsafe { GetAce(acl, index, &mut raw) }, 0);
+                let ace = raw.cast::<ACCESS_ALLOWED_ACE>();
+                if sid_string(unsafe { addr_of_mut!((*ace).SidStart).cast() }).unwrap() == "S-1-3-4"
+                {
+                    return unsafe { (*ace).Header.AceFlags };
+                }
+            }
+            panic!("The fixture must inherit OWNER_RIGHTS");
+        }
+
+        #[test]
+        fn initial_owner_preserves_owner_rights_but_later_assignment_deactivates_it() {
+            let directory = tempfile::tempdir().unwrap();
+            let user = user_sid().unwrap();
+            // Only this disposable fixture grants its user full access, so the
+            // owner-only mutation can also be reproduced without elevation.
+            let permissions =
+                descriptor(&format!("D:P(A;OICI;FA;;;{user})(A;OICI;RC;;;OW)")).unwrap();
+            let mut present = 0;
+            let mut defaulted = 0;
+            let mut acl = null_mut();
+            assert_ne!(
+                unsafe {
+                    GetSecurityDescriptorDacl(permissions.0, &mut present, &mut acl, &mut defaulted)
+                },
+                0
+            );
+            let root: Vec<u16> = directory
+                .path()
+                .as_os_str()
+                .encode_wide()
+                .chain(Some(0))
+                .collect();
+            assert_eq!(
+                unsafe {
+                    SetNamedSecurityInfoW(
+                        root.as_ptr(),
+                        SE_FILE_OBJECT,
+                        DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                        null_mut(),
+                        null_mut(),
+                        acl,
+                        null_mut(),
+                    )
+                },
+                0
+            );
+            let child = directory.path().join("owner-child.dll");
+            user_owned_fixture(&child, &user);
+            assert_eq!(
+                owner_rights_flags(&fixture_security(&child), &user) & 0x08,
+                0
+            );
+            let wide: Vec<u16> = child.as_os_str().encode_wide().chain(Some(0)).collect();
+            let user_text: Vec<u16> = user.encode_utf16().chain(Some(0)).collect();
+            let mut sid = null_mut();
+            assert_ne!(
+                unsafe { ConvertStringSidToSidW(user_text.as_ptr(), &mut sid) },
+                0
+            );
+            let _sid = Allocation(sid);
+            assert_eq!(
+                unsafe {
+                    SetNamedSecurityInfoW(
+                        wide.as_ptr(),
+                        SE_FILE_OBJECT,
+                        OWNER_SECURITY_INFORMATION,
+                        sid,
+                        null_mut(),
+                        null_mut(),
+                        null_mut(),
+                    )
+                },
+                0
+            );
+            assert_ne!(
+                owner_rights_flags(&fixture_security(&child), &user) & 0x08,
+                0
+            );
+        }
+
         fn restricted_primary() -> Token {
             let original = token().unwrap();
             let mut admin_sid = null_mut();
@@ -454,14 +612,18 @@ mod windows {
             let executable = runtime.join("Companion.exe");
             let child = nested.join("owner-child.dll");
             fs::write(&executable, b"nonexecutable fixture").unwrap();
-            fs::write(&child, b"original child data").unwrap();
+            let user = user_sid().unwrap();
+            user_owned_fixture(&child, &user);
             verify(&root, true).unwrap();
             for path in [&runtime, &nested, &executable, &child] {
                 verify(path, false).unwrap();
             }
-            // Force the child owner to the user, exercising OWNER_RIGHTS rather
-            // than depending on the elevated token's default owner setting.
-            let user = user_sid().unwrap();
+            // The owner was explicitly assigned at creation, independently of
+            // the elevated token's default owner, retaining effective protection.
+            assert_eq!(
+                owner_rights_flags(&fixture_security(&child), &user) & 0x08,
+                0
+            );
             let user_text: Vec<u16> = user.encode_utf16().chain(Some(0)).collect();
             let mut user_sid = null_mut();
             assert_ne!(
@@ -470,20 +632,6 @@ mod windows {
             );
             let _user = Allocation(user_sid);
             let child_wide: Vec<u16> = child.as_os_str().encode_wide().chain(Some(0)).collect();
-            assert_eq!(
-                unsafe {
-                    SetNamedSecurityInfoW(
-                        child_wide.as_ptr(),
-                        SE_FILE_OBJECT,
-                        OWNER_SECURITY_INFORMATION,
-                        user_sid,
-                        null_mut(),
-                        std::ptr::null(),
-                        std::ptr::null(),
-                    )
-                },
-                0
-            );
             verify(&child, false).unwrap();
             let restricted = restricted_primary();
             medium_integrity(&restricted);
@@ -529,6 +677,23 @@ mod windows {
             assert!(!injection.exists());
             assert_eq!(fs::read(&child).unwrap(), b"original child data");
             verify(&child, false).unwrap();
+            // A later owner assignment disables OWNER_RIGHTS. The production
+            // verifier must continue rejecting that altered security descriptor.
+            assert_eq!(
+                unsafe {
+                    SetNamedSecurityInfoW(
+                        child_wide.as_ptr(),
+                        SE_FILE_OBJECT,
+                        OWNER_SECURITY_INFORMATION,
+                        user_sid,
+                        null_mut(),
+                        null_mut(),
+                        null_mut(),
+                    )
+                },
+                0
+            );
+            assert!(verify(&child, false).unwrap_err().contains("ineffective"));
             drop(root_lock);
             drop(directory);
             assert!(
