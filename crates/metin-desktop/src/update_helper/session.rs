@@ -177,7 +177,7 @@ impl PreparedUpdate {
         OpenOptions::new()
             .write(true)
             .create_new(true)
-            .open(root.join("installer-progress.json"))
+            .open(root.join("installer-progress.jsonl"))
             .map_err(|e| e.to_string())?;
         // The helper owns this persistent session after spawn. It records completion;
         // its executable cannot be removed while Windows is still running it.

@@ -19,8 +19,9 @@ pub struct InstallProgress {
 }
 
 impl InstallProgress {
+    pub(super) const MAX_RECORD_BYTES: usize = 4096;
     pub fn decode(bytes: &[u8], session: uuid::Uuid) -> Result<Self, String> {
-        if bytes.len() > 4096 {
+        if bytes.len() > Self::MAX_RECORD_BYTES {
             return Err("Installer progress exceeded its size limit.".into());
         }
         let record: Self =

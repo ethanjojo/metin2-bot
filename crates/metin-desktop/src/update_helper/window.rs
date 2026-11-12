@@ -80,7 +80,7 @@ impl eframe::App for UpdateWindow {
                 HelperStatus::Failed("The update worker is unavailable.".into())
             });
         if matches!(status, HelperStatus::Installing(_))
-            && let Ok(bytes) = read_progress_bytes(&self.root.join("installer-progress.json"))
+            && let Ok(bytes) = read_progress_bytes(&self.root.join("installer-progress.jsonl"))
             && let Ok(session) =
                 session::read_json::<Session>(&self.root.join("session.json"), 65536)
             && let Ok(progress) = InstallProgress::decode(&bytes, session.id)
@@ -185,13 +185,39 @@ pub fn status_preview(ui: &mut egui::Ui, phase: &str) {
 }
 
 fn read_progress_bytes(path: &Path) -> Result<Vec<u8>, String> {
+    const MAX_STREAM_BYTES: usize = 64 * 1024;
     let mut bytes = Vec::new();
-    File::open(path)
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+        };
+        options.share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE);
+    }
+    options
+        .open(path)
         .map_err(|e| e.to_string())?
-        .take(4097)
+        .take((MAX_STREAM_BYTES + 1) as u64)
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
-    Ok(bytes)
+    if bytes.len() > MAX_STREAM_BYTES {
+        return Err("Installer progress exceeded its stream limit.".into());
+    }
+    let end = bytes
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .ok_or("No complete installer progress record yet.")?;
+    let start = bytes[..end]
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .map_or(0, |index| index + 1);
+    if end - start > InstallProgress::MAX_RECORD_BYTES {
+        return Err("Installer progress exceeded its record limit.".into());
+    }
+    Ok(bytes[start..end].to_vec())
 }
 fn set(status: &Mutex<HelperStatus>, value: HelperStatus) {
     if let Ok(mut state) = status.lock() {
@@ -239,17 +265,7 @@ fn install(
         process::registered_installation()?,
         &session.installation,
     )?;
-    let mut progress_options = OpenOptions::new();
-    progress_options.read(true);
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        progress_options.share_mode(3);
-    }
-    file_tree::reject_linked_ancestors(&root.join("installer-progress.json"))
-        .map_err(|e| e.to_string())?;
-    let _progress_guard = progress_options
-        .open(root.join("installer-progress.json"))
+    file_tree::reject_linked_ancestors(&root.join("installer-progress.jsonl"))
         .map_err(|e| e.to_string())?;
     session::write_new(
         &root.join("ready.json"),
@@ -286,7 +302,7 @@ fn install(
         format!("/DIR={}", registered.display()).into(),
         format!(
             "/COMPANIONUPDATEPROGRESS={}",
-            root.join("installer-progress.json").display()
+            root.join("installer-progress.jsonl").display()
         )
         .into(),
         format!("/COMPANIONUPDATESESSION={}", session.id).into(),
@@ -495,6 +511,52 @@ pub fn run(path: PathBuf) -> Result<(), String> {
 #[cfg(test)]
 mod aborted_window_tests {
     use super::*;
+
+    #[test]
+    fn progress_reader_uses_only_the_latest_complete_bounded_record() {
+        use crate::update_helper::InstallPhase;
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("installer-progress.jsonl");
+        let id = uuid::Uuid::new_v4();
+        let first = InstallProgress {
+            schema: 1,
+            session: id,
+            phase: InstallPhase::Installing,
+            completed: 1,
+            total: 10,
+        };
+        let second = InstallProgress {
+            completed: 2,
+            ..first.clone()
+        };
+        let line_one = serde_json::to_vec(&first).unwrap();
+        let line_two = serde_json::to_vec(&second).unwrap();
+        let mut stream = line_one.clone();
+        stream.push(b'\n');
+        stream.extend_from_slice(&line_two[..line_two.len() / 2]);
+        fs::write(&path, &stream).unwrap();
+        assert_eq!(
+            InstallProgress::decode(&read_progress_bytes(&path).unwrap(), id)
+                .unwrap()
+                .completed,
+            1
+        );
+        stream.truncate(line_one.len() + 1);
+        stream.extend_from_slice(&line_two);
+        stream.push(b'\n');
+        stream.extend_from_slice(b"unfinished");
+        fs::write(&path, &stream).unwrap();
+        assert_eq!(
+            InstallProgress::decode(&read_progress_bytes(&path).unwrap(), id)
+                .unwrap()
+                .completed,
+            2
+        );
+        fs::write(&path, b"unfinished").unwrap();
+        assert!(read_progress_bytes(&path).is_err());
+        fs::write(&path, vec![b'\n'; 65537]).unwrap();
+        assert!(read_progress_bytes(&path).is_err());
+    }
 
     #[test]
     fn helper_closes_only_for_its_valid_abort_and_never_closes_preview() {
