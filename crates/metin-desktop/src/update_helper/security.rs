@@ -432,7 +432,20 @@ mod windows {
         }
 
         fn restricted_primary() -> Token {
-            let original = token().unwrap();
+            // CreateRestrictedToken preserves handle access. This test lowers
+            // integrity, which additionally requires TOKEN_ADJUST_DEFAULT.
+            let mut original = null_mut();
+            assert_ne!(
+                unsafe {
+                    OpenProcessToken(
+                        GetCurrentProcess(),
+                        TOKEN_QUERY | TOKEN_DUPLICATE | TOKEN_ADJUST_DEFAULT,
+                        &mut original,
+                    )
+                },
+                0
+            );
+            let original = Token(original);
             let mut admin_sid = null_mut();
             let sid_text: Vec<u16> = "S-1-5-32-544\0".encode_utf16().collect();
             assert_ne!(
@@ -507,8 +520,43 @@ mod windows {
                     SetTokenInformation(primary.0, TokenIntegrityLevel, label.cast(), size as u32)
                 },
                 0,
-                "could not lower the restricted token to medium integrity"
+                "could not lower the restricted token to medium integrity: {}",
+                std::io::Error::last_os_error()
             );
+        }
+
+        #[test]
+        fn restricted_fixture_supports_medium_integrity_and_impersonation() {
+            let restricted = restricted_primary();
+            medium_integrity(&restricted);
+            let mut needed = 0;
+            unsafe {
+                GetTokenInformation(
+                    restricted.0,
+                    TokenIntegrityLevel,
+                    null_mut(),
+                    0,
+                    &mut needed,
+                );
+            }
+            assert!(needed > 0 && needed < 65536);
+            let mut buffer = vec![0usize; (needed as usize).div_ceil(size_of::<usize>())];
+            assert_ne!(
+                unsafe {
+                    GetTokenInformation(
+                        restricted.0,
+                        TokenIntegrityLevel,
+                        buffer.as_mut_ptr().cast(),
+                        needed,
+                        &mut needed,
+                    )
+                },
+                0
+            );
+            let label = unsafe { &*buffer.as_ptr().cast::<TOKEN_MANDATORY_LABEL>() };
+            assert_eq!(sid_string(label.Label.Sid).unwrap(), "S-1-16-8192");
+            let token = impersonation(&restricted);
+            let _identity = Impersonation::enter(&token);
         }
         struct Impersonation;
         impl Impersonation {
