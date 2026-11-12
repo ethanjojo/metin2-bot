@@ -13,6 +13,8 @@ Uninstall retains profiles and the shared driver by default. Choose driver remov
 
 Startup checking is enabled by default and runs once per launch. An existing explicit opt-out is preserved; change **Check automatically on startup** in **Settings → Updates**. **Stable** is the default channel; choose **Preview** to include release candidates. Checks use the public [Companion GitHub releases](https://github.com/ethanjojo/metin2-bot/releases) without an account or token and without sending profiles, captures or game data. Only compatible newer Companion packages are offered.
 
+“Up to date” applies to the selected channel. A newer `review`, `dev` or `rc` prerelease is offered only on **Preview**.
+
 The opening window first checks for updates. Choose **Continue** to stop waiting and open the game-window chooser. If a newer version is found, the same window offers **Install update** or **Skip for now**. Skip affects this launch only; it does not disable future checks. Once dismissed, a late result cannot replace the chooser or interrupt your connected game session. With no newer release, Companion proceeds to the chooser automatically.
 
 ![Startup update offer in the Companion window](assets/startup-update-available.png)

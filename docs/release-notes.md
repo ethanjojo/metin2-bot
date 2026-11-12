@@ -4,6 +4,7 @@ Companion for Windows x64: a compact Rust/egui desktop application for local vis
 
 ## Highlights
 
+- In-app updates keep profiles locked while verifying and copying their data without reading the transient lock file, fixing Windows error 33 during backup preparation.
 - Specific Run pause causes, recovery links and configuration readiness; F7 and the main button share validated Save & Start, including while minimized. F8 cancels pending starts even during saving, and input requires the acknowledged current configuration.
 - Review exact unsaved changes, return to the last Actions detail through breadcrumbs, and adjust UI scale as 75–150%. Pinned client-relative panel positions survive reconnects and remain accessible after monitor/size changes.
 - Duplicate profiles or export/import one bounded `.companion-profile` package with settings and images, fresh identity and explicit preview. Named excluded areas retain geometry through rename, edit and undo, including legacy profile loading.

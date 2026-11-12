@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fix Windows error 33 during in-app updates: retain the exclusive profile-store lock while excluding only its transient control file from backup hashes and copying; all profile data and reference images remain verified.
 - Precise Run pause causes with details/recovery and distinct setup readiness; one validated Save & Start path for F7 and the main button, including hidden/minimized-window logic and short-lived start requests.
 - Cached unsaved-field summaries, retained Actions details with breadcrumbs, DPI-aware per-client pinned panel positions and percentage UI scale with reset.
 - Read-only fresh HP/buff recognition checks with actual shared matcher scores, reference/current crops and Unknown/evidence-age explanations.

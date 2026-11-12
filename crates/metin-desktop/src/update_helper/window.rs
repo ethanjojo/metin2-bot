@@ -138,7 +138,7 @@ fn draw_window(
                     if let HelperStatus::Failed(error)=status {
                         ui.add(egui::Label::new(egui::RichText::new(error).color(widgets::RED)).wrap());
                         ui.add_space(10.);
-                        ui.weak("Your backups and setup log remain available. No automation was started.");
+                        ui.weak("Update files and any completed backups were kept. No automation was started.");
                     } else { ui.weak("Your profiles and settings will be kept."); }
                     if fixture { ui.small("Preview only · no installation or elevation"); }
                 });
@@ -225,8 +225,13 @@ fn set(status: &Mutex<HelperStatus>, value: HelperStatus) {
     }
 }
 
-fn backup_tree(source: &Path, destination: &Path) -> Result<(), String> {
-    let before = file_tree::fingerprints_except(source, None).map_err(|e| e.to_string())?;
+fn backup_tree(
+    source: &Path,
+    destination: &Path,
+    excluded: Option<&Path>,
+) -> Result<std::collections::BTreeMap<PathBuf, String>, String> {
+    let before = file_tree::fingerprints_except(source, excluded)
+        .map_err(|e| format!("Could not inspect {} for backup: {e}", source.display()))?;
     fs::create_dir(destination).map_err(|e| e.to_string())?;
     for relative in before.keys() {
         let output = destination.join(relative);
@@ -238,7 +243,7 @@ fn backup_tree(source: &Path, destination: &Path) -> Result<(), String> {
     if file_tree::fingerprints_except(destination, None).map_err(|e| e.to_string())? != before {
         return Err("Backup verification failed; nothing was installed.".into());
     }
-    Ok(())
+    Ok(before)
 }
 /// Compare canonical identities, but preserve the registry's spelling for Setup.
 /// Inno's existing-location preflight rejects Rust's Windows verbatim prefix.
@@ -278,19 +283,29 @@ fn install(
     set(status, HelperStatus::Waiting);
     parent.wait()?;
     session::require_commit(root, session.id)?;
+    let store_lock_path = session.data_dir.join("profiles/.store.lock");
     let store_lock = OpenOptions::new()
         .read(true)
         .write(true)
-        .open(session.data_dir.join("profiles/.store.lock"))
+        .open(&store_lock_path)
         .map_err(|e| e.to_string())?;
     fs2::FileExt::try_lock_exclusive(&store_lock).map_err(
         |_| "Another Companion instance opened these profiles. Close it before updating.",
     )?;
     set(status, HelperStatus::BackingUp);
-    let original_data =
-        file_tree::fingerprints_except(&session.data_dir, None).map_err(|e| e.to_string())?;
-    backup_tree(&session.data_dir, &root.join("data-backup"))?;
-    backup_tree(&session.installation, &root.join("installation-backup"))?;
+    // The writer lock remains held throughout setup and verification. Its
+    // control file is not profile data and Windows refuses to read its bytes
+    // through another handle while that exclusive byte-range lock is active.
+    let original_data = backup_tree(
+        &session.data_dir,
+        &root.join("data-backup"),
+        Some(&store_lock_path),
+    )?;
+    backup_tree(
+        &session.installation,
+        &root.join("installation-backup"),
+        None,
+    )?;
     session::require_commit(root, session.id)?;
     set(status, HelperStatus::Installing(None));
     let args: Vec<std::ffi::OsString> = vec![
@@ -368,7 +383,8 @@ fn install(
     {
         return Err("The input driver status could not be verified after update.".into());
     }
-    if file_tree::fingerprints_except(&session.data_dir, None).map_err(|e| e.to_string())?
+    if file_tree::fingerprints_except(&session.data_dir, Some(&store_lock_path))
+        .map_err(|e| e.to_string())?
         != original_data
     {
         return Err(
@@ -408,6 +424,57 @@ fn install(
 #[cfg(test)]
 mod installation_directory_tests {
     use super::*;
+
+    #[test]
+    fn profile_backup_preserves_all_content_while_its_store_lock_stays_exclusive() {
+        let temporary = tempfile::tempdir().unwrap();
+        let data = temporary.path().join("data");
+        let profiles = data.join("profiles");
+        let mut store = crate::storage::ProfileStore::open(&profiles).unwrap();
+        let profile = metin_core::Profile::create("Update regression");
+        store.save(&profile, None).unwrap();
+        fs::write(data.join("ui-settings.json"), b"{\"ui_scale\":1.0}").unwrap();
+        fs::create_dir(data.join("captures")).unwrap();
+        fs::write(
+            data.join("captures/.store.lock"),
+            b"ordinary content with the same filename",
+        )
+        .unwrap();
+        fs::write(data.join("captures/reference.png"), [0, 1, 2, 3, 255]).unwrap();
+        let lock = profiles.join(".store.lock");
+        let expected = file_tree::fingerprints_except(&data, Some(&lock)).unwrap();
+        let backup = temporary.path().join("backup");
+        #[cfg(windows)]
+        assert!(
+            backup_tree(
+                &data,
+                &temporary.path().join("wrong-exclusion"),
+                Some(&data.join("captures/.store.lock"))
+            )
+            .is_err(),
+            "An unrelated exclusion must not hide the locked profile-store file"
+        );
+        let verified = backup_tree(&data, &backup, Some(&lock))
+            .expect("Back up actual data without reading the held control lock");
+        assert_eq!(verified, expected);
+        assert!(!backup.join("profiles/.store.lock").exists());
+        assert_eq!(
+            file_tree::fingerprints_except(&backup, None).unwrap(),
+            expected
+        );
+        assert!(backup.join("captures/.store.lock").is_file());
+        assert!(
+            crate::storage::ProfileStore::open(&profiles).is_err(),
+            "Backup must never release the writer lock"
+        );
+        fs::write(data.join("ui-settings.json"), b"changed during install").unwrap();
+        assert_ne!(
+            file_tree::fingerprints_except(&data, Some(&lock)).unwrap(),
+            expected,
+            "The lock exclusion must not hide real data changes"
+        );
+        drop(store);
+    }
 
     #[test]
     fn registry_path_keeps_setup_spelling_after_canonical_identity_validation() {
