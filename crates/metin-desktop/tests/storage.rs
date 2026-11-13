@@ -20,7 +20,7 @@ fn obsolete_profile_window_choices_are_consumed_but_never_saved_again() {
     let saved: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     assert_eq!(
         saved,
-        serde_json::json!({"ui_scale":1.25,"lite_mode":true,"pin_to_game":false,"preview_refresh_ms":450,"check_updates_on_start":true,"update_channel":"stable","panel_positions":[]})
+        serde_json::json!({"ui_scale":1.25,"lite_mode":true,"pin_to_game":false,"preview_refresh_ms":450,"check_updates_on_start":true,"update_channel":"stable","panel_positions":[],"session_rate_display":"per_minute"})
     );
 }
 #[test]
@@ -295,7 +295,7 @@ fn retired_theme_values_are_ignored_without_losing_current_settings() {
         assert_eq!(
             saved,
             serde_json::json!({
-                "ui_scale":1.5,"preview_refresh_ms":5000,"lite_mode":true,"pin_to_game":false,"check_updates_on_start":true,"update_channel":"stable","panel_positions":[]
+                "ui_scale":1.5,"preview_refresh_ms":5000,"lite_mode":true,"pin_to_game":false,"check_updates_on_start":true,"update_channel":"stable","panel_positions":[],"session_rate_display":"per_minute"
             })
         );
         let reloaded = UISettings::load(dir.path()).unwrap();

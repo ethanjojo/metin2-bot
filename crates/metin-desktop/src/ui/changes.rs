@@ -69,8 +69,7 @@ fn destination(path: &[String]) -> (SetupAction, Option<usize>) {
         "out_of_target" => SetupAction::Actions(ActionsPage::OutOfTarget),
         "safety" if path.get(1).is_some_and(|key| key == "rules") => SetupAction::VisualRules,
         "safety" => SetupAction::Safety,
-        "timing" | "panel" => SetupAction::Settings,
-        "color" if path.get(1).is_some_and(|key| key != "hsv") => SetupAction::Settings,
+        "timing" => SetupAction::Settings,
         _ => SetupAction::Calibration,
     };
     let buff = if key == "buffs" && path.get(1).is_some_and(|key| key == "skills") {
@@ -90,6 +89,7 @@ fn field_label(path: &[String], profile: &Profile) -> String {
     let field = match name.as_str() {
         "interval seconds" => "Interval".into(),
         "png" => "Reference image".into(),
+        "color preset id" => "Metin preset".into(),
         _ => {
             let mut chars = name.chars();
             chars.next().map_or_else(String::new, |first| {
@@ -192,6 +192,14 @@ fn compare(
                 || (path.first().is_some_and(|key| key == "timing")
                     && path.last().is_some_and(|key| key != "max_rotations"));
             let format = |value: &Value| {
+                if path.first().is_some_and(|key| key == "color_preset_id") {
+                    return if value.is_null() {
+                        "Custom"
+                    } else {
+                        "Named preset"
+                    }
+                    .to_owned();
+                }
                 let text = short_value(value, image);
                 if units && value.is_number() {
                     format!("{text} s")
@@ -372,11 +380,7 @@ impl MetinApp {
         self.open_setup(row.action);
         match row.action {
             SetupAction::Settings => {
-                self.settings_page = if row.path.first().is_some_and(|key| key == "timing") {
-                    SettingsPage::Combat
-                } else {
-                    SettingsPage::Detection
-                }
+                self.settings_page = SettingsPage::Combat;
             }
             SetupAction::Safety => {
                 self.safety_page = match row.path.get(1).map(String::as_str) {
@@ -422,6 +426,33 @@ impl MetinApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn recognition_changes_open_recognition_and_timing_opens_settings() {
+        for key in ["color", "panel", "color_preset_id"] {
+            let path = vec![key.to_owned(), "stable_frames".to_owned()];
+            assert!(
+                matches!(destination(&path).0, SetupAction::Calibration),
+                "{key}"
+            );
+        }
+        assert!(matches!(
+            destination(&["timing".to_owned(), "sample_interval".to_owned()]).0,
+            SetupAction::Settings
+        ));
+    }
+
+    #[test]
+    fn preset_provenance_summary_uses_product_labels_instead_of_storage_ids() {
+        let before = Profile::create("Main");
+        let mut after = before.clone();
+        after.color_preset_id = Some(uuid::Uuid::new_v4());
+        let rows = profile_changes(&before, &after, false, false);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "Recognition · Metin preset");
+        assert_eq!(rows[0].before, "Custom");
+        assert_eq!(rows[0].after, "Named preset");
+    }
+
     #[test]
     fn summary_routes_buff_interval_and_hides_image_bytes() {
         let mut before = Profile::create("Main");

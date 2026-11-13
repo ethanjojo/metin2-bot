@@ -10,14 +10,14 @@ pub use super::icons::{Icon, paint as icon};
 /// Atlas buttons retain egui hit testing, keyboard activation and accessibility.
 fn control(
     ui: &mut egui::Ui,
-    kind: Option<Icon>,
+    kind: Option<(Icon, Color32)>,
     label: &str,
     size: Vec2,
     enabled: bool,
     selected: bool,
     hint: &str,
 ) -> egui::Response {
-    ui.add_enabled_ui(enabled, |ui| {
+    ui.add_enabled(enabled, |ui: &mut egui::Ui| {
         let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
         response.widget_info(|| {
             let mut info = egui::WidgetInfo::labeled(
@@ -53,7 +53,7 @@ fn control(
         .max(1.);
         job.wrap.max_rows = 1;
         let galley = ui.painter().layout_job(job);
-        if let Some(kind) = kind {
+        if let Some((kind, icon_color)) = kind {
             let center = if label.is_empty() {
                 rect.center()
             } else {
@@ -66,7 +66,7 @@ fn control(
                 ui.painter(),
                 center,
                 kind,
-                color,
+                icon_color,
                 (rect.height() - 5.).min(18.),
             );
         }
@@ -96,7 +96,6 @@ fn control(
         });
         response.on_hover_text(hint).on_disabled_hover_text(hint)
     })
-    .inner
 }
 pub fn button(
     ui: &mut egui::Ui,
@@ -116,7 +115,7 @@ pub fn button(
         .x;
     control(
         ui,
-        Some(kind),
+        Some((kind, Color32::from_gray(238))),
         label,
         egui::vec2(if label.is_empty() { 30. } else { width + 38. }, 28.),
         enabled,
@@ -130,9 +129,18 @@ pub fn small_icon_button(
     enabled: bool,
     hint: &str,
 ) -> egui::Response {
+    colored_small_icon_button(ui, kind, enabled, hint, Color32::from_gray(238))
+}
+pub fn colored_small_icon_button(
+    ui: &mut egui::Ui,
+    kind: Icon,
+    enabled: bool,
+    hint: &str,
+    color: Color32,
+) -> egui::Response {
     control(
         ui,
-        Some(kind),
+        Some((kind, color)),
         "",
         egui::vec2(26., 28.),
         enabled,
@@ -140,6 +148,7 @@ pub fn small_icon_button(
         hint,
     )
 }
+
 pub fn sized_button(
     ui: &mut egui::Ui,
     kind: Icon,
@@ -149,7 +158,15 @@ pub fn sized_button(
     selected: bool,
     hint: &str,
 ) -> egui::Response {
-    control(ui, Some(kind), label, size, enabled, selected, hint)
+    control(
+        ui,
+        Some((kind, Color32::from_gray(238))),
+        label,
+        size,
+        enabled,
+        selected,
+        hint,
+    )
 }
 pub fn compact_icon_button(
     ui: &mut egui::Ui,
@@ -159,7 +176,7 @@ pub fn compact_icon_button(
 ) -> egui::Response {
     control(
         ui,
-        Some(kind),
+        Some((kind, Color32::from_gray(238))),
         "",
         egui::vec2(26., 15.),
         enabled,

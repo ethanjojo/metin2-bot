@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Reusable named Metin detection presets with complete color/shape settings, private cancellable editor and self-contained per-profile copies. Recognition now owns detection and full-client HP-reference controls.
+- Stable header Save confirmation, aligned inline profile/exclusion rename controls and bounded select menus at narrow/scaled sizes.
+- Atlas-shaped native windows in expanded/collapsed/helper views, plus remembered per-client expanded size and position with a shared reset.
+- Session throughput toggles between Metins/min and average seconds per target using the complete active cycle, including search and loot.
 - Fix Windows error 33 during in-app updates: retain the exclusive profile-store lock while excluding only its transient control file from backup hashes and copying; all profile data and reference images remain verified.
 - Precise Run pause causes with details/recovery and distinct setup readiness; one validated Save & Start path for F7 and the main button, including hidden/minimized-window logic and short-lived start requests.
 - Cached unsaved-field summaries, retained Actions details with breadcrumbs, DPI-aware per-client pinned panel positions and percentage UI scale with reset.

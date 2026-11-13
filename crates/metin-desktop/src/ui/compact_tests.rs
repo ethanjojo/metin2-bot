@@ -550,7 +550,7 @@ fn compact_chrome_fills_header_and_keeps_footer_clear_of_window_frame() {
                 primary.top() - footer.top() <= 6.,
                 "Idle footer must not reserve an empty message row: {primary:?}, {footer:?}"
             );
-            app.show_feedback("Saved", false);
+            app.show_saved_feedback();
             compact_settle(&mut app, &ctx, size);
             let with_notice: egui::Rect = ctx
                 .data(|d| d.get_temp(egui::Id::unique("shell-primary")))
@@ -578,12 +578,12 @@ fn compact_stat_values_and_labels_have_separate_vertical_space() {
         widgets::theme(&ctx);
         let output = compact_settle(&mut app, &ctx, egui::vec2(460., 620.));
         let texts = text_regions(&output);
-        for label in ["Active time", "Targets ended", "Clicks", "Unconfirmed"] {
+        for label in ["Active time", "Targets ended", "metins/min"] {
             let (_, caption) = texts.iter().find(|(s, _)| s == label).unwrap();
             let (_, value) = texts
                 .iter()
                 .find(|(s, r)| {
-                    (s == "0" || s == "00:00:00")
+                    (s == "0" || s == "00:00:00" || s == "—")
                         && (r.left() - caption.left()).abs() < 1.
                         && r.top() < caption.top()
                         && r.bottom() > caption.top() - 40.
@@ -592,6 +592,21 @@ fn compact_stat_values_and_labels_have_separate_vertical_space() {
             assert!(
                 value.bottom() <= caption.top(),
                 "Stat value overlaps {label}: {value:?} / {caption:?}"
+            );
+        }
+        for label in ["Clicks", "Unconfirmed"] {
+            let (_, caption) = texts.iter().find(|(text, _)| text == label).unwrap();
+            let (_, value) = texts
+                .iter()
+                .find(|(text, rect)| {
+                    text == "0"
+                        && (rect.center().y - caption.center().y).abs() < 1.
+                        && rect.left() >= caption.right()
+                })
+                .expect("Compact secondary value beside its caption");
+            assert!(
+                caption.right() < value.left(),
+                "Secondary {label} and its value cannot overlap"
             );
         }
     }
@@ -836,7 +851,6 @@ fn compact_all_detail_forms_scroll_without_horizontal_overflow_or_profile_mutati
             screens.push((Tab::Actions, Some(page), None, None));
         }
         for page in [
-            SettingsPage::Detection,
             SettingsPage::Combat,
             SettingsPage::Appearance,
             SettingsPage::Diagnostics,
@@ -1440,7 +1454,7 @@ fn compact_run_schedule_truncates_long_names_without_losing_click_targets() {
         snapshot: Arc::new(RuntimeSnapshot {
             key: app.key(),
             revision: app.revision,
-        applied_revision: Some(app.revision),
+            applied_revision: Some(app.revision),
             running: true,
             state: "Searching".into(),
             action_timers: vec![metin_core::ActionTimer {
@@ -1719,9 +1733,11 @@ fn recent_activity_uses_only_whole_rows_and_fills_available_height() {
 #[test]
 fn recent_activity_does_not_load_more_rows_when_other_run_sections_scroll() {
     let (mut app, ctx, _dir) = setup();
-    app.target=Some(window_catalog()[0].token);
+    app.target = Some(window_catalog()[0].token);
     app.snapshot = Arc::new(RuntimeSnapshot {
-        key:app.key(),revision:app.revision,applied_revision:Some(app.revision),
+        key: app.key(),
+        revision: app.revision,
+        applied_revision: Some(app.revision),
         running: true,
         action_timers: (0..30)
             .map(|i| metin_core::ActionTimer {
@@ -1789,4 +1805,201 @@ fn recent_activity_does_not_load_more_rows_when_other_run_sections_scroll() {
         );
     }
     app.runtime.shutdown().unwrap();
+}
+#[test]
+fn saved_feedback_does_not_change_footer_content_budget_at_compact_dpi() {
+    let (mut app, ctx, _dir) = setup();
+    app.tab = Tab::Run;
+    ctx.set_zoom_factor(1.5);
+    let size = egui::vec2(400., 480.);
+    app.save().unwrap();
+    app.feedback = None;
+    compact_settle(&mut app, &ctx, size);
+    let footer = || {
+        ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::unique("shell-footer")))
+            .unwrap()
+    };
+    let idle = footer();
+    app.save().unwrap();
+    let output = compact_settle(&mut app, &ctx, size);
+    assert_eq!(
+        footer(),
+        idle,
+        "A successful save must not steal height from tab content"
+    );
+    assert!(
+        !text_regions(&output)
+            .iter()
+            .any(|(text, _)| text == "Saved"),
+        "Saved belongs only in the fixed Save control tooltip"
+    );
+    app.show_feedback("Restored", false);
+    let output = compact_settle(&mut app, &ctx, size);
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(text, _)| text == "Restored"),
+        "Other edit feedback remains available"
+    );
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn session_rate_click_switches_persisted_display_without_changing_canonical_statistics() {
+    use crate::session_metrics::RateDisplay;
+    let (mut app, ctx, dir) = setup();
+    ctx.set_zoom_factor(1.5);
+    app.snapshot = Arc::new(RuntimeSnapshot {
+        running: true,
+        statistics: metin_core::Statistics {
+            active_seconds: 120.,
+            completed: 4,
+            clicks: 9,
+            failed: 2,
+        },
+        ..Default::default()
+    });
+    let before = app.snapshot.statistics.clone();
+    let render = |app: &mut MetinApp, events| {
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(400., 480.),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ui| {
+                ui.set_width(400.);
+                app.run_view(ui);
+            },
+        );
+        output.textures_delta.clear();
+        output
+    };
+    let output = render(&mut app, vec![]);
+    let text = text_regions(&output);
+    let find = |label: &str| {
+        text.iter()
+            .find(|(value, _)| value == label)
+            .unwrap_or_else(|| panic!("Missing session metric: {label}"))
+            .1
+    };
+    let active = find("Active time");
+    let ended = find("Targets ended");
+    let rate = find("metins/min");
+    let clicks = find("Clicks");
+    let unconfirmed = find("Unconfirmed");
+    assert!((active.top() - ended.top()).abs() < 0.1 && (active.top() - rate.top()).abs() < 0.1);
+    assert!(clicks.top() > active.bottom() && (clicks.top() - unconfirmed.top()).abs() < 0.1);
+    assert!(text.iter().any(|(value, _)| value == "2.0"));
+    for pressed in [true, false] {
+        render(
+            &mut app,
+            vec![
+                egui::Event::PointerMoved(rate.center()),
+                egui::Event::PointerButton {
+                    pos: rate.center(),
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: Default::default(),
+                },
+            ],
+        );
+    }
+    let output = render(&mut app, vec![]);
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(value, _)| value == "seconds/metin")
+    );
+    assert!(
+        text_regions(&output)
+            .iter()
+            .any(|(value, _)| value == "30.0")
+    );
+    assert_eq!(
+        app.settings.session_rate_display,
+        RateDisplay::SecondsPerTarget
+    );
+    assert_eq!(
+        UISettings::load(dir.path()).unwrap().session_rate_display,
+        RateDisplay::SecondsPerTarget
+    );
+    assert_eq!(app.snapshot.statistics, before);
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn shared_select_bounds_long_preset_style_rows_inside_compact_scaled_viewport() {
+    let ctx = egui::Context::default();
+    widgets::theme(&ctx);
+    ctx.set_zoom_factor(1.5);
+    let names = ["M".repeat(80), "Short preset".into()];
+    let mut selected = 0;
+    let mut draw = |events| {
+        let mut trigger = egui::Rect::NOTHING;
+        let mut output = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(400., 480.),
+                )),
+                events,
+                ..Default::default()
+            },
+            |ui| {
+                ui.set_width(400.);
+                trigger = widgets::ComboBox::from_id_salt("bounded-preset-select")
+                    .width(280.)
+                    .selected_text(&names[selected])
+                    .show_ui(ui, |ui| {
+                        for (index, name) in names.iter().enumerate() {
+                            ui.horizontal(|ui| {
+                                ui.allocate_exact_size(egui::vec2(18., 20.), egui::Sense::hover());
+                                select::option(ui, &mut selected, index, name);
+                            });
+                        }
+                    })
+                    .response
+                    .rect;
+            },
+        );
+        output.textures_delta.clear();
+        trigger
+    };
+    let trigger = draw(vec![]);
+    for pressed in [true, false] {
+        draw(vec![
+            egui::Event::PointerMoved(trigger.center()),
+            egui::Event::PointerButton {
+                pos: trigger.center(),
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Default::default(),
+            },
+        ]);
+    }
+    for _ in 0..4 {
+        draw(vec![]);
+    }
+    for name in &names {
+        let (_, rect, clip) = ctx
+            .data(|data| {
+                data.get_temp::<(egui::Id, egui::Rect, egui::Rect)>(egui::Id::unique((
+                    "select-row",
+                    name.as_str(),
+                )))
+            })
+            .unwrap();
+        assert!(
+            rect.left() >= 0. && rect.right() <= 400.,
+            "Long choice must remain bounded: {rect:?}"
+        );
+        assert!(
+            clip.contains(rect.center()),
+            "Choice must remain clickable: {rect:?} / {clip:?}"
+        );
+    }
 }

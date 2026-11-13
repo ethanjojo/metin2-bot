@@ -26,6 +26,8 @@ pub enum StorageError {
 pub type Result<T> = std::result::Result<T, StorageError>;
 mod portable;
 pub use portable::ProfilePackage;
+mod metin_presets;
+pub use metin_presets::MetinPreset;
 mod migration;
 pub use migration::{
     DataDirectory, migration_protected_paths, prepare_data_directory, prepare_data_directory_at,
@@ -118,6 +120,7 @@ pub fn validate_data_directory(root: &Path) -> Result<()> {
         let profiles = profiles.canonicalize()?;
         list_profiles(&profiles)?;
         read_selection(&profiles)?;
+        metin_presets::read_catalog(&profiles)?;
     }
     Ok(())
 }
@@ -164,6 +167,7 @@ pub struct UISettings {
     pub check_updates_on_start: bool,
     pub update_channel: crate::updates::UpdateChannel,
     pub panel_positions: Vec<crate::placement::SavedPanelPosition>,
+    pub session_rate_display: crate::session_metrics::RateDisplay,
 }
 /// Consume obsolete persisted hints only when loading existing user data.
 /// Serialization has one source of truth and never writes these hints again.
@@ -183,6 +187,7 @@ struct StoredUISettings {
     check_updates_on_start: bool,
     update_channel: crate::updates::UpdateChannel,
     panel_positions: Vec<crate::placement::SavedPanelPosition>,
+    session_rate_display: crate::session_metrics::RateDisplay,
 }
 impl Default for StoredUISettings {
     fn default() -> Self {
@@ -198,6 +203,7 @@ impl Default for StoredUISettings {
             check_updates_on_start: settings.check_updates_on_start,
             update_channel: settings.update_channel,
             panel_positions: settings.panel_positions,
+            session_rate_display: settings.session_rate_display,
         }
     }
 }
@@ -211,6 +217,7 @@ impl From<StoredUISettings> for UISettings {
             check_updates_on_start: s.check_updates_on_start,
             update_channel: s.update_channel,
             panel_positions: s.panel_positions,
+            session_rate_display: s.session_rate_display,
         }
     }
 }
@@ -224,6 +231,7 @@ impl Default for UISettings {
             check_updates_on_start: true,
             update_channel: crate::updates::UpdateChannel::Stable,
             panel_positions: Vec::new(),
+            session_rate_display: crate::session_metrics::RateDisplay::default(),
         }
     }
 }

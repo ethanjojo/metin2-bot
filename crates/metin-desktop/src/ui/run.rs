@@ -239,48 +239,63 @@ impl MetinApp {
                     && let Some(key) = self.key() { self.send(Command::ResetSession { key }); }
             });
         });
-        let values = [
+        let statistics = &self.snapshot.statistics;
+        let rate = crate::session_metrics::SessionRate::from_statistics(statistics);
+        let rate_display = self.settings.session_rate_display;
+        let tooltip = rate.tooltip();
+        let primary = [
             (
-                Icon::Clock,
-                metin_core::duration(self.snapshot.statistics.active_seconds),
+                metin_core::duration(statistics.active_seconds),
                 "Active time",
-                "Active running time; excludes pauses and scheduled breaks.",
+                "Entire active running cycle; excludes manual pauses and scheduled breaks.",
             ),
             (
-                Icon::Target,
-                self.snapshot.statistics.completed.to_string(),
+                statistics.completed.to_string(),
                 "Targets ended",
                 "Confirmed target-panel disappearances; not independent proof of a kill.",
             ),
             (
-                Icon::Sword,
-                self.snapshot.statistics.clicks.to_string(),
-                "Clicks",
-                "Target-selection clicks sent in this session.",
-            ),
-            (
-                Icon::Cross,
-                self.snapshot.statistics.failed.to_string(),
-                "Unconfirmed",
-                "Target attempts that failed confirmation.",
+                rate_display.value(rate),
+                rate_display.label(),
+                tooltip.as_str(),
             ),
         ];
         let width = ui.available_width();
         let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 46.), egui::Sense::hover());
-        for (i, (_icon, value, label, hint)) in values.into_iter().enumerate() {
+        for (i, (value, label, hint)) in primary.into_iter().enumerate() {
             let tile = egui::Rect::from_min_max(
-                egui::pos2(rect.left() + i as f32 * width / 4., rect.top()),
-                egui::pos2(rect.left() + (i + 1) as f32 * width / 4., rect.bottom()),
+                egui::pos2(rect.left() + i as f32 * width / 3., rect.top()),
+                egui::pos2(rect.left() + (i + 1) as f32 * width / 3., rect.bottom()),
             );
+            let interactive = i == 2;
             let response = ui.interact(
                 tile,
                 ui.scope_id().with(("session-stat", i)),
-                egui::Sense::hover(),
+                if interactive {
+                    egui::Sense::click()
+                } else {
+                    egui::Sense::hover()
+                },
             );
             response.widget_info(|| {
-                egui::WidgetInfo::labeled(egui::Role::Label, true, format!("{label}: {value}"))
+                egui::WidgetInfo::labeled(
+                    if interactive {
+                        egui::Role::Button
+                    } else {
+                        egui::Role::Label
+                    },
+                    true,
+                    format!("{label}: {value}"),
+                )
             });
-            response.on_hover_text(hint);
+            if interactive && (response.hovered() || response.has_focus()) {
+                ui.painter().rect_stroke(
+                    tile.shrink(1.),
+                    2.,
+                    egui::Stroke::new(1., widgets::BRONZE),
+                    egui::StrokeKind::Inside,
+                );
+            }
             if i > 0 {
                 ui.painter().vline(
                     tile.left(),
@@ -288,22 +303,89 @@ impl MetinApp {
                     egui::Stroke::new(1., ui.visuals().widgets.noninteractive.bg_stroke.color),
                 );
             }
-            ui.painter().text(
-                egui::pos2(tile.left() + 9., tile.top() + 2.),
-                egui::Align2::LEFT_TOP,
-                value,
-                egui::FontId::proportional(if i == 0 { 17. } else { 20. }),
+            row_text(
+                ui.painter(),
+                egui::Rect::from_min_max(
+                    tile.min + egui::vec2(9., 1.),
+                    egui::pos2(tile.right() - 5., tile.top() + 26.),
+                ),
+                &value,
+                if i == 0 { 17. } else { 20. },
                 ui.visuals().text_color(),
+                false,
             );
-            ui.painter().text(
-                egui::pos2(tile.left() + 9., tile.bottom() - 2.),
-                egui::Align2::LEFT_BOTTOM,
+            row_text(
+                ui.painter(),
+                egui::Rect::from_min_max(
+                    egui::pos2(tile.left() + 9., tile.bottom() - 17.),
+                    tile.max - egui::vec2(5., 1.),
+                ),
                 label,
-                egui::FontId::proportional(10.),
+                10.,
                 ui.visuals().weak_text_color(),
+                false,
+            );
+            if response.on_hover_text(hint).clicked() && interactive {
+                self.settings.session_rate_display = rate_display.toggled();
+                if let Err(error) = self.settings.save(&self.root) {
+                    self.error = Some(error.to_string());
+                }
+            }
+        }
+        let secondary = [
+            (
+                statistics.clicks.to_string(),
+                "Clicks",
+                "Target-selection clicks sent in this session.",
+            ),
+            (
+                statistics.failed.to_string(),
+                "Unconfirmed",
+                "Target attempts that failed confirmation.",
+            ),
+        ];
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(width, 19.), egui::Sense::hover());
+        for (i, (value, label, hint)) in secondary.into_iter().enumerate() {
+            let tile = egui::Rect::from_min_max(
+                egui::pos2(rect.left() + i as f32 * width / 2., rect.top()),
+                egui::pos2(rect.left() + (i + 1) as f32 * width / 2., rect.bottom()),
+            );
+            let response = ui.interact(
+                tile,
+                ui.scope_id().with(("session-secondary", i)),
+                egui::Sense::hover(),
+            );
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::Role::Label, true, format!("{label}: {value}"))
+            });
+            response.on_hover_text(hint);
+            let label_rect = egui::Rect::from_min_max(
+                tile.min + egui::vec2(9., 0.),
+                egui::pos2(tile.center().x + 20., tile.bottom()),
+            );
+            row_text(
+                ui.painter(),
+                label_rect,
+                label,
+                11.,
+                ui.visuals().weak_text_color(),
+                false,
+            );
+            let value_rect = egui::Rect::from_min_max(
+                egui::pos2(label_rect.right() + 3., tile.top()),
+                tile.max - egui::vec2(9., 0.),
+            );
+            row_text(
+                ui.painter(),
+                value_rect,
+                &value,
+                12.,
+                ui.visuals().text_color(),
+                true,
             );
         }
     }
+
     fn run_schedule(&mut self, ui: &mut egui::Ui) {
         use metin_core::EventDestination as D;
         let mut open = None;

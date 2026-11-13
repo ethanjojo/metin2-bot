@@ -80,7 +80,7 @@ Review every generated image before committing. Keep labels neutral, avoid perso
 
 Updates uses `--ui-updates idle|checking|up-to-date|available|downloading|ready|failed` with the isolated screenshot/fixture arguments. The capture script maps these to `updates.png`, `update-available.png`, `update-download.png`, `update-ready.png` and `update-error.png`. All five states are offline fixtures. The ready fixture uses inert data and disables installation; it proves neither a network download nor a published update feed. Recapture them with `./tools/capture-docs.ps1 -OnlyViews updates,update-available,update-download,update-ready,update-error`. Add `--ui-startup-update` to show the same update state in the opening window. `--ui-update-helper verifying|waiting|backup|installing|driver|finishing|checking|complete|failed` renders the shared helper presentation only; it does not create a session, start setup, request UAC or execute driver management. The capture script registers separate `startup-update-*` and `update-installing`/`update-driver`/`update-checking`/`update-complete`/`update-install-error` views.
 
-New page fixtures: `--ui-settings detection|combat|appearance|diagnostics`, `--ui-safety schedule|recovery|notifications`, and `--ui-safety-capture`. Visual-rule fixtures use `--ui-tab actions --ui-actions visual-rules`; the internal enum is `ActionsPage::VisualRules`. Periodic scheduling and first-use migration, visual persistence/latching, guarded key/click execution, bounded verification retries, bounded recovery and cancelled-input cleanup have deterministic tests. Notification delivery has an injected failure test; `cargo run -p metin-desktop --example notification_probe -- --system` explicitly submits one local OS test alert.
+New page fixtures: `--ui-settings combat|appearance|diagnostics|updates`, `--ui-safety schedule|recovery|notifications`, and `--ui-safety-capture`. Metin detection and HP panel matching settings belong to Recognition; the retired Detection settings page is no longer a CLI fixture. Visual-rule fixtures use `--ui-tab actions --ui-actions visual-rules`; the internal enum is `ActionsPage::VisualRules`. Periodic scheduling and first-use migration, visual persistence/latching, guarded key/click execution, bounded verification retries, bounded recovery and cancelled-input cleanup have deterministic tests. Notification delivery has an injected failure test; `cargo run -p metin-desktop --example notification_probe -- --system` explicitly submits one local OS test alert.
 
 ## Compact capture and annotation architecture
 
@@ -152,6 +152,8 @@ Probe the actual feed without installing or sending game input:
 ```powershell
 cargo run -p metin-desktop --example update_probe --locked -- build/update-feed-probe.json
 ```
+
+Pass `--current-version <installed-product-version>` to verify eligibility from a specific installed build; the report records that version. Without it, the probe uses `0.0.0` to inspect the newest compatible Preview package. `--download` also verifies the public installer without executing it.
 
 Append `--download` to verify and discard an offered installer as well. The JSON receipt records feed access, candidate availability, download verification and `installer_executed: false`. A successful report with `compatible_new_installer: false` can be correct when the feed contains only legacy MetinBot assets, which are filtered out. Offline screenshot fixtures do not establish live feed or package acceptance.
 

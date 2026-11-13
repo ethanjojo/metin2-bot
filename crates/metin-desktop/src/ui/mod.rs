@@ -7,9 +7,10 @@ mod changes;
 mod feedback;
 mod forms;
 pub(crate) mod icons;
+mod metin_presets;
 mod mount;
 #[cfg(windows)]
-mod native_chrome;
+pub(crate) mod native_chrome;
 mod overlay;
 mod periodic;
 mod placement;
@@ -25,6 +26,7 @@ mod skill_icon;
 pub(crate) mod skin;
 mod startup_update;
 mod state;
+mod trailing_row;
 mod update_view;
 pub(crate) mod widgets;
 mod window_selection;
@@ -94,6 +96,7 @@ pub struct MetinApp {
     title_clip: Option<skin::TitleClip>,
     profiles: Vec<Profile>,
     editor: Editor,
+    metin_presets: metin_presets::PresetUi,
     runtime: RuntimeHandle,
     snapshot: Arc<RuntimeSnapshot>,
     target: Option<TargetToken>,
@@ -118,6 +121,7 @@ pub struct MetinApp {
     buff_detail: bool,
     collapsed: bool,
     expanded_size: egui::Vec2,
+    panel_size_state: placement::PanelSizeState,
     pinned: bool,
     overlay: Option<crate::game_overlay::GameOverlay>,
     pending_overlay: Option<overlay::PendingCapture>,
@@ -224,6 +228,8 @@ impl MetinApp {
         } else {
             (Profile::create("New profile"), None)
         };
+        let metin_presets =
+            metin_presets::PresetUi::new(store.metin_presets().map_err(|e| e.to_string())?);
         let settings = UISettings::load(&root).map_err(|e| e.to_string())?;
         let pinned = settings.pin_to_game;
         let notify = context.clone();
@@ -247,6 +253,7 @@ impl MetinApp {
             title_clip: None,
             profiles,
             editor: Editor::new(profile, template),
+            metin_presets,
             runtime,
             snapshot,
             target: None,
@@ -271,6 +278,7 @@ impl MetinApp {
             buff_detail: false,
             collapsed: false,
             expanded_size: egui::vec2(460., 620.),
+            panel_size_state: Default::default(),
             pinned,
             overlay: None,
             pending_overlay: None,
@@ -284,7 +292,7 @@ impl MetinApp {
             panel_link: None,
             placement_key: None,
             placement_save_due: None,
-            settings_page: settings::SettingsPage::Detection,
+            settings_page: settings::SettingsPage::Combat,
             selected_periodic: None,
             selected_safety: 0,
             visual_detail: false,
@@ -621,6 +629,11 @@ impl MetinApp {
         self.save_in_generation(None).map(|_| ())
     }
     fn save_in_generation(&mut self, expected: Option<u64>) -> Result<Option<u64>, String> {
+        if self.metin_presets.draft.is_some() {
+            return Err(
+                "Apply or cancel the Metin detection editor before saving the profile.".into(),
+            );
+        }
         if self.editor.is_recalibrating() {
             return Err("Confirm or cancel the calibration review before saving.".into());
         }
@@ -660,7 +673,7 @@ impl MetinApp {
         self.editor.mark_saved(saved);
         self.profiles = self.store.list().map_err(|e| e.to_string())?;
         let generation = self.configure_in_generation(expected)?;
-        self.show_feedback("Saved", false);
+        self.show_saved_feedback();
         Ok(generation)
     }
     fn discard_or_save(&mut self) -> bool {
@@ -668,6 +681,11 @@ impl MetinApp {
         if self.smoke.is_some() && self.smoke_requested {
             // A completed screenshot fixture discards only its synthetic draft.
             return true;
+        }
+        if self.metin_presets.draft.is_some() {
+            self.error =
+                Some("Apply or cancel the Metin detection editor before continuing.".into());
+            return false;
         }
         if self.editor.is_recalibrating() {
             self.error =
@@ -850,13 +868,13 @@ impl MetinApp {
         }
         #[cfg(feature = "ui-smoke")]
         if let Some(phase) = self.update_helper_fixture.clone() {
+            #[cfg(windows)]
+            self.sync_title_clip(ui.ctx(), None);
             crate::update_helper::status_preview(ui, &phase);
             return;
         }
         skin::background(ui, self.collapsed);
-        if !self.window_chooser.open && !self.collapsed {
-            self.expanded_size = ui.ctx().content_rect().size();
-        }
+        self.observe_expanded_panel_size(ui.ctx());
         #[cfg(windows)]
         if !self.collapsed {
             // Chooser/target-loss routes return before the toolbar: restore the
@@ -933,6 +951,8 @@ impl MetinApp {
             }
         });
         self.window_frame(ui);
+        let preset_was_open = self.metin_presets.draft.is_some();
+        self.metin_preset_dialog(ui.ctx());
         if self.editor.is_recalibrating()
             && ui.input(|i| i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::F8))
         {
@@ -940,7 +960,12 @@ impl MetinApp {
         }
         let history_was_open = self.history_open;
         self.sync_preview_demand();
-        if !history_was_open && !self.history_open && !binding_was_active && self.binding.is_none()
+        if !preset_was_open
+            && self.metin_presets.draft.is_none()
+            && !history_was_open
+            && !self.history_open
+            && !binding_was_active
+            && self.binding.is_none()
         {
             let input = ui.input(|i| {
                 (

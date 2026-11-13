@@ -33,11 +33,19 @@ impl ComboBox {
             self.width.unwrap_or(ui.spacing().combo_width),
         );
         let popup_id = egui::Popup::default_response_id(&response);
+        let frame = super::skin::popup_frame(ui);
+        let width = response
+            .rect
+            .width()
+            .min(ui.ctx().content_rect().width() - 16.);
         let popup = egui::Popup::menu(&response)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-            .width(response.rect.width())
-            .frame(super::skin::popup_frame(ui))
-            .show(|ui| menu_scroll(ui, self.id, 260., contents));
+            .width(width)
+            .frame(frame)
+            .show(|ui| {
+                bound_popup_content(ui, width, frame);
+                menu_scroll(ui, self.id, 260., contents)
+            });
         if popup.is_some() {
             ui.ctx().accesskit_node_builder(popup_id, |node| {
                 node.set_role(egui::accesskit::Role::ListBox)
@@ -49,6 +57,14 @@ impl ComboBox {
         }
     }
 }
+
+/// Area::default_width is an initial estimate, not a bound for long choice labels.
+pub(super) fn bound_popup_content(ui: &mut egui::Ui, width: f32, frame: egui::Frame) {
+    let content_width = (width - frame.total_margin().sum().x).max(1.);
+    ui.set_width(content_width);
+    ui.set_max_width(content_width);
+}
+
 pub fn combo_trigger(ui: &mut egui::Ui, id: egui::Id, text: &str, width: f32) -> egui::Response {
     let (_, rect) = ui.allocate_space(egui::vec2(width.min(ui.available_width()).max(40.), 28.));
     let response = ui.interact(rect, ui.make_persistent_id(id), egui::Sense::click());
@@ -156,14 +172,20 @@ pub fn menu_scroll<R>(
     let command_id = ui.make_persistent_id(("menu-scroll-command", &salt));
     let command = ui.ctx().data_mut(|d| d.remove_temp::<f32>(command_id));
     let width = ui.available_width();
+    let overflow_id = ui.make_persistent_id(("menu-scroll-overflow", &salt));
+    let reserved = ui
+        .ctx()
+        .data(|data| data.get_temp::<bool>(overflow_id))
+        .unwrap_or(true);
+    let content_width = (width - if reserved { 20. } else { 0. }).max(40.);
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = 3.;
         let result = ui
             .allocate_ui_with_layout(
-                egui::vec2((width - 20.).max(40.), max_height),
+                egui::vec2(content_width, max_height),
                 egui::Layout::top_down_justified(egui::Align::Min),
                 |ui| {
-                    ui.set_width((width - 20.).max(40.));
+                    ui.set_width(content_width);
                     let scroll = egui::ScrollArea::vertical()
                         .id_salt(&salt)
                         .max_height(max_height)
@@ -181,6 +203,14 @@ pub fn menu_scroll<R>(
             )
             .inner;
         let max_offset = (result.content_size.y - result.inner_rect.height()).max(0.);
+        let overflowing = max_offset > 0.;
+        if overflowing != reserved {
+            ui.ctx()
+                .data_mut(|data| data.insert_temp(overflow_id, overflowing));
+            // This is measured layout only; egui retains the sole scroll offset.
+            // Re-run before presenting so a newly absent/present gutter cannot jump.
+            ui.ctx().request_discard("Menu scrollbar gutter changed");
+        }
         if max_offset > 0. {
             let (bar, _) = ui.allocate_exact_size(
                 egui::vec2(17., result.inner_rect.height()),

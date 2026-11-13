@@ -31,6 +31,7 @@ struct Skin {
     manifest: Manifest,
     texture: egui::TextureHandle,
     title_alpha: [AlphaTile; 3],
+    board_alpha: BTreeMap<String, AlphaTile>,
 }
 struct AlphaTile {
     width: u32,
@@ -73,10 +74,32 @@ fn get(ctx: &egui::Context) -> Arc<Skin> {
             pixels,
         }
     });
+    let board_alpha = manifest.styles["board"]
+        .parts
+        .iter()
+        .map(|(part, name)| {
+            let [x, y, width, height] = manifest.regions[name].rect;
+            let pixels = (y..y + height)
+                .flat_map(|py| {
+                    (x..x + width).map(move |px| ((py * icon.width + px) * 4 + 3) as usize)
+                })
+                .map(|offset| icon.rgba[offset])
+                .collect();
+            (
+                part.clone(),
+                AlphaTile {
+                    width,
+                    height,
+                    pixels,
+                },
+            )
+        })
+        .collect();
     let skin = Arc::new(Skin {
         manifest,
         texture,
         title_alpha,
+        board_alpha,
     });
     ctx.data_mut(|data| data.insert_temp(id, skin.clone()));
     skin
@@ -218,7 +241,6 @@ pub fn background(ui: &egui::Ui, collapsed: bool) {
     let ctx = ui.ctx();
     let painter = ctx.layer_painter(egui::LayerId::background());
     let rect = ctx.content_rect();
-    painter.rect_filled(rect, 0., ui.visuals().window_fill);
     let skin = get(ctx);
     painter.add(skin.panel_shape("board", rect));
     painter.rect_filled(rect.shrink(12.), 0., Color32::from_black_alpha(120));
@@ -233,9 +255,23 @@ pub struct TitleBar {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-pub(super) struct TitleClip {
+pub(crate) struct TitleClip {
     rect: Rect,
     pixels_per_point: f32,
+    board: bool,
+}
+
+impl TitleClip {
+    pub(crate) fn board(rect: Rect, pixels_per_point: f32) -> Self {
+        Self {
+            rect,
+            pixels_per_point,
+            board: true,
+        }
+    }
+}
+pub(crate) fn board_clip(ctx: &egui::Context) -> TitleClip {
+    TitleClip::board(ctx.content_rect(), ctx.pixels_per_point())
 }
 
 impl TitleBar {
@@ -243,6 +279,7 @@ impl TitleBar {
         TitleClip {
             rect: self.paint,
             pixels_per_point,
+            board: false,
         }
     }
     pub fn close(self, ui: &mut egui::Ui, hint: &str) -> egui::Response {
@@ -353,8 +390,11 @@ pub(crate) fn simple_title(ui: &mut egui::Ui, text: &str) -> bool {
 
 /// Pixel runs from the same atlas that paints the title, including DPI and tiled center.
 /// Windows clips the collapsed native surface to these runs, independent of GPU alpha support.
-pub(super) fn title_clip_runs(ctx: &egui::Context, clip: TitleClip) -> Vec<[i32; 4]> {
+pub(crate) fn title_clip_runs(ctx: &egui::Context, clip: TitleClip) -> Vec<[i32; 4]> {
     let skin = get(ctx);
+    if clip.board {
+        return board_clip_runs(&skin, clip);
+    }
     let [left_cap, right_cap] = skin.manifest.styles["titlebar"]
         .cap_widths_px
         .unwrap()
@@ -387,6 +427,70 @@ pub(super) fn title_clip_runs(ctx: &egui::Context, clip: TitleClip) -> Vec<[i32;
             } else if let Some(left) = start.take() {
                 runs.push([left, py, px, py + 1]);
             }
+        }
+    }
+    runs
+}
+
+/// Only the outer atlas contour clips the window; opaque interior preserves every control.
+fn board_clip_runs(skin: &Skin, clip: TitleClip) -> Vec<[i32; 4]> {
+    let rect = clip.rect;
+    let scale = clip.pixels_per_point;
+    if !rect.is_positive() || !scale.is_finite() || scale <= 0. {
+        return Vec::new();
+    }
+    let [l, t, r, b] = skin.manifest.styles["board"]
+        .borders_ltrb_px
+        .unwrap()
+        .map(|v| v as f32);
+    let alpha = |x: f32, y: f32| {
+        let (column, tx) = if x < l {
+            ("left", x)
+        } else if x >= rect.width() - r {
+            ("right", x - rect.width() + r)
+        } else {
+            ("", x - l)
+        };
+        let (row, ty) = if y < t {
+            ("top", y)
+        } else if y >= rect.height() - b {
+            ("bottom", y - rect.height() + b)
+        } else {
+            ("", y - t)
+        };
+        let part = match (row, column) {
+            ("", "") => "center",
+            ("", c) => c,
+            (row, "") => row,
+            ("top", "left") => "top_left",
+            ("top", "right") => "top_right",
+            ("bottom", "left") => "bottom_left",
+            _ => "bottom_right",
+        };
+        skin.board_alpha[part].sample(tx, ty)
+    };
+    let left = (rect.left() * scale).floor() as i32;
+    let right = (rect.right() * scale).ceil() as i32;
+    let mut runs: Vec<[i32; 4]> = Vec::new();
+    for py in (rect.top() * scale).floor() as i32..(rect.bottom() * scale).ceil() as i32 {
+        let y = (py as f32 + 0.5) / scale - rect.top();
+        let occupied = |px: i32| {
+            let x = (px as f32 + 0.5) / scale - rect.left();
+            x >= 0. && x < rect.width() && y >= 0. && y < rect.height() && alpha(x, y) >= 128
+        };
+        let Some(first) = (left..right).find(|px| occupied(*px)) else {
+            continue;
+        };
+        let last = (first..right).rev().find(|px| occupied(*px)).unwrap() + 1;
+        // Merge equal adjacent rows before passing them over the GDI boundary.
+        if let Some(previous) = runs.last_mut()
+            && previous[0] == first
+            && previous[2] == last
+            && previous[3] == py
+        {
+            previous[3] = py + 1;
+        } else {
+            runs.push([first, py, last, py + 1]);
         }
     }
     runs
@@ -609,6 +713,30 @@ pub fn panel_shape(ui: &egui::Ui, rect: Rect) -> egui::Shape {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn expanded_native_outline_keeps_the_interior_and_cuts_atlas_corners_at_each_dpi() {
+        let ctx = egui::Context::default();
+        for scale in [1., 1.5, 2.] {
+            let rect = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400., 480.));
+            let runs = title_clip_runs(&ctx, TitleClip::board(rect, scale));
+            let inside = |x, y| {
+                runs.iter()
+                    .any(|[l, t, r, b]| x >= *l && x < *r && y >= *t && y < *b)
+            };
+            assert!(
+                !inside(0, 0),
+                "The transparent artwork corner must never reveal the window surface"
+            );
+            for y in 32..448 {
+                assert!(inside((200. * scale) as i32, (y as f32 * scale) as i32));
+            }
+            assert!(
+                inside((380. * scale) as i32, (460. * scale) as i32),
+                "The resize grip remains usable"
+            );
+        }
+    }
+
     #[test]
     fn embedded_skin_regions_and_styles_are_complete_and_upload_once_per_context() {
         let ctx = egui::Context::default();

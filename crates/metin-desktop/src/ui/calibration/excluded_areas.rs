@@ -74,13 +74,8 @@ impl MetinApp {
             let mut edit_area = false;
             let mut show = false;
             ui.push_id(("excluded-area", index), |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 4.;
-                    let editing = rename.as_ref().is_some_and(|edit| edit.index == index);
-                    let controls_width = if editing { 60. } else {
-                        3. * 26. + 4. * 4. + 38. + ui.painter().layout_no_wrap("Edit".into(), egui::FontId::proportional(13.), egui::Color32::WHITE).size().x
-                    };
-                    let width = (ui.available_width() - controls_width).max(50.);
+                let editing = rename.as_ref().is_some_and(|edit| edit.index == index);
+                crate::ui::trailing_row::show(ui, if editing { 2 } else { 4 }, |ui, actions_ui, width| {
                     if editing {
                         let draft = rename.as_mut().expect("editing rename");
                         let input = ui.add_sized([width, 28.], egui::TextEdit::singleline(&mut draft.name)
@@ -90,9 +85,9 @@ impl MetinApp {
                         let mut candidate = area.clone();
                         candidate.name = draft.name.trim().to_owned();
                         let valid = candidate.validate().is_ok();
-                        confirm = widgets::small_icon_button(ui, Icon::Check, can_edit && valid, "Save excluded area name (Enter)")
+                        confirm = widgets::small_icon_button(actions_ui, Icon::Check, can_edit && valid, "Save excluded area name (Enter)")
                             .on_disabled_hover_text("Enter 1–80 characters without control characters.").clicked();
-                        cancel = widgets::small_icon_button(ui, Icon::Cross, true, "Cancel excluded area rename (Escape)").clicked();
+                        cancel = widgets::small_icon_button(actions_ui, Icon::Cross, true, "Cancel excluded area rename (Escape)").clicked();
                         if input.has_focus() || input.lost_focus() {
                             confirm |= valid && can_edit && ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
                             cancel |= ui.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
@@ -103,12 +98,12 @@ impl MetinApp {
                             self.mode = EditMode::Mask(Some(index));
                             show = can_show;
                         }
-                        response.on_hover_text("Select this area. Use Edit to move or resize it over a frozen game image.");
-                        begin_rename = widgets::small_icon_button(ui, Icon::Edit, can_edit, &format!("Rename excluded area: {}", area.name)).clicked();
-                        show |= widgets::small_icon_button(ui, Icon::Target, can_show, &format!("Show {} in game for 3 seconds", area.name))
+                        response.on_hover_text("Select this area. Use the region icon to move or resize it over a frozen game image.");
+                        begin_rename = widgets::small_icon_button(actions_ui, Icon::Edit, can_edit, &format!("Rename excluded area: {}", area.name)).clicked();
+                        show |= widgets::small_icon_button(actions_ui, Icon::Target, can_show, &format!("Show {} in game for 3 seconds", area.name))
                             .on_disabled_hover_text("Connect a game window and enable Game overlay first. No game input is sent.").clicked();
-                        edit_area = widgets::button(ui, Icon::Edit, "Edit", can_edit, &format!("Move or resize {} over a frozen game image", area.name)).clicked();
-                        if widgets::small_icon_button(ui, Icon::Trash, can_edit, "Delete this excluded area. Undo restores it.").clicked() { removed = Some(index); }
+                        edit_area = widgets::small_icon_button(actions_ui, Icon::Window, can_edit, &format!("Move or resize {} over a frozen game image", area.name)).clicked();
+                        if widgets::small_icon_button(actions_ui, Icon::Trash, can_edit, "Delete this excluded area. Undo restores it.").clicked() { removed = Some(index); }
                     }
                 });
             });

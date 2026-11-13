@@ -156,13 +156,13 @@ impl MetinApp {
         let allowed = self.pending_overlay.is_none()
             && !self.editor.is_recalibrating()
             && self.profile_rename.is_none();
-        ui.horizontal_wrapped(|ui| {
-            if widgets::button(ui,Icon::Plus,"New profile",allowed,"Create a new profile; unsaved changes are checked first.").clicked() && self.discard_or_save() {
+        ui.add_enabled_ui(allowed, |ui| {
+            ui.horizontal_wrapped(|ui| {
+            if widgets::button(ui,Icon::Plus,"New profile",true,"Create a new profile; unsaved changes are checked first.").clicked() && self.discard_or_save() {
                 self.replace_profile(Profile::create("New profile"),None);
                 self.navigate(Tab::Calibration);
                 ui.close();
             }
-            ui.add_enabled_ui(allowed,|ui| {
                 if widgets::plain_button(ui,"Duplicate").on_hover_text("Duplicate the selected saved profile and its images. Unsaved edits are checked first; the copy starts with no session state.").clicked() {
                     match self.duplicate_selected_profile(){Err(error)=>self.error=Some(error),Ok(true)=>ui.close(),Ok(false)=>{}}
                 }
@@ -254,10 +254,7 @@ impl MetinApp {
         let mut cancel = false;
         let mut focus = None;
         ui.push_id(id, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 5.;
-                let controls = if editing { 2. } else { 1. };
-                let width = (ui.available_width() - controls * 31.).max(40.);
+            super::trailing_row::show(ui, if editing { 2 } else { 1 }, |ui, actions_ui, width| {
                 if editing {
                     let draft = self.profile_rename.as_mut().expect("editing row");
                     let input = ui.add_sized(
@@ -281,7 +278,7 @@ impl MetinApp {
                         ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
                     let valid = !draft.name.trim().is_empty();
                     confirm = (widgets::small_icon_button(
-                        ui,
+                        actions_ui,
                         Icon::Check,
                         allowed && valid,
                         "Save profile name (Enter)",
@@ -296,7 +293,7 @@ impl MetinApp {
                         && allowed
                         && valid;
                     cancel = widgets::small_icon_button(
-                        ui,
+                        actions_ui,
                         Icon::Cross,
                         true,
                         "Cancel profile rename (Escape)",
@@ -320,7 +317,7 @@ impl MetinApp {
                         ui.close();
                     }
                     let pencil = widgets::small_icon_button(
-                        ui,
+                        actions_ui,
                         Icon::Edit,
                         allowed,
                         &format!("Rename profile: {label}"),
@@ -392,9 +389,7 @@ impl MetinApp {
             ).clicked() {
                 self.revert_profile();
             }
-            if widgets::small_icon_button(
-                ui, Icon::Save, can_commit, "Save profile changes. Applying changes pauses automation.",
-            ).clicked() && let Err(error) = self.save() {
+            if self.save_profile_button(ui, can_commit).clicked() && can_commit && let Err(error) = self.save() {
                 self.error = Some(error);
             }
             response
@@ -414,17 +409,17 @@ impl MetinApp {
         }
         // This is an editable chooser, not a flat menu: menu arrow navigation
         // would visit each pencil as a separate vertical item.
+        let popup_width = response
+            .rect
+            .width()
+            .max(300.)
+            .min(ui.ctx().content_rect().width() - 24.);
+        let frame = skin::popup_frame(ui);
         let popup = egui::Popup::from_toggle_button_response(&response)
             .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
             .layout(egui::Layout::top_down_justified(egui::Align::Min))
-            .frame(skin::popup_frame(ui))
-            .width(
-                response
-                    .rect
-                    .width()
-                    .max(300.)
-                    .min(ui.ctx().content_rect().width() - 24.),
-            );
+            .frame(frame)
+            .width(popup_width);
         #[cfg(feature = "ui-smoke")]
         let popup = if self.profile_menu_fixture {
             popup.open(true)
@@ -432,6 +427,7 @@ impl MetinApp {
             popup
         };
         let open = popup.show(|ui| {
+            select::bound_popup_content(ui, popup_width, frame);
             if self.profile_import_preview(ui) {
                 return;
             }
@@ -516,6 +512,17 @@ impl MetinApp {
             ui.separator();
             self.profile_transfer_actions(ui);
         });
+        #[cfg(test)]
+        if let Some(open) = &open {
+            let outer = open.response.rect;
+            let content = outer.shrink2(frame.total_margin().sum() * 0.5);
+            ui.ctx().data_mut(|data| {
+                data.insert_temp(
+                    egui::Id::unique("profile-popup-frame"),
+                    (outer, content, popup_width),
+                )
+            });
+        }
         if open.is_none() {
             self.profile_rename = None;
             ui.ctx()

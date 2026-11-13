@@ -292,6 +292,9 @@ impl GameOverlay {
         None
     }
     pub fn hide(&self) {}
+    pub fn reset_panel_position(&self) -> Result<(), String> {
+        Ok(())
+    }
     pub fn panel_position(&self) -> Option<(TargetToken, crate::placement::PanelOffset)> {
         None
     }

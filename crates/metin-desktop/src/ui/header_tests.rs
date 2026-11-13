@@ -1,9 +1,8 @@
 // Included from tests.rs: exercise the real shell, painter output and pointer events.
-const PROFILE_HEADER_HINTS: [&str; 4] = [
+const PROFILE_HEADER_HINTS: [&str; 3] = [
     "Undo profile edit (Ctrl+Z)",
     "Redo profile edit (Ctrl+Y)",
     "Revert all unsaved changes to the saved profile. The connected game window stays selected.",
-    "Save profile changes. Applying changes pauses automation.",
 ];
 
 fn header_profile_geometry(ctx: &egui::Context) -> [egui::Rect; 5] {
@@ -11,7 +10,10 @@ fn header_profile_geometry(ctx: &egui::Context) -> [egui::Rect; 5] {
         .data(|d| d.get_temp::<egui::Rect>(egui::Id::unique("profile-trigger")))
         .unwrap();
     let controls = PROFILE_HEADER_HINTS.map(|hint| compact_control_rect(ctx, hint));
-    [trigger, controls[0], controls[1], controls[2], controls[3]]
+    let (save, _) = ctx
+        .data(|d| d.get_temp::<(egui::Rect, bool)>(egui::Id::unique("profile-save")))
+        .expect("Stable Save slot, including its temporary Saved check");
+    [trigger, controls[0], controls[1], controls[2], save]
 }
 
 #[test]
@@ -25,7 +27,10 @@ fn header_profile_actions_stay_visible_aligned_and_fixed_across_clean_and_dirty_
         .data(|d| d.get_temp::<egui::Rect>(egui::Id::unique("shell-header")))
         .unwrap();
     let gap = clean[0].top() - (header.top() + 4. + 23.);
-    assert!((6. ..=8.).contains(&gap), "Profile row must follow the visible title strip without a blank band: {gap}");
+    assert!(
+        (6. ..=8.).contains(&gap),
+        "Profile row must follow the visible title strip without a blank band: {gap}"
+    );
     for rect in clean {
         assert_eq!(rect.height(), 28.);
         assert_eq!(rect.top(), clean[0].top());
@@ -39,8 +44,15 @@ fn header_profile_actions_stay_visible_aligned_and_fixed_across_clean_and_dirty_
     app.editor.record();
     compact_settle(&mut app, &ctx, size);
     let dirty_geometry = header_profile_geometry(&ctx);
-    assert_eq!(&dirty_geometry[1..], &clean[1..], "Unsaved changes must not move Undo/Redo/Revert/Save");
-    assert!(dirty_geometry[0].width() < clean[0].width(), "The changes badge uses space beside the profile name");
+    assert_eq!(
+        &dirty_geometry[1..],
+        &clean[1..],
+        "Unsaved changes must not move Undo/Redo/Revert/Save"
+    );
+    assert!(
+        dirty_geometry[0].width() < clean[0].width(),
+        "The changes badge uses space beside the profile name"
+    );
     compact_click_at(&mut app, &ctx, size, clean[1].center());
     assert!(!app.editor.dirty());
     assert!(!egui::Popup::is_any_open(&ctx));
@@ -136,10 +148,16 @@ fn header_glyph_controls_keep_pointer_keyboard_focus_and_collapse_actions() {
     assert!(app.collapsed);
     let compact = egui::vec2(400., 42.);
     let collapsed = compact_settle(&mut app, &ctx, compact);
-    assert_eq!(eframe::App::clear_color(&app, &egui::Visuals::dark()), [0.; 4]);
-    assert!(!collapsed.shapes.iter().any(|shape| matches!(&shape.shape,
-        egui::Shape::Rect(rect) if rect.fill.a() > 0 && rect.rect.width() > 100.
-    )), "Collapsed mode must paint only the source title artwork, without an opaque window backing");
+    assert_eq!(
+        eframe::App::clear_color(&app, &egui::Visuals::dark()),
+        [0.; 4]
+    );
+    assert!(
+        !collapsed.shapes.iter().any(|shape| matches!(&shape.shape,
+            egui::Shape::Rect(rect) if rect.fill.a() > 0 && rect.rect.width() > 100.
+        )),
+        "Collapsed mode must paint only the source title artwork, without an opaque window backing"
+    );
     let expand = compact_control_rect(&ctx, "Expand panel");
     compact_click_at(&mut app, &ctx, compact, expand.center());
     assert!(!app.collapsed);
@@ -200,6 +218,12 @@ fn header_profile_save_and_revert_cannot_modify_a_size_review_but_undo_redo_edit
         header_toolbar_frame(&mut app, &ctx, vec![]);
     }
     let rects = header_profile_geometry(&ctx);
+    assert!(
+        !ctx.data(|d| d.get_temp::<(egui::Rect, bool)>(egui::Id::unique("profile-save")))
+            .unwrap()
+            .1,
+        "Calibration review must display the disabled Save action, not stale success feedback"
+    );
     for index in [3, 4] {
         header_toolbar_click(&mut app, &ctx, rects[index].center());
         assert!(app.editor.is_recalibrating());
@@ -295,16 +319,24 @@ fn header_title_and_native_controls_use_logical_title_center_and_source_dimensio
                 .find(|(text, _)| text == crate::PRODUCT_NAME)
                 .unwrap()
                 .1;
-            let ink = output.shapes.iter().find_map(|shape| match &shape.shape {
-                egui::Shape::Text(text) if text.galley.job.text == crate::PRODUCT_NAME =>
-                    Some(text.galley.mesh_bounds.translate(text.pos.to_vec2())),
-                _ => None,
-            }).unwrap();
+            let ink = output
+                .shapes
+                .iter()
+                .find_map(|shape| match &shape.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == crate::PRODUCT_NAME => {
+                        Some(text.galley.mesh_bounds.translate(text.pos.to_vec2()))
+                    }
+                    _ => None,
+                })
+                .unwrap();
             assert!(
                 (ink.center().y - center_y).abs() <= 0.75,
                 "Painted letters must be centered in the 23 px strip: {ink:?}, center {center_y}"
             );
-            assert!(ink.left() >= header.left() + 22., "Title must clear the source ornament: {ink:?}");
+            assert!(
+                ink.left() >= header.left() + 22.,
+                "Title must clear the source ornament: {ink:?}"
+            );
             let controls = [
                 "Change the connected game window. Automation pauses before the window chooser opens.",
                 if app.pinned { "Unpin the panel from the selected game window" } else { "Pin the panel to the selected game window" },

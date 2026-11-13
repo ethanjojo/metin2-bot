@@ -236,6 +236,14 @@ impl Editor {
             .as_ref()
             .ok_or("Take a Snapshot before calibration.")?;
         let hsv = metin_vision::pick_color(frame, point).map_err(|e| e.to_string())?;
+        if self
+            .profile
+            .color
+            .as_ref()
+            .is_none_or(|color| color.hsv != hsv)
+        {
+            self.profile.color_preset_id = None;
+        }
         self.profile.color = Some(ColorConfig {
             hsv,
             ..self.profile.color.clone().unwrap_or_default()
@@ -418,7 +426,10 @@ impl Editor {
                     self.profile.masks.remove(i);
                 }
             }
-            EditMode::Color => self.profile.color = None,
+            EditMode::Color => {
+                self.profile.color = None;
+                self.profile.color_preset_id = None;
+            }
             EditMode::Template => {
                 self.profile.template_region = None;
                 self.profile.template_file = None;

@@ -66,7 +66,9 @@ impl WindowChooser {
     fn close(&mut self, context: &egui::Context, size: egui::Vec2) {
         self.open = false;
         self.suspend();
-        context.send_viewport_cmd(egui::ViewportCommand::MinInnerSize(egui::vec2(400., 480.)));
+        context.send_viewport_cmd(egui::ViewportCommand::MinInnerSize(
+            super::placement::expanded_minimum(context),
+        ));
         context.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
     }
     fn poll(&mut self, context: &egui::Context, targets: &[TargetInfo]) {
@@ -199,6 +201,7 @@ impl MetinApp {
         Ok(())
     }
     pub(super) fn open_window_chooser(&mut self) {
+        self.metin_presets.draft = None;
         self.remember_latest_panel_position();
         self.cancel_size_review();
         self.size_change = None;
@@ -238,7 +241,9 @@ impl MetinApp {
         if self.window_chooser.resize_pending {
             self.window_chooser.resize_pending = false;
             ui.ctx()
-                .send_viewport_cmd(egui::ViewportCommand::MinInnerSize(egui::vec2(400., 480.)));
+                .send_viewport_cmd(egui::ViewportCommand::MinInnerSize(
+                    super::placement::expanded_minimum(ui.ctx()),
+                ));
             ui.ctx()
                 .send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(780., 600.)));
         }

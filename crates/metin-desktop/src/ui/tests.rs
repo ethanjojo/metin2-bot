@@ -1318,12 +1318,12 @@ fn user_review_three_calibration_steps_hover_select_and_preserve_edits() {
             "Select the part of the game",
         ),
         (
-            "2. Metin color",
+            "2. Metin detection",
             EditMode::Color,
             "Pick a representative target pixel",
         ),
         (
-            "3. Target HP panel",
+            "3. HP panel reference",
             EditMode::Template,
             "Select one fixed edge or symbol",
         ),
@@ -1465,7 +1465,7 @@ fn user_review_capture_error_dismissal_retains_the_previous_frozen_frame() {
         &before.bgr,
         &app.editor.frozen.as_ref().unwrap().bgr
     ));
-    click_label(&mut app, &ctx, "3. Target HP panel");
+    click_label(&mut app, &ctx, "3. HP panel reference");
     assert_eq!(app.mode, EditMode::Template);
     assert!(app.editor.frozen.is_some());
     app.runtime.shutdown().unwrap();
@@ -1644,9 +1644,9 @@ fn user_review_sampled_color_can_be_cleared_with_the_same_visible_delete_control
     let (mut app, ctx, _dir) = setup();
     app.editor.color([50, 50]).unwrap();
     let sampled = app.editor.profile.color.clone();
-    click_label(&mut app, &ctx, "2. Metin color");
+    click_label(&mut app, &ctx, "2. Metin detection");
     assert!(app.mode == EditMode::Color);
-    click_row_trash(&mut app, &ctx, "2. Metin color");
+    click_row_trash(&mut app, &ctx, "2. Metin detection");
     assert!(
         app.editor.profile.color.is_none(),
         "The visible delete action must also clear the sampled color"
@@ -1701,6 +1701,7 @@ fn feedback_color_value_is_visible_and_excluded_area_announces_drawing() {
         hsv: [90, 200, 180],
         ..Default::default()
     });
+    app.open_metin_preset(false);
     let mut output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
     for _ in 0..3 {
         output = draw_at_size(&mut app, &ctx, &mut vec![], egui::vec2(1280., 820.));
@@ -1710,6 +1711,7 @@ fn feedback_color_value_is_visible_and_excluded_area_announces_drawing() {
             .iter()
             .any(|(s, _)| s == "HSV 90, 200, 180")
     );
+    click_label(&mut app, &ctx, "Cancel");
     click_label(&mut app, &ctx, "Draw excluded area");
     assert!(app.editing);
     assert!(app.mode == EditMode::Mask(None));
@@ -2348,7 +2350,7 @@ fn remaining_pages_are_reachable_and_keep_profile_values_across_navigation() {
         metin_core::PullerMode::CombatPeriodic
     );
     click_label(&mut app, &ctx, "Settings");
-    for label in ["Timing", "Display", "Diagnostics", "Detection"] {
+    for label in ["Timing", "Display", "Diagnostics"] {
         click_label(&mut app, &ctx, label);
     }
     assert!(app.editor.profile.periodic_actions[0].enabled);
@@ -2386,7 +2388,6 @@ fn all_remaining_subpages_render_in_metin_theme_at_small_size_without_edits() {
         }
         app.tab = Tab::Settings;
         for page in [
-            SettingsPage::Detection,
             SettingsPage::Combat,
             SettingsPage::Appearance,
             SettingsPage::Diagnostics,
@@ -2907,6 +2908,7 @@ include!("profile_menu_tests.rs");
 include!("profile_transfer_tests.rs");
 include!("workflow_qol_tests.rs");
 include!("excluded_area_tests.rs");
+include!("recognition_refinement_tests.rs");
 
 fn back_to_action_catalog(app: &mut MetinApp, ctx: &egui::Context) {
     let output = draw_at_size(app, ctx, &mut vec![], egui::vec2(1280., 820.));

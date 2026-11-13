@@ -24,7 +24,6 @@ pub enum Icon {
     Revert,
     History,
     Clock,
-    Sword,
     Settings,
     Undo,
     Redo,
@@ -273,12 +272,6 @@ pub fn paint_sized(p: &egui::Painter, center: Pos2, kind: Icon, color: Color32, 
             circle(12., 12., 9.);
             line(&[(12., 6.), (12., 12.), (16., 14.)]);
         }
-        Icon::Sword => {
-            line(&[(9., 14.), (18., 3.), (21., 3.), (21., 6.), (10., 15.)]);
-            line(&[(6., 11.), (13., 18.)]);
-            line(&[(9., 15.), (4., 20.)]);
-            line(&[(2., 18.), (6., 22.)]);
-        }
         Icon::Settings => {
             for (y, x) in [(5., 8.), (12., 16.), (19., 7.)] {
                 line(&[(3., y), (x - 3., y)]);
@@ -324,7 +317,6 @@ pub fn sheet(ui: &mut egui::Ui) {
                 Icon::Revert,
                 Icon::History,
                 Icon::Clock,
-                Icon::Sword,
                 Icon::Settings,
                 Icon::Undo,
                 Icon::Redo,

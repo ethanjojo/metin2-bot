@@ -13,10 +13,10 @@ A compact Windows desktop app for visual target recognition and configurable act
 ## Features
 
 - **Run:** bare activity artwork, countdowns to the next timed step, session statistics, mount confirmation and recent events fitted to the available space.
-- **Recognition:** searchable window thumbnails; direct region, color and icon selection over a frozen capture; movable/resizable areas and live game annotations.
+- **Recognition:** reusable Metin detection presets with color and shape settings; fixed HP-detail matching; direct frozen-capture selection and live game annotations.
 - **Actions:** ordered buffs with icon recognition, loot, mount behavior, periodic keys/clicks, visual rules, auto-puller and bounded attacks outside a selected target.
 - **Safety:** automatic stops, scheduled breaks, limited recovery, local notifications and emergency pause.
-- **Profiles:** independent calibration and action settings, with Save, Revert, Undo and Redo.
+- **Profiles:** independent calibration and actions, inline rename, Save/Revert/Undo/Redo, plus remembered per-client panel position and size.
 - **Updates:** startup checks, Stable/Preview channels and verified downloads. Confirm an update to follow download, installation and restart in Companion's own progress window.
 
 ## Install and start

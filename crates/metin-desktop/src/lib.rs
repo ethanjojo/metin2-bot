@@ -6,6 +6,7 @@ pub mod game_overlay;
 pub mod installation;
 pub mod runtime;
 pub mod self_test;
+pub mod session_metrics;
 pub mod storage;
 pub mod ui;
 pub mod ui_controls;

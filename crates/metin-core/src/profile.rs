@@ -385,6 +385,9 @@ pub struct Profile {
     pub masks: Vec<ExcludedArea>,
     #[serde(default)]
     pub color: Option<ColorConfig>,
+    /// Optional origin only; the embedded color config is the runtime authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color_preset_id: Option<Uuid>,
     #[serde(default)]
     pub panel: PanelConfig,
     #[serde(default)]
@@ -462,6 +465,7 @@ impl Profile {
             region: None,
             masks: vec![],
             color: None,
+            color_preset_id: None,
             panel: PanelConfig::default(),
             timing: TimingConfig::default(),
             buffs: BuffConfig::default(),

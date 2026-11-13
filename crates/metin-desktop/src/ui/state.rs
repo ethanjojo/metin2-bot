@@ -21,6 +21,7 @@ pub(super) struct RunSetupStep {
 }
 impl MetinApp {
     pub(super) fn revert_profile(&mut self) {
+        self.metin_presets.draft = None;
         self.cancel_overlay_capture();
         self.runtime.stop();
         self.editor.revert();
@@ -33,12 +34,14 @@ impl MetinApp {
         }
     }
     pub(super) fn undo_profile(&mut self) {
+        self.metin_presets.draft = None;
         self.feedback = None;
         self.cancel_overlay_capture();
         self.runtime.stop();
         self.editor.undo();
     }
     pub(super) fn redo_profile(&mut self) {
+        self.metin_presets.draft = None;
         self.feedback = None;
         self.cancel_overlay_capture();
         self.runtime.stop();
@@ -104,6 +107,7 @@ impl MetinApp {
         self.runtime.stop();
         self.send(Command::Detach);
         self.editor = Editor::new(profile, template);
+        self.metin_presets.draft = None;
         self.profile_rename = None;
         self.history_open = false;
         self.reset_capture_navigation();

@@ -22,6 +22,9 @@ pub enum QolFixture {
     Import,
     Recognition,
     Paused,
+    MetinPreset,
+    MetinPresetNew,
+    MetinPresetCustom,
 }
 
 #[cfg(feature = "ui-smoke")]
@@ -40,6 +43,36 @@ impl MetinApp {
             ctx.set_zoom_factor(zoom);
         }
         match fixture {
+            Some(
+                QolFixture::MetinPreset
+                | QolFixture::MetinPresetNew
+                | QolFixture::MetinPresetCustom,
+            ) => {
+                if !matches!(fixture, Some(QolFixture::MetinPresetCustom)) {
+                    let existing = self
+                        .metin_presets
+                        .catalog
+                        .iter()
+                        .find(|preset| preset.name == "Red stones")
+                        .map(|preset| preset.id);
+                    let preset = self
+                        .store
+                        .save_metin_preset(
+                            existing,
+                            "Red stones",
+                            &self.editor.profile.color.clone().unwrap_or_default(),
+                        )
+                        .map_err(|error| error.to_string())?;
+                    self.editor.profile.color = Some(preset.color.clone());
+                    self.editor.profile.color_preset_id = Some(preset.id);
+                    self.editor.record();
+                    self.metin_presets.catalog = self
+                        .store
+                        .metin_presets()
+                        .map_err(|error| error.to_string())?;
+                }
+                self.open_metin_preset(matches!(fixture, Some(QolFixture::MetinPresetNew)));
+            }
             Some(QolFixture::Changes) => {
                 self.editor.profile.loot.presses += 1;
                 self.editor.profile.timing.search_timeout += 1.;
@@ -155,6 +188,7 @@ impl MetinApp {
             return Err("Finish choosing the game window or the current update first.".into());
         }
         if self.pending_overlay.is_some()
+            || self.metin_presets.draft.is_some()
             || self.binding.is_some()
             || self.profile_rename.is_some()
             || self.recognition_check.is_pending()

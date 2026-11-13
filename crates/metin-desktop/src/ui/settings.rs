@@ -4,7 +4,6 @@ use widgets::{Icon, button, section};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "ui-smoke", derive(clap::ValueEnum))]
 pub enum SettingsPage {
-    Detection,
     Combat,
     Appearance,
     Diagnostics,
@@ -16,11 +15,6 @@ impl MetinApp {
             ui,
             &mut self.settings_page,
             &[
-                (
-                    SettingsPage::Detection,
-                    "Detection",
-                    "Recognition settings for the selected profile.",
-                ),
                 (
                     SettingsPage::Combat,
                     "Timing",
@@ -48,7 +42,6 @@ impl MetinApp {
         egui::ScrollArea::vertical().id_salt(("settings-scroll",self.settings_page as u8)).show(ui,|ui| {
             let mut changed=false;
             match self.settings_page {
-                SettingsPage::Detection=>{widgets::heading(ui,"Detection","Recognition settings for the selected profile.");changed|=self.recognition_settings(ui);}
                 SettingsPage::Combat=>{widgets::heading(ui,"Combat & timing","Concrete timing values; detection and input guards remain independent.");changed|=self.timing_preset(ui);changed|=self.timing_settings(ui);}
                 SettingsPage::Appearance=>self.appearance_settings(ui),
                 SettingsPage::Diagnostics=>self.diagnostics_view(ui),
@@ -114,6 +107,19 @@ impl MetinApp {
             let _ = scale_controls;
             if changed {
                 self.settings.ui_scale = percent as f32 / 100.;
+            }
+        });
+        section(ui, "Panel placement", |ui| {
+            if button(
+                ui,
+                Icon::Revert,
+                "Reset position and size",
+                true,
+                "Restore the default panel position and expanded size for this window.",
+            )
+            .clicked()
+            {
+                self.reset_panel_placement(ui.ctx());
             }
         });
         section(ui, "Overlay rendering", |ui| {
@@ -202,63 +208,6 @@ impl MetinApp {
                     ui.monospace(log);
                 });
         }
-    }
-    fn recognition_settings(&mut self, ui: &mut egui::Ui) -> bool {
-        let mut changed = false;
-        widgets::first_section(ui, "Target recognition", |ui| {
-            if let Some(c) = &mut self.editor.profile.color {
-                changed |= numeric_u32(
-                    ui,
-                    "Stable detections (frames)",
-                    "stable_frames",
-                    &mut c.stable_frames,
-                );
-
-                ui.collapsing("Advanced color & shape limits", |ui| {
-                    for (label, name, value) in [
-                        ("Hue tolerance", "hue_tolerance", &mut c.hue_tolerance),
-                        (
-                            "Saturation tolerance",
-                            "saturation_tolerance",
-                            &mut c.saturation_tolerance,
-                        ),
-                        (
-                            "Brightness tolerance",
-                            "value_tolerance",
-                            &mut c.value_tolerance,
-                        ),
-                        ("Minimum area (px²)", "min_area", &mut c.min_area),
-                        ("Minimum width (px)", "min_width", &mut c.min_width),
-                        ("Minimum height (px)", "min_height", &mut c.min_height),
-                    ] {
-                        changed |= numeric_u32(ui, label, name, value);
-                    }
-                    changed |= numeric(
-                        ui,
-                        "Maximum area ratio",
-                        "max_area_ratio",
-                        &mut c.max_area_ratio,
-                    );
-                });
-            } else {
-                ui.label("Pick a Metin color in Recognition before adjusting its tolerances.");
-            }
-        });
-        section(ui, "Target panel confirmation", |ui| {
-            changed |= numeric(
-                ui,
-                "Match threshold",
-                "threshold",
-                &mut self.editor.profile.panel.threshold,
-            );
-            changed |= numeric_u32(
-                ui,
-                "Stable matches (frames)",
-                "stable_frames",
-                &mut self.editor.profile.panel.stable_frames,
-            );
-        });
-        changed
     }
     fn timing_settings(&mut self, ui: &mut egui::Ui) -> bool {
         let mut changed = false;

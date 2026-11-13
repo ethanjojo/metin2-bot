@@ -1,6 +1,21 @@
 use metin_core::{Profile, Region, Shortcut};
 
 #[test]
+fn preset_provenance_is_optional_and_never_replaces_self_contained_color() {
+    let old = serde_json::to_value(Profile::create("Existing profile")).unwrap();
+    assert!(old.get("color_preset_id").is_none());
+    let mut saved = old;
+    saved["color"] = serde_json::to_value(metin_core::ColorConfig::default()).unwrap();
+    saved["color"]["hsv"] = serde_json::json!([90, 210, 180]);
+    saved["color_preset_id"] = serde_json::json!("8591a09f-25dc-4ca4-b858-cafe68231dfc");
+    let loaded = Profile::from_json(&saved.to_string()).unwrap();
+    let encoded = serde_json::to_value(&loaded).unwrap();
+    assert_eq!(encoded["color"], saved["color"]);
+    assert_eq!(encoded["color_preset_id"], saved["color_preset_id"]);
+    assert!(loaded.validate_settings().is_ok());
+}
+
+#[test]
 fn legacy_exclusions_gain_names_without_changing_geometry() {
     let mut saved = serde_json::to_value(Profile::create("Existing profile")).unwrap();
     let regions = serde_json::json!([

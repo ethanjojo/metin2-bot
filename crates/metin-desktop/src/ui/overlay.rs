@@ -27,6 +27,7 @@ fn same_image(a: &Option<metin_platform::Frame>, b: &Option<metin_platform::Fram
 pub(super) enum CapturePurpose {
     Edit(EditMode),
     SizeReview(EditMode),
+    PresetColor,
 }
 
 pub(super) struct PendingCapture {
@@ -46,6 +47,12 @@ impl PendingCapture {
     }
     fn current(&self, app: &MetinApp) -> bool {
         app.key() == Some(self.key)
+            && (!matches!(self.purpose, CapturePurpose::PresetColor)
+                || app.metin_presets.draft.as_ref().is_some_and(|draft| {
+                    draft.profile == app.editor.profile.id
+                        && draft.change_id == app.editor.change_id()
+                        && draft.target == app.target
+                }))
             && app.revision == self.revision
             && app.runtime.stop_generation() == self.generation
             && (!self.launched
@@ -73,6 +80,15 @@ impl PendingCapture {
 }
 
 impl MetinApp {
+    fn report_capture_error(&mut self, purpose: CapturePurpose, error: String) {
+        if matches!(purpose, CapturePurpose::PresetColor)
+            && let Some(draft) = &mut self.metin_presets.draft
+        {
+            draft.error = Some(error);
+        } else {
+            self.error = Some(error);
+        }
+    }
     pub(super) fn cancel_overlay_capture(&mut self) {
         if self.pending_overlay.take().is_some() {
             // Retire an accepted one-shot as well as queued capture commands.
@@ -116,7 +132,7 @@ impl MetinApp {
                     capture: None,
                 });
             }
-            Err(error) => self.error = Some(error),
+            Err(error) => self.report_capture_error(purpose, error),
         }
     }
 
@@ -180,10 +196,19 @@ impl MetinApp {
                     let result = pending
                         .capture
                         .ok_or("The capture source is no longer available.".to_owned())
-                        .and_then(|capture| capture.commit(&mut self.editor, region, point));
+                        .and_then(|capture| {
+                            if matches!(pending.purpose, CapturePurpose::PresetColor) {
+                                self.commit_preset_color(capture, region, point)
+                            } else {
+                                capture.commit(&mut self.editor, region, point)
+                            }
+                        });
                     match result {
-                        Ok(()) => self.show_feedback("Selection updated", true),
-                        Err(error) => self.error = Some(error),
+                        Ok(()) if !matches!(pending.purpose, CapturePurpose::PresetColor) => {
+                            self.show_feedback("Selection updated", true)
+                        }
+                        Ok(()) => {}
+                        Err(error) => self.report_capture_error(pending.purpose, error),
                     }
                     self.editing = false;
                     self.overlay_frame_id = 0;
@@ -208,7 +233,11 @@ impl MetinApp {
                             .as_ref()
                             .is_some_and(|p| Some(p.id) == id)
                     {
-                        self.error = Some(message);
+                        let purpose = self
+                            .pending_overlay
+                            .as_ref()
+                            .map_or(CapturePurpose::Edit(self.mode), |pending| pending.purpose);
+                        self.report_capture_error(purpose, message);
                         self.cancel_overlay_capture();
                     }
                 }
@@ -323,15 +352,22 @@ impl MetinApp {
         Vec<metin_core::Candidate>,
         Option<metin_vision::TemplateMatch>,
     ) {
-        if self.snapshot.running || self.snapshot.arming || !self.editor.dirty() {
+        if self.snapshot.running
+            || self.snapshot.arming
+            || (!self.editor.dirty() && self.metin_presets.draft.is_none())
+        {
             self.overlay_preview = None;
             return (self.snapshot.candidates.clone(), self.snapshot.panel_match);
         }
         let Some(frame) = self.snapshot.frame.clone() else {
             return (Vec::new(), None);
         };
+        let mut profile = self.editor.profile.clone();
+        if let Some(draft) = &self.metin_presets.draft {
+            profile.color = Some(draft.color.clone());
+        }
         let valid = self.overlay_preview.as_ref().is_some_and(|cache| {
-            cache.profile == self.editor.profile
+            cache.profile == profile
                 && Arc::ptr_eq(&cache.frame.bgr, &frame.bgr)
                 && same_image(&cache.template, &self.editor.template)
         });
@@ -343,14 +379,14 @@ impl MetinApp {
                 .and_then(|template| metin_vision::panel_match(&frame, template).ok());
             match metin_vision::detect_candidates_excluding(
                 &frame,
-                &self.editor.profile,
+                &profile,
                 panel
                     .as_ref()
                     .filter(|found| found.score >= self.editor.profile.panel.threshold),
             ) {
                 Ok(candidates) => {
                     self.overlay_preview = Some(RecognitionPreview {
-                        profile: self.editor.profile.clone(),
+                        profile,
                         template: self.editor.template.clone(),
                         frame,
                         candidates,
@@ -378,7 +414,7 @@ impl MetinApp {
             return;
         }
         if pending.timed_out() {
-            self.error = Some("No fresh game frame or input-release confirmation arrived. Check the selected window and retry.".into());
+            self.report_capture_error(pending.purpose, "No fresh game frame or input-release confirmation arrived. Check the selected window and retry.".into());
             self.cancel_overlay_capture();
             return;
         }
@@ -401,8 +437,10 @@ impl MetinApp {
             }
             return;
         }
-        let CapturePurpose::Edit(mode) = purpose else {
-            unreachable!()
+        let mode = match purpose {
+            CapturePurpose::Edit(mode) => mode,
+            CapturePurpose::PresetColor => EditMode::Color,
+            CapturePurpose::SizeReview(_) => unreachable!(),
         };
         if self
             .editor
@@ -411,6 +449,9 @@ impl MetinApp {
             .is_some_and(|previous| previous != [frame.width, frame.height])
         {
             self.record_size_change(&frame, mode);
+            if matches!(purpose, CapturePurpose::PresetColor) {
+                self.report_capture_error(purpose, "The game size changed. Cancel this editor and use Review calibration before sampling again.".into());
+            }
             self.cancel_overlay_capture();
             return;
         }
@@ -423,13 +464,21 @@ impl MetinApp {
         let capture = match self.editor.begin_capture(mode, frame.clone()) {
             Ok(capture) => capture,
             Err(error) => {
-                self.error = Some(error);
+                self.report_capture_error(purpose, error);
                 self.cancel_overlay_capture();
                 return;
             }
         };
         let initial_region = capture.initial_region();
-        let color_preview = (mode == EditMode::Color).then(|| Box::new(capture.profile().clone()));
+        let color_preview = (mode == EditMode::Color).then(|| {
+            let mut profile = capture.profile().clone();
+            if matches!(purpose, CapturePurpose::PresetColor)
+                && let Some(draft) = &self.metin_presets.draft
+            {
+                profile.color = Some(draft.color.clone());
+            }
+            Box::new(profile)
+        });
         let result = self.ensure_overlay().and_then(|()| {
             self.overlay
                 .as_ref()
@@ -460,7 +509,7 @@ impl MetinApp {
                 pending.capture = Some(capture);
             }
             Err(error) => {
-                self.error = Some(error);
+                self.report_capture_error(purpose, error);
                 self.cancel_overlay_capture();
             }
         }

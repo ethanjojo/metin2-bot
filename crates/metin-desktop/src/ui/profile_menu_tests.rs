@@ -179,3 +179,119 @@ fn profile_menu_rename_new_profile_keeps_its_settings_in_the_draft() {
     assert_ne!(app.editor.profile.timing, persisted.timing);
     app.runtime.shutdown().unwrap();
 }
+
+#[test]
+fn profile_picker_inline_rename_keeps_trailing_edge_and_row_height_at_compact_dpi() {
+    let (mut app, ctx, _dir) = setup();
+    app.editor.profile.name = "M".repeat(80);
+    app.save().unwrap();
+    ctx.set_zoom_factor(1.5);
+    let size = egui::vec2(400., 480.);
+    compact_settle(&mut app, &ctx, size);
+    app.profile_open_requested = true;
+    compact_settle(&mut app, &ctx, size);
+    let id = app.editor.profile.id;
+    let pencil = ctx
+        .data(|d| d.get_temp::<egui::Rect>(egui::Id::unique(("rename-profile", id))))
+        .unwrap();
+    let (_, choice, _) = ctx
+        .data(|d| {
+            d.get_temp::<(egui::Id, egui::Rect, egui::Rect)>(egui::Id::unique((
+                "select-row",
+                app.editor.profile.name.as_str(),
+            )))
+        })
+        .unwrap();
+    let clip = ctx
+        .data(|data| {
+            data.get_temp::<egui::Rect>(egui::Id::unique((
+                "control-clip",
+                format!("Rename profile: {}", app.editor.profile.name),
+            )))
+        })
+        .expect("Pencil action clip");
+    assert!(
+        clip.contains(pencil.center()),
+        "Profile pencil must be visible and clickable: {pencil:?} / {clip:?}"
+    );
+    assert!((choice.height() - 28.).abs() < 0.1 && (choice.top() - pencil.top()).abs() < 0.1);
+    compact_click_at(&mut app, &ctx, size, pencil.center());
+    assert!(
+        app.profile_rename.is_some(),
+        "Pencil should open inline rename at {pencil:?}; popup open {}",
+        egui::Popup::is_any_open(&ctx)
+    );
+    compact_settle(&mut app, &ctx, size);
+    let check = compact_control_rect(&ctx, "Save profile name (Enter)");
+    let cancel = compact_control_rect(&ctx, "Cancel profile rename (Escape)");
+    assert!(
+        (cancel.right() - pencil.right()).abs() < 0.1,
+        "Rename controls stay at the same trailing edge"
+    );
+    assert!(
+        (check.top() - choice.top()).abs() < 0.1 && (check.height() - choice.height()).abs() < 0.1
+    );
+    assert!(cancel.right() <= 400. && check.left() > choice.left());
+    app.runtime.shutdown().unwrap();
+}
+
+#[test]
+fn profile_popup_frame_and_trailing_rows_share_the_configured_width_with_wrapped_actions() {
+    for scale in [1., 1.5] {
+        for extra_profiles in [1, 18] {
+            let (mut app, ctx, _dir) = setup();
+            app.editor.profile.name = "M".repeat(80);
+            app.save().unwrap();
+            for index in 0..extra_profiles {
+                app.store
+                    .save(
+                        &Profile::create(format!("Secondary profile {index:02}")),
+                        None,
+                    )
+                    .unwrap();
+            }
+            app.profiles = app.store.list().unwrap();
+            ctx.set_zoom_factor(scale);
+            let size = egui::vec2(400., 480.);
+            compact_settle(&mut app, &ctx, size);
+            app.profile_open_requested = true;
+            compact_settle(&mut app, &ctx, size);
+            let frame = || {
+                ctx.data(|data| {
+                    data.get_temp::<(egui::Rect, egui::Rect, f32)>(egui::Id::unique(
+                        "profile-popup-frame",
+                    ))
+                })
+                .unwrap()
+            };
+            let (outer, content, configured) = frame();
+            assert!(
+                (outer.width() - configured).abs() < 1.,
+                "Actual popup must keep configured width at {scale} with {extra_profiles} other profiles: {outer:?} / {configured}"
+            );
+            let pencil = compact_control_rect(
+                &ctx,
+                &format!("Rename profile: {}", app.editor.profile.name),
+            );
+            let gutter = if extra_profiles > 1 { 20. } else { 0. };
+            assert!(
+                (pencil.right() + gutter - content.right()).abs() < 1.,
+                "Trailing actions align with actual content edge, allowing only a visible scrollbar: {pencil:?} / {content:?}"
+            );
+            compact_click_at(&mut app, &ctx, size, pencil.center());
+            compact_settle(&mut app, &ctx, size);
+            let (renamed_outer, renamed_content, configured) = frame();
+            let cancel = compact_control_rect(&ctx, "Cancel profile rename (Escape)");
+            assert!((renamed_outer.width() - configured).abs() < 1.);
+            assert!(
+                (cancel.right() + gutter - renamed_content.right()).abs() < 1.,
+                "Confirm/cancel group stays against actual popup edge"
+            );
+            assert!(
+                (cancel.right() - pencil.right()).abs() < 1.
+                    && (cancel.top() - pencil.top()).abs() < 1.
+            );
+            app.runtime.shutdown().unwrap();
+        }
+    }
+}

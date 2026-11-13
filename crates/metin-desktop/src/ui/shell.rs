@@ -80,11 +80,10 @@ impl MetinApp {
                 ).clicked() {
                     self.collapsed = !self.collapsed;
                     if self.collapsed {
-                        self.expanded_size = ui.ctx().content_rect().size();
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::MinInnerSize(egui::vec2(320., 42.)));
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(self.expanded_size.x, 42.)));
                     } else {
-                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::MinInnerSize(egui::vec2(400., 480.)));
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::MinInnerSize(super::placement::expanded_minimum(ui.ctx())));
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::InnerSize(self.expanded_size));
                     }
                 }
@@ -139,7 +138,7 @@ impl MetinApp {
                 (
                     Tab::Settings,
                     "Settings",
-                    "Recognition tolerances, timing and platform diagnostics.",
+                    "Display, timing and platform diagnostics.",
                 ),
             ] {
                 let selected = self.tab == tab;
@@ -268,8 +267,10 @@ impl MetinApp {
         }
     }
     pub(super) fn status_bar(&mut self, ui: &mut egui::Ui) {
-        if self.error.is_none() && !self.feedback_current() {
-            self.feedback = None;
+        if self.error.is_none() && !self.footer_feedback_current() {
+            if !self.feedback_current() {
+                self.feedback = None;
+            }
             return;
         }
         let width = ui.available_width();
@@ -310,7 +311,7 @@ impl MetinApp {
         );
     }
     pub(super) fn window_frame(&mut self, ui: &mut egui::Ui) {
-        let bounds = ui.ctx().content_rect().shrink(1.);
+        let bounds = ui.ctx().content_rect().shrink(10.);
         let painter = ui.ctx().layer_painter(egui::LayerId::new(
             egui::Order::Foreground,
             egui::Id::unique("companion-resize"),

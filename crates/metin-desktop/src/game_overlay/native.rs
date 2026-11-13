@@ -104,6 +104,48 @@ impl Drop for UiFont {
 enum Command {
     Annotations(OverlayScene),
     Select(SelectionRequest),
+    ResetPanel(PanelIdentity),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PanelIdentity {
+    window: usize,
+    target: TargetToken,
+}
+impl From<ControlPanelLink> for PanelIdentity {
+    fn from(link: ControlPanelLink) -> Self {
+        Self {
+            window: link.window,
+            target: link.target,
+        }
+    }
+}
+
+#[derive(Default)]
+struct PanelPositionState {
+    latest: Option<(PanelIdentity, crate::placement::PanelOffset)>,
+    pending_reset: Option<PanelIdentity>,
+}
+impl PanelPositionState {
+    fn current(&self) -> Option<(TargetToken, crate::placement::PanelOffset)> {
+        self.pending_reset
+            .map(|identity| (identity.target, Default::default()))
+            .or_else(|| {
+                self.latest
+                    .map(|(identity, offset)| (identity.target, offset))
+            })
+    }
+    fn publish(&mut self, identity: PanelIdentity, offset: crate::placement::PanelOffset) {
+        self.latest = Some((identity, offset));
+        if self.pending_reset == Some(identity) && offset == Default::default() {
+            self.pending_reset = None;
+        }
+    }
+    fn relink(&mut self, identity: Option<PanelIdentity>) {
+        if self.pending_reset != identity {
+            self.pending_reset = None;
+        }
+    }
 }
 
 struct Shared {
@@ -112,7 +154,7 @@ struct Shared {
     selecting: AtomicBool,
     annotation: AtomicUsize,
     control_panel: Mutex<Option<ControlPanelLink>>,
-    panel_position: Mutex<Option<(TargetToken, crate::placement::PanelOffset)>>,
+    panel_position: Mutex<PanelPositionState>,
 }
 
 /// A bounded, nonblocking adapter. Dropping it closes all windows and joins its worker.
@@ -126,11 +168,11 @@ pub struct GameOverlay {
 impl GameOverlay {
     /// Latest worker-owned preferred offset, including moves not yet debounced.
     pub fn panel_position(&self) -> Option<(TargetToken, crate::placement::PanelOffset)> {
-        *self
-            .shared
+        self.shared
             .panel_position
             .lock()
             .unwrap_or_else(|error| error.into_inner())
+            .current()
     }
     pub fn new() -> Result<Self, String> {
         let (commands, incoming) = mpsc::sync_channel(2);
@@ -142,7 +184,7 @@ impl GameOverlay {
             selecting: AtomicBool::new(false),
             annotation: AtomicUsize::new(0),
             control_panel: Mutex::new(None),
-            panel_position: Mutex::new(None),
+            panel_position: Mutex::new(Default::default()),
         });
         let state = shared.clone();
         let worker = thread::Builder::new()
@@ -215,9 +257,21 @@ impl GameOverlay {
     }
 
     pub fn poll(&self) -> Option<OverlayEvent> {
-        let event = self.events.try_recv().ok()?;
-        self.shared.selecting.store(false, Ordering::Release);
-        Some(event)
+        loop {
+            let event = self.events.try_recv().ok()?;
+            if let OverlayEvent::PanelMoved { target, .. } = event {
+                // Events are only notifications; the latest worker-owned placement is
+                // authoritative, including a Reset clicked after this event was queued.
+                if let Some((latest_target, offset)) = self.panel_position()
+                    && latest_target == target
+                {
+                    return Some(OverlayEvent::PanelMoved { target, offset });
+                }
+                continue;
+            }
+            self.shared.selecting.store(false, Ordering::Release);
+            return Some(event);
+        }
     }
 
     /// Also cancels selection. Independent of a saturated scene-command queue.
@@ -232,11 +286,41 @@ impl GameOverlay {
         {
             return Err("The control panel must be this application's own native window.".into());
         }
-        *self
+        let mut current = self
             .shared
             .control_panel
             .lock()
-            .unwrap_or_else(|error| error.into_inner()) = link;
+            .unwrap_or_else(|error| error.into_inner());
+        *current = link;
+        self.shared
+            .panel_position
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .relink(link.map(Into::into));
+        Ok(())
+    }
+
+    /// Reset presentation offset only, scoped to the exact linked target and owned HWND.
+    pub fn reset_panel_position(&self) -> Result<(), String> {
+        let current = self
+            .shared
+            .control_panel
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let Some(link) = *current else {
+            return Ok(());
+        };
+        let identity = PanelIdentity::from(link);
+        let mut position = self
+            .shared
+            .panel_position
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let previous = position.pending_reset.replace(identity);
+        if let Err(error) = self.commands.try_send(Command::ResetPanel(identity)) {
+            position.pending_reset = previous;
+            return Err(format!("Cannot reset panel position: {error}"));
+        }
         Ok(())
     }
 
@@ -423,6 +507,7 @@ struct PinnedPanel {
     changed_at: Option<Instant>,
     work_area: Option<[i32; 4]>,
     size: Option<[u32; 2]>,
+    dpi: Option<u32>,
     geometry: Option<(i32, i32, u32, u32)>,
     position: Option<[i32; 2]>,
     pending_position_until: Option<Instant>,
@@ -450,12 +535,23 @@ impl PinnedPanel {
             changed_at: None,
             work_area: None,
             size: None,
+            dpi: None,
             geometry: None,
             position: None,
             pending_position_until: None,
             hidden_by_us: false,
             topmost: None,
         }
+    }
+
+    fn reset(&mut self, identity: PanelIdentity) -> bool {
+        if PanelIdentity::from(self.link) != identity {
+            return false;
+        }
+        self.offset = Default::default();
+        self.geometry = None;
+        self.changed_at = Some(Instant::now());
+        true
     }
 
     unsafe fn set_level(&mut self, topmost: bool) {
@@ -560,7 +656,7 @@ impl PinnedPanel {
                     info.rcWork.bottom,
                 ])
             };
-            if self.geometry == Some(bounds) {
+            if self.geometry == Some(bounds) && self.dpi == Some(dpi) {
                 let size_changed = self.size != Some(size);
                 if self.position == Some([rect.left, rect.top]) {
                     self.pending_position_until = None;
@@ -621,6 +717,7 @@ impl PinnedPanel {
             self.work_area = Some(work);
             self.pending_position_until = Some(Instant::now() + Duration::from_millis(200));
             self.geometry = Some(bounds);
+            self.dpi = Some(dpi);
         }
     }
 }
@@ -672,12 +769,11 @@ impl Worker {
             unsafe {
                 panel.sync();
             }
-            *self
-                .shared
+            self.shared
                 .panel_position
                 .lock()
-                .unwrap_or_else(|error| error.into_inner()) =
-                Some((panel.link.target, panel.offset));
+                .unwrap_or_else(|error| error.into_inner())
+                .publish(panel.link.into(), panel.offset);
             if panel
                 .changed_at
                 .is_some_and(|time| time.elapsed() >= Duration::from_millis(350))
@@ -806,6 +902,11 @@ impl Worker {
                             self.dirty = true;
                         }
                         Command::Select(request) => self.begin(request),
+                        Command::ResetPanel(identity) => {
+                            if let Some(panel) = self.control_panel.as_mut() {
+                                panel.reset(identity);
+                            }
+                        }
                     }
                 }
                 let mut message = zeroed();
@@ -1510,6 +1611,114 @@ unsafe fn draw_region_annotations(
 mod tests {
     use super::*;
 
+    #[test]
+    fn queued_move_notifications_read_reset_preference_without_finishing_selection() {
+        let link = ControlPanelLink {
+            window: 11,
+            target: TargetToken {
+                handle: 12,
+                pid: 13,
+                created: 14,
+            },
+            offset: Some(crate::placement::PanelOffset { right: 80, top: 90 }),
+        };
+        let mut position = PanelPositionState::default();
+        position.publish(link.into(), link.offset.unwrap());
+        let (commands, incoming) = mpsc::sync_channel(2);
+        let (outgoing, events) = mpsc::sync_channel(2);
+        let shared = Arc::new(Shared {
+            shutdown: AtomicBool::new(false),
+            hidden: AtomicBool::new(true),
+            selecting: AtomicBool::new(true),
+            annotation: AtomicUsize::new(0),
+            control_panel: Mutex::new(Some(link)),
+            panel_position: Mutex::new(position),
+        });
+        let overlay = GameOverlay {
+            commands,
+            events,
+            shared,
+            worker: None,
+        };
+        outgoing
+            .try_send(OverlayEvent::PanelMoved {
+                target: link.target,
+                offset: link.offset.unwrap(),
+            })
+            .unwrap();
+        overlay.reset_panel_position().unwrap();
+        assert_eq!(
+            overlay.poll(),
+            Some(OverlayEvent::PanelMoved {
+                target: link.target,
+                offset: Default::default()
+            })
+        );
+        assert!(
+            overlay.shared.selecting.load(Ordering::Acquire),
+            "Placement notifications do not acknowledge capture completion"
+        );
+        let Command::ResetPanel(identity) = incoming.try_recv().unwrap() else {
+            panic!("Expected scoped Reset");
+        };
+        assert_eq!(identity, link.into());
+    }
+
+    #[test]
+    fn pending_panel_reset_masks_old_publication_until_acknowledged_and_never_retargets() {
+        let a = ControlPanelLink {
+            window: 11,
+            target: TargetToken {
+                handle: 12,
+                pid: 13,
+                created: 14,
+            },
+            offset: Some(crate::placement::PanelOffset { right: 80, top: 90 }),
+        };
+        let identity = PanelIdentity::from(a);
+        let old = a.offset.unwrap();
+        let mut position = PanelPositionState::default();
+        position.publish(identity, old);
+        position.pending_reset = Some(identity);
+        assert_eq!(
+            position.current(),
+            Some((a.target, Default::default())),
+            "Immediate shutdown must persist Reset, not the old worker offset"
+        );
+        position.publish(identity, old);
+        assert_eq!(
+            position.current(),
+            Some((a.target, Default::default())),
+            "A pre-command publication cannot undo Reset"
+        );
+        assert_eq!(position.pending_reset, Some(identity));
+        position.publish(identity, Default::default());
+        assert_eq!(position.pending_reset, None);
+        assert_eq!(position.current(), Some((a.target, Default::default())));
+        let mut panel = PinnedPanel::new(a);
+        assert!(panel.reset(identity));
+        for b in [
+            ControlPanelLink { window: 21, ..a },
+            ControlPanelLink {
+                target: TargetToken {
+                    handle: 22,
+                    ..a.target
+                },
+                ..a
+            },
+        ] {
+            let mut next = PinnedPanel::new(b);
+            assert!(
+                !next.reset(identity),
+                "Queued Reset cannot target a replacement panel or selected game"
+            );
+            assert_eq!(next.offset, old);
+            position.pending_reset = Some(identity);
+            position.relink(Some(b.into()));
+            assert_eq!(position.pending_reset, None);
+        }
+    }
+
     fn synthetic_frame() -> Frame {
         // Asymmetric RGB gradient, 40px grid and three solid swatches expose color,
         // orientation, row-padding and pixel-coordinate mistakes in the actual native tool.
@@ -1697,7 +1906,7 @@ mod tests {
                 selecting: AtomicBool::new(false),
                 annotation: AtomicUsize::new(0),
                 control_panel: Mutex::new(None),
-                panel_position: Mutex::new(None),
+                panel_position: Mutex::new(Default::default()),
             });
             let worker = Worker::new(shared, tx).unwrap();
             let during = AreDpiAwarenessContextsEqual(
@@ -1750,7 +1959,7 @@ mod tests {
             selecting: AtomicBool::new(false),
             annotation: AtomicUsize::new(0),
             control_panel: Mutex::new(None),
-            panel_position: Mutex::new(None),
+            panel_position: Mutex::new(Default::default()),
         });
         unsafe {
             let mut worker = Worker::new(shared, tx).unwrap();
@@ -2217,7 +2426,7 @@ mod tests {
             selecting: AtomicBool::new(true),
             annotation: AtomicUsize::new(0),
             control_panel: Mutex::new(None),
-            panel_position: Mutex::new(None),
+            panel_position: Mutex::new(Default::default()),
         });
         unsafe {
             let mut worker = Worker::new(shared, tx).unwrap();
@@ -2261,7 +2470,7 @@ mod tests {
             selecting: AtomicBool::new(false),
             annotation: AtomicUsize::new(0),
             control_panel: Mutex::new(None),
-            panel_position: Mutex::new(None),
+            panel_position: Mutex::new(Default::default()),
         });
         unsafe {
             let worker = Worker::new(shared, tx).unwrap();
@@ -2341,7 +2550,7 @@ mod tests {
             selecting: AtomicBool::new(false),
             annotation: AtomicUsize::new(0),
             control_panel: Mutex::new(None),
-            panel_position: Mutex::new(None),
+            panel_position: Mutex::new(Default::default()),
         });
         unsafe {
             let fixture = Worker::new(shared, tx).unwrap();
@@ -2600,7 +2809,7 @@ mod tests {
             selecting: AtomicBool::new(false),
             annotation: AtomicUsize::new(0),
             control_panel: Mutex::new(None),
-            panel_position: Mutex::new(None),
+            panel_position: Mutex::new(Default::default()),
         });
         let seconds = std::env::var("METIN_OVERLAY_FIXTURE_SECONDS")
             .ok()

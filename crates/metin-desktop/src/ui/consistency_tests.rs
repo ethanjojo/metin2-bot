@@ -5,10 +5,10 @@ fn settings_and_safety_use_aligned_plain_headings_and_one_navigation_separator()
     let (mut app, ctx, _dir) = setup();
     for (settings, safety, title, first_group) in [
         (
-            Some(SettingsPage::Detection),
+            Some(SettingsPage::Combat),
             None,
-            "Detection",
-            "Target recognition",
+            "Combat & timing",
+            "Tempo preset",
         ),
         (
             Some(SettingsPage::Appearance),
@@ -74,7 +74,11 @@ fn settings_and_safety_use_aligned_plain_headings_and_one_navigation_separator()
         for clipped in &output.shapes {
             if let egui::Shape::LineSegment { points, .. } = clipped.shape {
                 let y = points[0].y;
-                if (points[1].x - points[0].x).abs() > 100. && (points[1].y - y).abs() < 0.1 {
+                // A form control's bevel is not a full-width page separator.
+                if points[0].x.min(points[1].x) <= heading.left() + 1.
+                    && (points[1].x - points[0].x).abs() > 100.
+                    && (points[1].y - y).abs() < 0.1
+                {
                     assert!(
                         y <= heading.top() || y >= first.bottom(),
                         "extra separator between {title} and first group at {y}"

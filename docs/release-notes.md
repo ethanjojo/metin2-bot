@@ -4,6 +4,8 @@ Companion for Windows x64: a compact Rust/egui desktop application for local vis
 
 ## Highlights
 
+- Named Metin detection presets group sampled color, tolerances, shape limits and confirmation. Profile copies remain independent; cancelled edits and failed writes preserve the current setup. HP-reference confirmation settings now live in Recognition.
+- A stable Save check, aligned inline rename controls, remembered expanded panel sizes and shaped native window edges refine the compact interface. Session throughput switches between Metins/min and complete-cycle seconds per target.
 - In-app updates keep profiles locked while verifying and copying their data without reading the transient lock file, fixing Windows error 33 during backup preparation.
 - Specific Run pause causes, recovery links and configuration readiness; F7 and the main button share validated Save & Start, including while minimized. F8 cancels pending starts even during saving, and input requires the acknowledged current configuration.
 - Review exact unsaved changes, return to the last Actions detail through breadcrumbs, and adjust UI scale as 75–150%. Pinned client-relative panel positions survive reconnects and remain accessible after monitor/size changes.

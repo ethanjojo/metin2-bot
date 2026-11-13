@@ -55,6 +55,10 @@ struct UpdateWindow {
     fixture: bool,
     last_progress: Option<InstallProgress>,
     session_id: uuid::Uuid,
+    #[cfg(windows)]
+    native_window: Option<Arc<winit::window::Window>>,
+    #[cfg(windows)]
+    native_clip: Option<skin::TitleClip>,
 }
 impl UpdateWindow {
     fn should_close_after_abort(&self) -> bool {
@@ -92,6 +96,20 @@ impl eframe::App for UpdateWindow {
         }
         if ctx.input(|input| input.viewport().close_requested()) && !status.terminal() {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+        #[cfg(windows)]
+        if let Some(window) = &self.native_window {
+            use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+            let desired = skin::board_clip(&ctx);
+            if self.native_clip != Some(desired)
+                && let Ok(handle) = window.window_handle()
+                && let RawWindowHandle::Win32(handle) = handle.as_raw()
+            {
+                match crate::ui::native_chrome::apply_clip(handle.hwnd.get() as _, &ctx, desired) {
+                    Ok(()) => self.native_clip = Some(desired),
+                    Err(error) => tracing::warn!(%error,"Cannot update helper window shape"),
+                }
+            }
         }
         draw_window(ui, &status, &self.version, &self.root, self.fixture);
         if matches!(status, HelperStatus::Complete) && !self.fixture {
@@ -569,6 +587,10 @@ pub fn run(path: PathBuf) -> Result<(), String> {
                 fixture: false,
                 last_progress: None,
                 session_id: preview.id,
+                #[cfg(windows)]
+                native_window: cc.winit_window().cloned(),
+                #[cfg(windows)]
+                native_clip: None,
             }))
         }),
     )
@@ -636,6 +658,10 @@ mod aborted_window_tests {
             fixture: false,
             last_progress: None,
             session_id: id,
+            #[cfg(windows)]
+            native_window: None,
+            #[cfg(windows)]
+            native_clip: None,
         };
         assert!(!window.should_close_after_abort());
         let abort = root.path().join("abort.json");

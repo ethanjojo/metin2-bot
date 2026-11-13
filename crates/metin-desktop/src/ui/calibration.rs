@@ -19,9 +19,9 @@ impl MetinApp {
             else {
                 for (number, mode, label, hint) in [
                     (1,EditMode::World,"Search area","Select the part of the game where targets may appear. A fresh frame is captured automatically."),
-                    (2,EditMode::Color,"Metin color","Pick a representative target pixel directly in the frozen game image."),
-                    (3,EditMode::Template,"Target HP panel","Select one fixed edge or symbol of the target panel. Avoid names, changing HP and the full variable-width panel. The whole connected game client is always searched.")
+                    (3,EditMode::Template,"HP panel reference","Select one fixed edge or symbol of the target panel. Avoid names, changing HP and the full variable-width panel. The whole connected game client is always searched.")
                 ] {
+                    if mode==EditMode::Template { self.metin_detection_controls(ui); ui.separator(); }
                     let ready = self.calibration_ready(mode);
                     let mut edit=false; let mut delete=false;
                     ui.horizontal(|ui| {
@@ -37,11 +37,15 @@ impl MetinApp {
                     }).inner.on_hover_text(hint);
                     if edit {self.edit_area(mode);}
                     if delete {self.delete_area(mode);}
-                    if mode==EditMode::Color {self.color_control(ui);}
                     if mode==EditMode::Template && let Some(image)=self.editor.template.clone() {
                         self.reference_thumbnail(ui, &image);
                         ui.small(format!("Fixed detail · {} × {} px",image.width,image.height));
                         self.recognition_check_controls(ui, recognition_check::RecognitionSubject::HpPanel);
+                    }
+                    if mode==EditMode::Template {
+                        let mut changed=crate::ui_controls::numeric(ui,"Match threshold","threshold",&mut self.editor.profile.panel.threshold);
+                        changed|=crate::ui_controls::numeric_u32(ui,"Stable matches (frames)","stable_frames",&mut self.editor.profile.panel.stable_frames);
+                        if changed { self.runtime.stop(); self.editor.record(); }
                     }
                 }
                 ui.separator(); ui.strong("Excluded areas");
@@ -169,19 +173,6 @@ impl MetinApp {
             if let Some(icon) = icon { self.icon_thumbnail(ui, &icon); }
             ui.label(if self.calibration_ready(self.mode) { "Captured · profile edit" } else { "Not captured yet" });
             crate::ui_controls::help(ui, "Drag on the frozen image to capture or replace the selection. The preview updates after capture. Return to Buffs when satisfied, then Save the profile.");
-        });
-    }
-    fn color_control(&mut self, ui: &mut egui::Ui) {
-        let old = self.editor.profile.color.as_ref().map(|c| c.hsv);
-        let hsv = old.unwrap_or([0, 200, 200]);
-        let mut picker = crate::ui_controls::sampled_hsv_to_srgb(hsv);
-        ui.horizontal_wrapped(|ui| {
-            let response=ui.color_edit_button_srgb(&mut picker).on_hover_text("View or adjust the Metin color. You can also select the color tool and sample a frozen pixel.");
-            if response.changed() {
-                let value=crate::ui_controls::sampled_srgb_to_hsv(picker);
-                if old!=Some(value) {self.runtime.stop();self.editor.profile.color.get_or_insert_with(Default::default).hsv=value;self.editor.record();}
-            }
-            ui.small(old.map_or("Color not set".into(),|v|format!("HSV {}, {}, {}",v[0],v[1],v[2])));
         });
     }
 }

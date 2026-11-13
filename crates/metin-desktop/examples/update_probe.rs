@@ -1,15 +1,27 @@
 //! Read-only public-feed acceptance. Optional download verifies and discards; never installs.
+use clap::Parser;
 use metin_desktop::updates::{UpdateChannel, UpdateService, UpdateState};
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
 
+#[derive(Parser)]
+struct Args {
+    report: PathBuf,
+    #[arg(long)]
+    download: bool,
+    #[arg(long, default_value = "0.0.0")]
+    current_version: String,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut args = std::env::args_os().skip(1);
-    let report = PathBuf::from(args.next().ok_or("Pass the output JSON path.")?);
-    let download = args.next().is_some_and(|arg| arg == "--download");
-    let mut service = UpdateService::new("0.0.0")?;
+    let Args {
+        report,
+        download,
+        current_version,
+    } = Args::parse();
+    let mut service = UpdateService::new(&current_version)?;
     service.check(UpdateChannel::Preview)?;
     let deadline = Instant::now() + Duration::from_secs(if download { 620 } else { 25 });
     loop {
@@ -31,7 +43,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             UpdateState::Failed(error) => return Err(error.clone().into()),
             _ => None,
         };
-        if let Some(value) = result {
+        if let Some(mut value) = result {
+            value["current_version"] = current_version.clone().into();
             let text = serde_json::to_string_pretty(&value)?;
             std::fs::write(report, text.as_bytes())?;
             println!("{text}");
