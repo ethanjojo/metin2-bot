@@ -5,14 +5,16 @@ const sharp = require('sharp');
 
 async function main() {
   const root = path.resolve(__dirname, '../packaging/icons');
-  const source = await fs.readFile(path.join(root, 'logo.svg'), 'utf8');
+  const source = (await fs.readFile(path.join(root, 'logo.svg'), 'utf8'))
+    .replace(/[ \t]+$/gm, '').replace(/\r\n/g, '\n');
+  if (!source.includes('fill="#ffffff"')) throw new Error('Canonical Companion mark must be white.');
   const sizes = [16, 20, 24, 32, 40, 48, 64, 128, 256];
   const images = new Map();
   for (const size of sizes) {
-    // Preserve the supplied black mark and transparency. A light edge
-    // keeps the silhouette visible on dark desktop surfaces at every size.
+    // One white mark for the app, shell and setup. A dark edge keeps it
+    // readable on a light Windows taskbar without adding a background tile.
     const svg = source.replace(/stroke="none"/g, '')
-      .replace(/<path /g, `<path stroke="#ffffff" stroke-width="${1.2 * 1024 / size}" stroke-linejoin="round" paint-order="stroke fill" `);
+      .replace(/<path /g, `<path stroke="#181818" stroke-width="${1.2 * 1024 / size}" stroke-linejoin="round" paint-order="stroke fill" `);
     const png = await sharp(Buffer.from(svg)).resize(size, size).png().toBuffer();
     images.set(size, png);
   }
@@ -32,6 +34,9 @@ async function main() {
     offset += png.length;
   });
   await fs.writeFile(path.join(root, 'companion.ico'), Buffer.concat([directory, ...sizes.map(size => images.get(size))]));
+  // GitHub README light mode needs a dark mark; geometry stays canonical.
+  const lightLogo = source.replace(/fill="#ffffff"/g, 'fill="#000000"');
+  await fs.writeFile(path.resolve(root, '../../docs/assets/companion-logo-light.svg'), lightLogo);
   console.log(`Generated fixed Companion PNG and ICO with ${sizes.length} resolutions.`);
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

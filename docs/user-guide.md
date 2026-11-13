@@ -1,255 +1,160 @@
-# User guide
+# Companion user guide
+
+Companion is a Metin2 bot for Windows. This guide covers connecting it to your game, choosing what it should do and understanding its status.
+
+[First setup](#first-setup) · [Recognition](#recognition) · [Actions](actions.md) · [Run and stop](#run-and-stop) · [Updates](#updating-companion) · [Troubleshooting](#data-and-troubleshooting)
 
 ## Installation and HID driver
 
-Use the Windows x64 setup installer and verify it against the release's `SHA256SUMS.txt`. Windows 10 version 2004 / build 19041 or newer and a D3D11-capable device are required. Setup requires administrator approval and installs the mandatory generic HIDMaestro v2.1.0 driver. Setup discloses creation of the `CN=HIDMaestroTestCert` RSA 2048/SHA-256 code-signing certificate with an exportable private key stored in machine `My` and certificate trust copies in machine `Root` and `TrustedPublisher`. It also discloses configuring/starting `GameInputSvc` for automatic startup before continuing. Review that disclosure; these changes affect Windows beyond the application folder.
+Download **CompanionSetup** from [Releases](https://github.com/ethanjojo/metin2-bot/releases) and follow the installer. You need 64-bit Windows 10 version 2004 or newer and Direct3D 11 graphics support.
 
-The bundled `MetinInput.dll` contains the pinned MIT HIDMaestro SDK compiled with NativeAOT. No .NET runtime installation is needed. Automation uses this one HID input path. A missing bridge, incompatible ABI or unavailable driver prevents Start and provides a reason; calibration and capture remain usable. Starting automation never installs a driver or certificate.
+Setup requests administrator approval and installs the required HIDMaestro input driver. It also adds a local signing certificate to trusted Windows certificate stores and configures the GameInput service. Read the disclosure before accepting. The app and installer are unsigned, so Windows does not show a verified publisher. [Installation details](installation.md) explains these changes, backups and driver removal.
 
-Uninstall retains profiles and the shared driver by default. Choose driver removal explicitly only when other HIDMaestro consumers are stopped; removal refuses when another consumer is running. Silent setup requires `/ACCEPTINPUTDRIVER=1`; silent uninstall opts into driver removal with `/REMOVEINPUTDRIVER=1`. Explicit removal deletes the certificate/private key when no driver package remains, but leaves `GameInputSvc` configured for automatic startup because its original setting is not recorded. Driver management and structured reports are documented in [development](development.md#driver-management).
+## First setup
 
+1. Start your game and open Companion. Finish or skip the startup update check.
+2. Select the game window from the screenshot grid. Use search if several windows are open.
+3. Choose or create a profile from the selector at the top.
+4. Complete the three **Recognition** settings below.
+5. Open **Actions** and enable the behaviors you want. Confirm your character's mount state using the horse icon in the footer.
+6. Review setup warnings in **Run**, save, and press **F7** or **Start**. Press **F8** whenever you need to pause.
 
-## Updating Companion
+<a href="assets/window-chooser.png"><img src="assets/window-chooser.png" alt="Game-window chooser with search and screenshot tiles" width="740"></a>
 
-Startup checking is enabled by default and runs once per launch. An existing explicit opt-out is preserved; change **Check automatically on startup** in **Settings → Updates**. **Stable** is the default channel; choose **Preview** to include release candidates. Checks use the public [Companion GitHub releases](https://github.com/ethanjojo/metin2-bot/releases) without an account or token and without sending profiles, captures or game data. Only compatible newer Companion packages are offered.
+The chooser refreshes automatically. The window button in the title bar lets you choose another game window later.
 
-“Up to date” applies to the selected channel. A newer `review`, `dev` or `rc` prerelease is offered only on **Preview**.
+## Recognition
 
-The opening window first checks for updates. Choose **Continue** to stop waiting and open the game-window chooser. If a newer version is found, the same window offers **Install update** or **Skip for now**. Skip affects this launch only; it does not disable future checks. Once dismissed, a late result cannot replace the chooser or interrupt your connected game session. With no newer release, Companion proceeds to the chooser automatically.
+Open **Recognition** and configure:
 
-![Startup update offer in the Companion window](assets/startup-update-available.png)
+| Setting | What to select |
+| --- | --- |
+| Search area | The part of the game where Metins may appear, or the full game window. |
+| Metin detection | A representative target color, or a saved detection preset. |
+| HP panel reference | A small, distinctive detail that appears when a target is selected. |
 
-Review the visible HIDMaestro driver, certificate-trust and GameInput service disclosure before choosing **Install update**; that action authorizes the download and installation sequence. Download progress shows received and total bytes, followed by verification against the published size and SHA-256. **Cancel download** stops the request and removes its partial file. Verification failure keeps installation unavailable; use **Retry check** or skip the update. The separate **Settings → Updates** page remains available for manual checks, release notes and channel preferences. Its manual flow offers **Download update**, then **Install and restart** after verification.
+<a href="assets/calibration.png"><img src="assets/calibration.png" alt="The three recognition settings and game-overlay options" width="460"></a>
 
-![Updates settings with manual checking and release-channel choices](assets/updates.png)
+For the **HP reference**, capture a fixed decoration or corner of the panel. Avoid the monster name, changing health fill and other variable text. Companion searches the whole game window for this detail, so it can work with different panel lengths.
 
-![In-app installation progress](assets/update-installing.png)
+### Selecting and editing areas
 
-First installation uses the normal setup wizard. An in-app update uses a Companion progress window while the same installer runs behind it, without navigating setup pages. Finish or cancel any capture/calibration review first. Companion pauses automation, resolves unsaved edits through the normal save/discard/cancel decision and waits for held inputs to release before handing over to the update helper. Cancelling the unsaved-edit decision keeps the application and edits open. Windows may still request administrator approval; the update does not bypass UAC.
+**Pick** or **Edit** opens a darkened, frozen view of the game. Draw the area you need; an existing area can be moved or resized. Use **Confirm** or Enter to accept. Escape or F8 cancels without changing the saved selection.
 
-The helper rechecks the official package, waits for Companion to close and verifies complete backups of both the installation and your data. It displays installation stages and actual file-copy progress; backup, driver checks and final verification use an indeterminate indicator rather than invented percentages. Input safety, profiles and custom data locations are preserved. Completion requires the installed bundle and version to match, an isolated installed self-test to pass, and data to remain unchanged. Companion then reopens paused. A failed update keeps its error, setup log and available backups; it never resumes automation. Cancellation is available during downloading, not while installation is replacing files.
+Add **Excluded areas** over chat or the minimap to ignore targets there. Each area has controls to rename, show, edit or delete it. Undo restores a removed area.
 
-The [available release](assets/update-available.png), [download progress](assets/update-download.png), [verified download](assets/update-ready.png) and [error](assets/update-error.png) screenshots are isolated offline examples, not evidence of a completed installed update. Additional offline previews show [startup checking](assets/startup-update-check.png), [startup download](assets/startup-update-download.png), [startup failure](assets/startup-update-error.png), [driver verification](assets/update-driver.png), [installed verification](assets/update-checking.png), [completion](assets/update-complete.png) and [installation failure](assets/update-install-error.png).
+The Metin detection row shows the current color. Its pencil opens color tolerance, size limits and confirmation settings together. Save a useful setup as a named preset with **+**. Applying a preset copies its settings into this profile; changing the preset later does not change your other profiles.
 
-Update sessions can retain the downloaded package, a staged helper runtime, setup logs and verified backups in the current user's temporary directory. Do not remove a session while its update window or installer is running. Failed or incomplete sessions are retained; completed inactive sessions can be cleaned up by a later update after 24 hours. Keep an independent copy of any backup you need to retain longer.
+### Check recognition
 
-## Compact panel, profiles and game window
+Use **Check recognition** beside the HP reference or an image-based buff. The dialog compares a fresh game image with your references without clicking or pressing keys.
 
-After the startup update check or **Continue / Skip for now**, a searchable grid shows the available window names and screenshots. Select a tile to connect and open the 460 × 620 Companion panel; it can be resized down to 400 × 480. A thumbnail that cannot be captured shows its reason instead of an image from the desktop. Drag the Companion title to move it; use the lower-right grip to resize. The title-bar controls change the connected window, pin the panel to it, collapse the panel or close it. The interface uses one fixed Metin appearance. Companion installs in `Program Files/Companion` and uses `%LOCALAPPDATA%/Companion`. Existing default paths migrate with complete verified backups; existing profile data is retained and old excluded rectangles receive default names when loaded. Close previous instances first. The shared driver remains HIDMaestro.
+- **Match / no match:** compare the current crop with your reference and the required score.
+- **Active / Inactive / Unknown:** see which buff appearance was recognized. Unknown means the images do not allow a confident decision.
+- **Check again:** take another image. **Edit reference:** replace the reference. **Close:** return to the form.
 
-The title strip keeps Window, Pin, Collapse and Close aligned with the original artwork. Collapse leaves only the shaped Metin title strip; Expand restores the complete panel. The Metin-style profile combobox opens profile search and New profile. Each profile has a pencil: edit its name in place, confirm with the check icon or Enter, and cancel with the cross icon or Escape. Clicking outside discards an unconfirmed name. Confirmation saves only that name, preserves other draft settings and never selects a different profile. Empty names are rejected; a failed save keeps the input available for correction or retry. Undo, Redo, Revert and Save remain visible beside the selector and are disabled when unavailable. Revert restores the last saved profile transaction and retains the connection. Save persists the complete recognition setup, settings and buffs. The footer keeps a wide Start/Pause control and one horse icon on every tab. Start and F7 use the same validated Save & Start action: draft changes are saved before the three-second countdown, while a clean profile resumes without being reapplied. Invalid drafts, active capture/recognition checks and calibration review block both paths. F8 remains immediate, including while the panel is minimized. An expired F7 request is never replayed after a file dialog closes. Editing controls are unavailable during native selection; Escape/F8 cancels the selection and F8 remains emergency pause. Selects share a recessed field, original game arrow, matching full-width popup and clear hover/selection. Keyboard navigation, Enter, Escape and accessible value labels remain available.
+<a href="assets/recognition-check.png"><img src="assets/recognition-check.png" alt="HP check with current and reference images" width="360"></a>
+<a href="assets/buff-recognition-check.png"><img src="assets/buff-recognition-check.png" alt="Buff check explaining an ambiguous result" width="360"></a>
 
-The changes badge beside the profile name opens a grouped **Unsaved changes** review with previous and edited values. One color, moved/resized area, captured reference or buff reorder counts as one logical change. References have previews, colors have swatches, and values include their units. Expand a compound change to inspect its settings; select its label to open that exact item. Removing an item opens its parent list instead. The review scrolls inside the popup without moving the form.
+The result describes that captured image, not a permanently live status. It shows when the image was taken and whether unsaved settings were used. Close the dialog before starting.
 
-The review describes what Save will persist. A buff without a shortcut is listed separately under **Incomplete buffs**, because Save omits it until completed; a draft containing only these items shows **Draft**. An unsaved new profile shows **New profile**. Session state, window placement and immediately saved profile renames are not pending profile settings. Narrow/scaled windows retain the badge tooltip. Undo/Redo/Revert/Save stay aligned. Actions restores the last open section/detail when returning from another tab. Its clickable **Actions › section › detail** path returns to the list or catalog without discarding edits. Switching profiles starts at the Actions catalog.
+### Game overlay
 
-The profile menu also has **Duplicate**, **Export…** and **Import…**. Duplicate creates an independent copy, including captured images. Export writes one `.companion-profile` package with validated settings and images; it omits logs, global UI preferences, mount confirmation and runtime timers. Import previews its name, image count and calibration dimensions before creating a fresh profile ID; it never overwrites an existing profile. Save/discard/cancel resolves current draft edits before changing the active profile. Packages are bounded to 16 MiB; their external HP reference is limited to 8 MiB encoded PNG and 16 million decoded pixels. A different connected client size still requires calibration review.
+**Game overlay** shows recognition over the game. **Detected targets** shows candidate outlines; **Calibration areas** shows configured regions; **Sizes (px)** adds dimensions. Green marks the current target, and gold marks the next one.
 
-Panel positions and expanded sizes are saved outside profiles for each connected client, in DPI-aware units. Position is relative to the client's right/top edges. Reconnecting restores both; collapse, the chooser and automatic work-area clamping do not overwrite the preferred expanded size. Settings → Display offers Reset position and size. Reconnecting restores the saved position; changing profile in the same client leaves it in place. Disconnected monitors and expanding near an edge clamp the panel into an available monitor work area. Automatic clamping does not overwrite the preferred position. Window matching uses process/title and an instance order for otherwise identical clients; that order can change if indistinguishable clients are relaunched in a different order.
+These options change what is displayed. Turning off the overlay does not disable recognition. The overlay hides when the game is minimized or its image is no longer current.
 
-![Unsaved profile changes](assets/unsaved-changes.png)
+## Calibration size review
 
-![Profile import preview](assets/profile-import.png)
+If the game size changes, choose **Review calibration**. Check the preserved areas on the new image, move or recapture anything that no longer fits, then choose **Confirm calibration** and save.
 
-![Searchable Metin-style profile menu](assets/profile-menu.png)
+Nothing is automatically stretched or deleted. **Cancel review** or Escape restores the previous calibration, including edits made during that review. The bot remains paused.
 
-![Inline profile rename with confirm and cancel](assets/profile-rename.png)
+## Actions and Safety
 
-![Collapsed title strip](assets/collapsed.png)
+**Actions** contains Buffs, Loot, Mount, Periodic actions, Visual rules, Auto-puller and Out-of-target attack. Select a behavior to open its settings; the path above the form takes you back. [The Actions guide](actions.md) explains each one with examples.
 
-Saving briefly turns the header Save icon into a green check with a Saved tooltip; it never inserts a row or moves the content. Selection and removal notices may appear above the footer while current. Idle mode reserves no empty message row; Start and mount controls remain anchored at the bottom. A removal's **Undo** restores that edit while its message is current; another edit or profile change retires the message. Missing prerequisites show the action needed to continue. Changes remain drafts until Save; feedback does not imply that a capture or profile was saved automatically. Numeric fields keep their units visible, secondary text stays readable over the dimmed Metin background, and Start/Pause stays in the same footer.
+In **Safety**, choose optional limits and alerts:
 
-Connection belongs to the current application session, independently of profiles. Switching profiles pauses automation and retains the exact selected window. The title-bar window icon reopens the grid; search by title, application filename or process ID. Catalog and visible thumbnails refresh automatically. Closing or replacing the selected window returns to the chooser. A new application launch always asks for an explicit selection; old remembered-window preferences are discarded when settings are next saved.
+- **Stop after active time:** stop after the chosen running time. Manual pauses and breaks do not count.
+- **Stop at local time:** stop at the next occurrence of a clock time, including during pauses or breaks.
+- **Take regular breaks:** finish the current target and loot, then rest for the chosen duration.
+- **Recovery:** try clearing a timed-out target and rotating the view a limited number of times; pause if that does not help.
+- **Notifications:** choose sound, Windows notifications or both. Use the test button to check them.
 
-Pinning makes the panel follow the selected game's client geometry. It is raised while that game or the panel is active, and gives up that level when another application becomes active. When the target is minimized or hidden, an inactive pinned panel hides with it and returns without activation when the target returns. An active panel remains usable for selecting another target; a destroyed target also leaves the panel available. Unpinning restores normal independent window behavior. Moving or viewing this control panel does not grant it permission to send game inputs.
+If both stop limits are enabled, the earlier one wins. An automatic stop does not restart itself. Pausing during a scheduled break cancels automatic continuation. Windows notification settings or Do Not Disturb may hide alerts.
 
-The Session row shows Active time, Targets ended and a clickable rate. Click **Metins/min** to switch to **s/metin**; the choice is remembered. Both use the complete active cycle, including searching, combat, loot, buffs and retries; pauses and scheduled breaks are excluded. Before a target ends, the average is unavailable. Targets ended counts confirmed HP-panel disappearance, not independently verified kills or rewards. Reset session resets the existing statistics, buff timers and history together.
+## Compact panel and profiles
 
-## Recognition and capture
+Use the title-bar controls to choose a window, pin, collapse or close Companion. Drag the frame to move it and resize its edges. Position and expanded size are remembered for the game window. **Settings → Appearance & performance → Reset position and size** restores the default placement.
 
-Select the correct game window, then complete the three recognition steps:
+The profile selector includes search and **New profile**. A profile's pencil renames it; check/Enter saves the name and cross/Escape cancels. Beside the selector:
 
-1. **Search area:** select the playable scene. Add excluded areas for chat, the minimap or other false matches.
-2. **Metin detection:** pick a representative target pixel, select a named preset or open its editor in Recognition. The editor controls color tolerances, target dimensions and stable detections. Each main profile keeps its applied configuration; editing a reusable preset does not rewrite other profiles.
-3. **HP panel reference:** capture one distinctive fixed edge or symbol. Avoid the changing HP fill, character names and the full variable-width panel. The reference must be at least 5 × 5 source pixels and have enough visual detail; uniform crops can be rejected.
+| Control | Effect |
+| --- | --- |
+| Save | Keep the current profile edits. |
+| Revert | Restore the last saved profile. |
+| Undo / Redo | Step backward or forward through edits. |
+| Changes badge | Compare saved and edited values; select a change to open its setting. |
 
-The Metin detection row has a color swatch, a preset selector, a pencil and **+**. **Pick** samples a custom color; the pencil opens one editor containing the color, hue/saturation/brightness tolerances, candidate size limits, maximum frame-area ratio and stable-frame requirement. The body scrolls in a small window while Cancel and Apply remain visible. **+** saves these values as a named preset; **Save & apply** updates that library entry and copies it into the current profile draft. The header Save persists/applies that main profile. Editing a library entry never rewrites another main profile. A missing or subsequently changed library entry leaves the retained profile values shown as **Custom**. Choose **Custom · current settings** to detach the name without changing detection values.
+One color, area or buff reorder counts as one logical change. A buff without a shortcut is listed as incomplete and will be omitted by Save. Complete it first if you want to keep it.
 
-A color selected from this editor stays in its private draft until Apply. Cancel, Escape or a failed preset save leaves the main profile and undo history untouched. The trash in the editor deletes only the saved library entry; profiles keep their copied values. The recognition-row trash clears the current profile color and can be undone. Exported profiles contain their complete detection values and work without the preset library. Back up the complete data folder to retain the shared library too.
-
-![Metin preset editor with color, tolerances and shape limits](assets/metin-preset.png)
-
-Choosing a capture tool automatically pauses automation and requests a fresh image of the selected client. Selection opens only after the worker confirms held inputs have been released. There is no separate Refresh or Snapshot step. The native selector dims the frozen image outside the selection and keeps selected pixels clear. Drag a rectangle, move it from its interior, or resize it using an edge or corner handle. An existing region starts selected on the fresh image; drawing outside it replaces the region. The contextual controls appear outside the selected rectangle after drawing, leaving the image clear while drawing. For a color sample, click to lock the pixel and inspect the color swatch and candidate outlines in the same frozen image before confirming. Check the source-pixel dimensions/readout and choose **Confirm selection** or press Enter. Escape, F8, the Cancel control or right-click cancels. Tab temporarily hides the controls and magnifier so every source pixel remains reachable. Selection itself sends no input into the game.
-
-Opening a selection creates a private draft and leaves the current profile, color, reference pixels and undo history unchanged. Escape/F8/Cancel discards that draft. Confirm applies one validated edit that can be undone in one step. A confirmed selection passes through the normal editor validation. Buff and action captures retain their source editor, thumbnail and manual return control; inspect the result before returning and saving. A failed selection shows its reason instead of replacing a valid crop. A profile/window change, target loss or cancelled request invalidates an old selection. If game dimensions differ from the profile, the selector reports both sizes and offers **Review calibration** or **Keep original**.
-
-The fixed HP detail is always matched anywhere inside the connected game client window. Existing saved search restrictions are discarded without changing the reference. HP matching never searches the desktop or monitor. Use Excluded areas for target masks; the confirmed matched HP detail is excluded automatically. Match threshold and Stable matches (frames) are edited immediately below the HP reference in Recognition. Similarity and consecutive stable-frame requirements still apply.
-
-Live annotations mark current, next and other candidate targets directly over the selected game. The current detected target has a green outline; no fixed cross remains at its previous click position. The next target keeps its gold marker. Recognition groups the **Game overlay** master with **Detected targets**, **Calibration areas** and **Sizes (px)**. Suboptions are disabled but retained while the master is off. Calibration areas controls the selected recognition outline. The annotation window is read-only, click-through and does not activate itself. It hides when frames become stale, target focus/visibility is lost, the target is minimized or replaced, the profile/window changes, or the app shuts down. It does not bypass focus, occlusion or input guards.
-
-Companion requests borderless capture through the supported Windows permission API, shared by live capture and window thumbnails. Windows may ask for consent; its privacy policy remains authoritative. Older Windows versions or denied permission can retain the system capture border. No global privacy setting is changed. When paused with Game overlay off, after a single capture, on disconnect or shutdown, Companion closes its capture session rather than leaving a capture indicator active unnecessarily.
-
-### Editing recognition
-
-All region, color, buff and action selection uses the same native overlay. There is no separate screenshot canvas or zoom editor in Companion. Reopen a tool to adjust its saved region on a fresh image. Row trash icons remove the corresponding area/color/icon; the top Undo/Redo controls restore profile edits. Game overlay is global across tabs, with its visible targets, calibration areas and dimensions configured in Recognition. Paused annotation previews reflect draft recognition edits; running automation always uses the applied runtime profile.
-
-### Calibration size review
-
-Choose **Review calibration** after a size-change notice to inspect a fresh image of the current game client. Automation pauses and held inputs must be released before review starts. Existing areas retain their physical client-pixel positions; reference PNGs and sampled colors are kept. Coordinates are not automatically scaled or clamped to fit the new image. **Keep original** leaves the existing calibration untouched; restore the old client size to use it, or keep a separate profile for the new layout.
-
-The review lists the search area, exclusions, fixed HP detail, buff detection area, Active/Inactive buff icon positions, visual-rule reference positions, and visual-rule/periodic click targets. Use **Edit** to adjust any area on a frozen client image or the trash control to remove it from the draft. All preserved region outlines appear together: gold for valid areas and red with **outside image** for areas beyond the current image. Red outlines are clipped for display only. Edit or remove every invalid area before confirming; removing a required area can require recalibration before the profile is valid. Captured PNG pixels remain unchanged unless you explicitly replace or remove a reference. Metin color can also be sampled again if needed.
-
-**Confirm calibration** requires a fresh, visible capture from the same connected window, unchanged client dimensions, no active selection and valid reviewed areas. It accepts the whole draft as one undoable profile edit; Save then persists/applies it. GUI Start and F7 remain blocked while review is active, including from the already applied runtime profile. A change of profile/window or another client-size change cancels the review and rejects stale results. Automation stays paused after confirmation or cancellation.
-
-**Cancel review** or Escape cancels the entire size review, including its intermediate edits, and restores the previous calibration, reference pixels and undo/redo history. This also applies when Escape cancels a native selection opened from the review.
-
-![Calibration size review with preserved areas and invalid-area warning](assets/size-review.png)
-
-Excluded areas have editable names such as **Minimap** and **Chat**. Use the pencil, confirm with Enter/check or cancel with Escape/cross. The target icon briefly highlights the named region without changing detection; the region icon moves or resizes it over a frozen capture. Rename, geometry editing, trash, undo and size labels preserve the same canonical geometry. Existing rectangle-only profiles automatically receive names such as Excluded area 1.
-
-**Check recognition** in HP reference and icon-based buff details opens a dialog and requests one fresh image from the same client. It sends no input and changes no settings, timers or runtime Active-state hold. The dialog shows waiting, capture failure or a result with larger current/reference previews. A match score is compared with the configured threshold; it is not a probability. Buff results distinguish Active, Inactive and Unknown, including ambiguous references. A missing optional inactive image is shown as unavailable.
-
-Results show their capture age and indicate unsaved settings when applicable. One snapshot cannot establish consecutive live confirmation or extend the live Active-state hold. **Technical details** contains the source dimensions and matching evidence. **Check again** requests another fresh image, **Close** returns to the form, and **Edit reference** opens the existing capture tool. Closing, changing profile/window or editing the checked settings invalidates outstanding work. Start/F7 is blocked while the dialog is open; F8 remains immediate.
-
-![Read-only HP reference check](assets/recognition-check.png)
-
-![Read-only buff reference check](assets/buff-recognition-check.png)
-
-
-## Actions
-
-Each of the seven behavior categories has its own icon in the Actions list and the same icon beside its detail heading. Periodic actions use a clock; the hourglass represents waiting and breaks.
-
-Each category summarizes its current edited configuration as **On**, **Off** or **Setup needed**, with the relevant shortcut, interval or missing requirement. These summaries describe the draft; Save applies it to automation. Advanced groups expose their configured values while collapsed. Essential hold/wait fields and click-target previews remain visible directly in their forms.
-
-### Buffs
-
-Choose Buffs from the Actions list, use **Add buff**, then select a buff to open its shortcut, mode and timing details. **Timed** refreshes it on the configured interval; **Icon-based** activates it when recognition confirms it is inactive. Both choices are directly visible. Back to Buffs returns to the list; Actions returns to all behaviors. The two compact arrows beside its list button reorder it; the adjacent trash icon removes that buff. For Icon-based buffs, capture the active icon and, when needed, a distinct inactive appearance. Capturing an icon automatically creates or expands the buff detection area with a small margin. Edit buff detection area remains available when a wider search region is needed.
-
-Each capture control requests a fresh frozen game image labelled with the buff and capture type. Confirm the crop, inspect its thumbnail, then use Done & back to buffs. A failed capture shows the validation reason and does not replace a valid saved icon. Configure the actual current On/Off state before running when the skill requires it.
-
-The skill's display icon is chosen separately from its captured Active and Inactive references. Open its icon picker and choose Warrior, Ninja, Sura or Shaman. Both specializations are available: 10 Warrior, 10 Ninja, 12 Sura and 12 Shaman icons, 44 in total. Built-in tooltips and accessible labels use official English base-skill names, such as **Aura of the Sword** and **Dragon's Strength**. Your own profile and skill names are retained. Changing this icon affects the skill list and Run artwork; it does not replace recognition captures or change when a key is sent. Existing profiles keep their captures and can leave the display icon unset.
-
-![Four-class presentation icon picker](assets/buff-icon-picker.png)
-
-### Loot
-
-In Actions → Loot, enable Automatic loot and record the game’s pickup shortcut. Set the number of presses, initial delay, wait between presses and key hold duration. Loot starts only after a confirmed target panel disappears for the configured number of frames. Startup, unconfirmed clicks and search rotations do not trigger it. It sends a pickup shortcut; it does not recognize item names or inventory contents. A target panel reappearing interrupts pickup and pauses automation.
-
-### Mount
-
-The single horse icon in the fixed footer records the current On foot / Mounted declaration. Red means On foot; green means Mounted. The icon has no additional enclosing frame. Grey with a question mark means Unknown: click it and explicitly choose On foot or Mounted. Once confirmed, clicking toggles the declaration to the other state, with a matching tooltip. The icon waits for runtime acknowledgement and is disabled while disconnected or selecting a capture. No capture or recognition setup is required. Confirmation pauses automation and never sends a mount shortcut to the game. Actions → Mount contains desired Fight mounted behavior, the actual mount shortcut and delays; those settings apply on Save. Mount handling runs as part of Automatic buffs.
-
-Each new profile/window connection starts with unknown mount state. Check the character and select On foot or Mounted before starting automatic buffs. Saving the same connected session preserves its declaration; switching connections or restarting the app requires a new declaration. The state is never borrowed from another character.
-
-### Periodic actions
-
-![Periodic action with input and first-use settings](assets/periodic.png)
-
-In Actions → Periodic actions, use Add action to create a named key or click action. For a key, record the shortcut and set its inline hold duration. For a click, choose **Select click target** and select its area in a fresh frozen game image; the target preview and any missing-target reason are visible directly. Set the repeat interval and inline wait after use, then enable and save. First use after Start offers **Immediately** or **After interval** (the default for new actions) without opening a menu. Actions from older saved profiles retain immediate first use; saving writes the updated format.
-
-Actions run between targets, never during combat. After successful input, the next interval starts after the configured wait. Manual pauses and scheduled breaks freeze these intervals. The wait is only a delay: it does not verify that an item was used or a game action succeeded. This is a single input, not a dialog sequence.
-
-The action and its animation wait do not consume the search timeout. Time already spent searching is retained when searching resumes.
-
-Click areas use source pixels relative to the calibrated game window, not desktop coordinates. Select a stable button area and review it after changing game size or layout. A changed frame size preserves saved click areas and offers [calibration size review](#calibration-size-review); no click target is automatically scaled or clamped. Focus, window and input guards apply to clicks as well as keys.
-
-### Visual rules
-
-![Custom visual rule in Actions](assets/visual-rules.png)
-
-In Actions → Visual rules, use Add rule and name the event. There are no death/disconnect presets or supplied game images. Capture a distinctive fixed part of the event (5–128 source pixels), inspect its thumbnail and return to Visual rules. Test on snapshot compares the reference with the frozen frame; compare normal and event snapshots before enabling. Set similarity and how long the event must persist. Missing or stale observations reset persistence; a rule fires once until its condition disappears. Enabled rules require complete calibration.
-
-The editor follows **When → Do → Then**: When contains the captured condition, Do contains the reaction and input, and Then controls verification and completion. **Notify** is independent and can be combined with **Pause immediately**, **Perform action**, or used alone. Immediate pause and performing input are mutually exclusive; neither selection silently changes the other. A rule without any reaction cannot be enabled. Perform action uses one recorded key with inline hold duration or a calibrated click area with an inline preview. The app releases ongoing attack input and checks a fresh frame before sending the action. Click areas follow the same game-window-relative calibration rules as periodic clicks.
-
-**Verify** is the default result check. After the configured wait, fresh consecutive frames must confirm that the rule's reference has disappeared. If it remains after the verification timeout, the action may retry, up to Maximum attempts (1–5 total attempts, including the first). Exhausting attempts pauses automation. Notify controls alerts from this rule, including retries and failures; history and warning reasons are always recorded. During a visual action, this also covers focus, capture and input errors. Scheduled automatic stops retain their independent alerts. When sound and system notifications are both off, the rule shows a shortcut to Safety → Notifications. **Wait** explicitly skips outcome verification: the event history records that only the delay completed. It does not prove revival, reconnection or any other game result.
-
-After completion, choose **Continue** from a fresh frame or **Pause** (the default). This completion pause can be combined with performing an action; it is distinct from Pause immediately. Continue discards the interrupted sequence and recognizes the game state again; it does not resume stale clicks or attacks. If mount state became uncertain during interrupted buffs, the app pauses for a manual check. A visual action detected during a scheduled break pauses for review.
-
-Pause/F8, focus loss, geometry changes, capture/input errors and automatic safety limits cancel execution and release held input. Cancelled work never resumes automatically after Start. Rules that pause take priority over action execution. Test recognition and the configured input in your own setup before enabling; live-game acceptance is still pending.
-
-### Auto-puller
-
-![Auto-puller configured for one sequence at combat start](assets/puller.png)
-
-Assign the shortcut of your enemy-attracting hotbar item. **Combat start** sends one sequence after the target HP panel is confirmed. Choose the number of presses and gap between presses; shortcut hold stays inline, while applicable advanced timing shows its configured summary. A brief panel flicker or Pause/Resume does not trigger another start sequence for the same combat. **Repeat** sends a sequence immediately when combat is confirmed, then repeats after the configured post-sequence wait and interval. No puller inputs are sent while searching, acquiring a target, looting, buffing, recovering or on break. A pause cancels remaining presses; delayed samples never replay missed sequences.
-
-Profiles saved with the previous Searching/Combat/Both periodic modes load as Repeat, preserving their shortcut/timing. The next save writes the new mode. Newly created profiles default to Combat start with the puller disabled.
-
-### Out-of-target attack
-
-![Independent timed attack settings after combat and during long searching](assets/out-of-target.png)
-
-Actions → Out-of-target attack has independent, default-disabled options for after combat and long searching. Set the attack shortcut (Space is supported).
-
-After combat starts only after confirmed target-panel disappearance, holds the key for the configured duration, releases it, then continues with loot and settling. It does not run after startup or an unconfirmed click. During long searching triggers after the configured search time with no target; search/rotation settling counts, pauses and other actions do not. It holds the key for its own duration, then resumes fresh searching. A new panel or stable candidate interrupts a search attack before selection. Maximum search attacks is bounded; existing search/rotation/recovery limits still apply and may stop the run first. Attempt counts reset after confirmed combat or a manual Start, not Reset session.
-
-These are timed key holds, not monster recognition: finishing a hold does not prove nearby enemies are dead. Vision and safety monitoring continue during a hold. A panel appearance, Pause/F8, focus/geometry change, capture failure or safety limit releases the key; no hold resumes automatically after a pause. Slow capture during a hold fails closed rather than continuing a blind attack.
-
-## Safety
-
-All options are per profile and disabled by default. Save applies edits; changing stop/break settings restarts the safety budget. Editing visual rules in Actions, recovery or notifications preserves that budget. Keep the game focused during scheduled breaks if you want automatic continuation.
-
-- **Stop after active time:** counts searching, combat, buffs, pickup and settling. Manual pauses and scheduled breaks do not count. The limit interrupts guarded input and releases held keys, including during combat.
-- **Stop at local time:** fixes the next occurrence of the chosen local time when a new run starts (tomorrow if necessary). This deadline continues through pauses and breaks. Later system-clock/time-zone changes do not move the already fixed deadline. During a daylight-saving gap the next valid occurrence is used; repeated local times use the first future occurrence.
-- **Take regular breaks:** after the configured active interval, waits for the current target, loot and settling to finish. No inputs are sent during the break. Buff timers freeze and recognition restarts on a fresh frame afterwards.
-
-If both stop limits are enabled, the earlier one wins. A completed automatic stop never restarts by itself: Start or F7 explicitly begins a new run and fresh safety budget. Pause, F8, focus loss or an error during a break cancels automatic continuation; the next manual Start begins a fresh break interval. Pausing outside a break preserves active-time progress. Reset session, Reset skill timer and Clear history do not reset safety limits. Changing profile/window or restarting the app begins a new runtime session.
-
-The execution order is target end → optional out-of-target attack → loot → settling → break if due → buffs → periodic actions → next target.
-
-### Recovery and notifications
-
-Recovery optionally clears a timed-out target with Escape, rotates the camera and waits for fresh recognition. Attempts are bounded; exhausting the limit pauses. Recovery never counts a target completion or triggers loot. Attempts reset after a confirmed target end or manual Start.
-
-Notifications optionally play a sound and/or submit a local system notification for rules, automatic stops and runtime errors. Test notification needs no game window. Delivery status and failures appear in Safety and Diagnostics. Windows notification settings and Do Not Disturb can suppress presentation. No remote messaging is configured.
+Open the **profile selector** to find **Duplicate**, **Export…** and **Import…**. An export includes settings and captured images. Import previews the package and creates a separate profile.
 
 ## Run and stop
 
-Companion always starts stopped. Review readiness, save, and use Start or F7. Run groups bare activity artwork, state and reason, an actionable setup checklist, four session counters, next-action countdowns and recent events. The single History control opens the full event list inside Run. Game overlay shows annotations directly over the selected game across all tabs. Turning it off stops continuous presentation capture while paused without changing automation's detection and safety interval. The game must be foreground and match the profile. Input pauses or is rejected when identity, focus, size, permissions, occlusion or manual-input guards fail. Focus changes during the start countdown are allowed time to settle; execution still requires fresh, stable, active-target observations.
+<a href="assets/run.png"><img src="assets/run.png" alt="Run with activity, next pickup countdown, statistics and recent events" width="460"></a>
 
-Pause or F8 stops the worker; do not rely on closing a game window as the primary stop control. Test the full game cycle before unattended use. The HIDMaestro bridge and installed driver must be available before Start.
+The activity card shows what the bot is doing and why. Its bar counts down to the next step or a timeout; it is not target health. Setup warnings link to settings that need attention. **Setup complete** means configuration is ready, not that the bot is running.
 
-The activity card reserves a thin countdown strip. Each finite phase shows its actual time remaining and an emptying bar. Searching counts down to the next rotation, search limit or configured out-of-target attack, whichever becomes due first; the label names that transition. Combat and target confirmation bars explicitly represent timeout limits, not target HP. Buff waits, loot, periodic actions, visual-rule verification, recovery, breaks and timed attacks use their own runtime deadlines. Ready, Paused, Stopped, Error and pending input acknowledgements have no invented countdown or percentage. Regular buff rows and details show time to next use with an interval bar; icon-driven buffs show Active, Inactive or Unknown from fresh recognition instead of an invented timer. Paused buff countdowns retain their remaining time.
+| Control | Use |
+| --- | --- |
+| Start / F7 | Save valid edits and start after the countdown. |
+| Pause / F8 | Stop immediately and release held input. F8 also works while Companion is minimized. |
+| Horse icon | Confirm current mount state: grey = unknown, red = on foot, green = mounted. |
+| Reset session | Pause, clear counters/history and restart timed buff timers. Mount confirmation and Safety limits are retained. |
 
-Activity artwork follows the current runtime action: target attack, out-of-target attack, searching/rotation, the skill currently being cast, loot, auto-puller, periodic action, waiting/break, recovery or an alert. Buff artwork uses that skill's selected display icon when present. A timer reaching zero alone does not imply that an action is executing. Periodic actions use the clock, while waits and breaks use the original hourglass. The artwork has no decorative circle or item-slot frame. The state text and reason remain visible beside it.
+Keep the selected game in the foreground. Switching away, losing the connection or changing game size can pause the bot. Read the reason and use its suggested action before starting again.
 
-**Reset session** pauses automation and releases held inputs before resetting counters, in-panel history and regular buff timers. Regular buffs become due at the next Start; icon-driven skills are recognized again from fresh pixels. One reset audit event remains in history, while the file log is retained. Mount declaration, periodic scheduling and automatic-stop/break safety budgets are preserved. Reset does not press buff keys or start automation.
+Click **Metins/min** to switch to average seconds per Metin. This includes the full active cycle: searching, combat and loot. **Recent activity** shows the newest events that fit; **History** opens the longer event list inside Run, with a **Warnings only** filter. Clearing history does not delete the log file.
 
-### Event history
+## Updating Companion
 
-![Event history inside Run](assets/event-history.png)
+Companion checks for updates when it starts. Choose **Install update** or **Skip for now**, or **Continue** if you do not want to wait for the check.
 
-Run also shows upcoming periodic/puller timers and recovery attempts. Click an action or skill name to open its exact editor; click Safety schedule or its countdowns to adjust breaks and stopping. Configure actions opens the Actions tab. Event links open the relevant action, rule, recovery page or Recognition.
+**Settings → Updates** also lets you check manually and choose a channel:
 
-Recent activity fills only the space left below the other Run sections. It measures wrapped messages and shows as many complete newest-first records as fit, without partial rows, a fixed three-event cap or a scrollbar introduced by the summary. Resizing the window or changing UI scale recalculates the fit. History beside Recent activity opens a detail view inside Run with the newest 200 events for the connected profile/window, including starts, target changes, pickup, buff/mount actions and pause reasons. Times are elapsed since application startup. Back to Run or Escape returns to the overview. Warnings only filters the full view, while the space-fitted summary remains unchanged. Clear history removes the in-memory list; the full event log stays in `logs/run.log`. Changing profile/window starts a separate history. The fixed footer and main navigation remain available throughout.
+- **Stable:** regular releases.
+- **Preview:** regular releases plus testing versions such as review, rc and dev.
+
+<a href="assets/startup-update-available.png"><img src="assets/startup-update-available.png" alt="Startup update offer" width="360"></a>
+<a href="assets/update-installing.png"><img src="assets/update-installing.png" alt="Update installation progress" width="360"></a>
+
+The app downloads and checks the package, backs up the installation and data, then shows installation progress. Approve administrator access if requested. Updates reopen Companion paused and preserve profiles. Downloading can be cancelled; replacing installed files cannot. If an update fails, keep its message and logs and retry after resolving the cause.
+
+Update checks do not upload profiles, screenshots or game data. Update illustrations use demonstration versions.
 
 ## Settings and appearance
 
-Actions uses a behavior list and detail pages. Safety and Settings retain their compact secondary tabs, with aligned plain page headings, optional info icons and one separator between navigation and content; later separators divide setting groups. Hover hints adapt to the window width and UI scale, reposition near the edges and wrap long words or paths instead of clipping them. Keyboard-focused info buttons expose the same readable help. Settings has Combat & timing, Appearance & performance, Diagnostics and [Updates](#updating-companion) pages. Metin detection and HP panel matching controls live in Recognition. Timing presets show concrete values; manual edits become Custom. Appearance saves UI scale and preview refresh globally; **Reset position and size** restores the current window's default panel placement and expanded size. UI scale is displayed as 75–150%, with a reset to 100%. Lite mode refreshes previews at most once per second and does not change detection or safety processing. Diagnostics can read recent local logs and export structured version/platform/session/events JSON; exports omit profile images and raw log files. Safety has its own tab. Invalid values prevent the affected action and display a reason. Companion uses one fixed Metin appearance and a fixed window/taskbar icon. Previous saved theme preferences are safely discarded when settings load; other preferences and profiles are preserved.
+**Combat & timing** contains target, rotation and action delays. Choose a timing preset or edit values individually. **Appearance & performance** adjusts UI scale from 75–150% and preview refresh. **Lite mode** reduces preview refresh without changing recognition or Safety checks. Companion uses one Metin-style appearance.
+
+Hover a control or info icon for help. Use **Diagnostics** to inspect recent logs or export a report when reporting a problem.
 
 ## Data and troubleshooting
 
-Data: `%LOCALAPPDATA%/Companion`. Logs are in `logs/run.log` beneath that folder. Keep profile JSON and PNG assets together when backing up/importing. Default-path migration retains a full `Companion-data-backup-*` folder beside the new data root and a `Companion-install-backup-*` folder beside the new installation. Keep these until the migrated application is verified; backups are not registered installations and their archived uninstallers must not be run. Two populated data roots produce a conflict instead of merging or overwriting profiles. Custom `--data-dir` locations remain explicit.
+Profiles, images, settings and logs are stored in **%LOCALAPPDATA%/Companion**. Back up the whole folder while Companion is closed. The log is **logs/run.log**. Ordinary uninstall keeps your data; [installation details](installation.md) covers backups and driver removal.
 
-If no window appears, confirm the client is running and open the picker again; it refreshes automatically. If Start is unavailable, read its readiness explanation rather than repeatedly clicking it. If capture/input fails, check the selected window, foreground focus and privilege level. Recalibrate after resizing or changing the game's UI layout.
+| Problem | What to check |
+| --- | --- |
+| Game is missing from the chooser | Start the client, reopen the chooser and search its title. |
+| Start is disabled | Read the setup warning in Run. Check Recognition, buff shortcuts, mount confirmation and driver readiness. |
+| Mouse moves but clicks or keys are ignored | Confirm the game is selected and focused. Check the input-driver message; run setup again if the driver is unavailable. |
+| Too many or too few Metins are found | Check color, search area, exclusions and detection preset settings. |
+| A selected target never confirms | Recapture a fixed HP-panel detail without the name or changing health fill. |
+| A buff flickers or stays Unknown | Capture distinct Active/Inactive appearances and adjust Keep Active for (s); see [buff recognition](actions.md#buffs). |
+| Updates says Up to date | Testing versions are offered only on Preview. Check the channel. |
+| An update fails | Keep its message and setup log. Close other Companion instances before retrying; do not delete active update backups. |
 
-A diagnostic self-test uses temporary data and no game input:
+If you still need help, include the version, exact message and a Diagnostics report. Review reports and screenshots before sharing them.
 
-```powershell
-.\Companion.exe --self-test --self-test-report C:\Temp\companion-selftest.json
-```
-
-Use a writable report folder. The release executable still requests its normal UAC confirmation. Self-test verifies storage, vision and headless interface rendering; it does not prove game reaction, native GPU rendering or clean-machine installation.
-
-
-### Buff recognition stability
-
-Each image-controlled skill has **Keep Active for (s)**, defaulting to 1.5 seconds (0–5; 0 disables the hold). A confident active match refreshes this time. Brief ambiguous images keep Active; they never extend the deadline themselves. After expiry, uncertain images become Unknown. Three consecutive positive inactive-reference matches can confirm Inactive earlier. Without an inactive reference, repeated missing-active evidence waits for the hold to expire. Invalid images, expired captures, capture errors and session changes retire the evidence. Unknown never authorizes a toggle key.
-
-The Start/Pause and horse-icon hit targets have the same height and a clear inset from the window frame. F7/F8 appear in the primary button and its tooltip. Timer bars decrease with remaining time; a missing total never creates a fabricated percentage.
-
-
-Run separates automation activity from configuration readiness. A paused run shows its specific cause and a wrapped explanation; **Details** holds technical context and the recovery action opens the appropriate window/setup. **Setup complete** means the profile prerequisites are configured, not that automation is running or the current capture is healthy.
-
-![Run with a specific pause cause](assets/run-paused.png)
+[Actions guide](actions.md) · [Installation details](installation.md) · [Release notes](release-notes.md) · [Developer documentation](development.md)

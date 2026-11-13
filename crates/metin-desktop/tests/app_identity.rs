@@ -1,5 +1,21 @@
 use eframe::icon_data::from_png_bytes;
 
+fn assert_white_mark(rgba: &[u8]) {
+    let pixels = rgba.as_chunks::<4>().0;
+    let white = pixels
+        .iter()
+        .filter(|p| p[3] > 200 && p[..3].iter().all(|c| *c >= 220))
+        .count();
+    let dark = pixels
+        .iter()
+        .filter(|p| p[3] > 200 && p[..3].iter().all(|c| *c <= 48))
+        .count();
+    assert!(
+        white > dark,
+        "Companion must use a white mark, not a black fill: white={white}, dark={dark}"
+    );
+}
+
 #[test]
 fn runtime_identity_and_transparent_icon_match_packaged_assets() {
     let identity: serde_json::Value =
@@ -14,13 +30,7 @@ fn runtime_identity_and_transparent_icon_match_packaged_assets() {
     assert_eq!([icon.width, icon.height], [256, 256]);
     assert_eq!(icon.rgba.len(), 256 * 256 * 4);
     assert_eq!(icon.rgba[3], 0);
-    assert!(
-        icon.rgba
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .any(|p| p[3] > 200 && p[..3] == [0, 0, 0])
-    );
+    assert_white_mark(&icon.rgba);
 }
 
 #[test]
@@ -38,13 +48,7 @@ fn windows_icon_contains_valid_transparent_pngs_at_all_desktop_sizes() {
         assert_eq!([png.width, png.height], [size, size]);
         assert_eq!(png.rgba[3], 0);
         assert!(png.rgba.as_chunks::<4>().0.iter().any(|p| p[3] > 0));
-        assert!(
-            png.rgba
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .any(|p| p[3] > 200 && p[..3] == [0, 0, 0])
-        );
+        assert_white_mark(&png.rgba);
         assert!(
             png.rgba
                 .as_chunks::<4>()

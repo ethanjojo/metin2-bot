@@ -7,10 +7,11 @@ import os
 import shutil
 import subprocess
 import sys
+import struct
 from types import SimpleNamespace
 
 from tools.build_metadata import BuildMetadata
-from tools.verify_bundle import verify_inventory, verify_input_bridge
+from tools.verify_bundle import verify_inventory, verify_input_bridge, verify_icon_resources
 from tools.package_notices import copy_cargo_notices
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,31 @@ class RustReleaseTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(dir=ROOT / "build/release-tests")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+
+    def test_primary_icon_rejects_changed_pixels_despite_matching_dimensions(self):
+        png = b"\x89PNG\r\n\x1a\ncanonical icon payload"
+        ico = self.root / "icon.ico"
+        ico.write_bytes(struct.pack("<HHH", 0, 1, 1)
+                        + struct.pack("<BBBBHHII", 16, 16, 0, 0, 1, 32, len(png), 22) + png)
+        group = struct.pack("<HHH", 0, 1, 1) + struct.pack("<BBBBHHIH", 16, 16, 0, 0, 1, 32, len(png), 7)
+        blobs = {10: png, 20: group}
+        def resource(identifier, offset):
+            value = SimpleNamespace(OffsetToData=offset, Size=len(blobs[offset]))
+            return SimpleNamespace(id=identifier, directory=SimpleNamespace(entries=[SimpleNamespace(data=SimpleNamespace(struct=value))]))
+        icon = resource(7, 10)
+        primary = resource(1, 20)
+        image = SimpleNamespace(
+            DIRECTORY_ENTRY_RESOURCE=SimpleNamespace(entries=[
+                SimpleNamespace(id=3, directory=SimpleNamespace(entries=[icon])),
+                SimpleNamespace(id=14, directory=SimpleNamespace(entries=[primary])),
+            ]), get_data=lambda offset, size: blobs[offset][:size])
+        self.assertEqual(verify_icon_resources(image, ico), [16])
+        blobs[10] = png[:-1] + b"!"
+        with self.assertRaisesRegex(ValueError, "canonical Companion artwork"):
+            verify_icon_resources(image, ico)
+        primary.directory.entries.clear()
+        with self.assertRaisesRegex(ValueError, "missing"):
+            verify_icon_resources(image, ico)
 
     def test_companion_identity_and_upgrade_registration_are_consistent(self):
         identity = json.loads((ROOT / "packaging/app-identity.json").read_text())
@@ -136,6 +162,12 @@ class RustReleaseTests(unittest.TestCase):
         (self.root / "packaging").mkdir()
         for name in ("tools/package-rust-windows.ps1", "tools/build_metadata.py", "packaging/app-identity.json", "packaging/release-policy.json", "VERSION"):
             shutil.copyfile(ROOT / name, self.root / name)
+        # This negative fixture must remain blocked even after the real release is accepted.
+        policy_path = self.root / "packaging/release-policy.json"
+        policy = json.loads(policy_path.read_text())
+        policy["stable_ready"] = False
+        policy["blockers"] = ["Acceptance deliberately incomplete in test fixture"]
+        policy_path.write_text(json.dumps(policy))
         for case in ("dirty", "stable"):
             result = subprocess.run(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ROOT / "tests/verify_release_guards.ps1"), "-ScriptPath", str(self.root / "tools/package-rust-windows.ps1"), "-OutputPath", str(self.root / case), "-PythonPath", sys.executable, "-Case", case], capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

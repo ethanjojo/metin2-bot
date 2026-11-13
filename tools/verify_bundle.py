@@ -7,6 +7,48 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 
+def verify_icon_resources(image, ico_path: Path) -> list[int]:
+    """Require the primary Windows icon to contain the canonical ICO images."""
+    ico = ico_path.read_bytes()
+    if ico[:4] != b"\x00\x00\x01\x00":
+        raise ValueError("Invalid canonical icon")
+    expected = {}
+    for index in range(int.from_bytes(ico[4:6], "little")):
+        entry = ico[6 + 16 * index:22 + 16 * index]
+        size, offset = int.from_bytes(entry[8:12], "little"), int.from_bytes(entry[12:16], "little")
+        expected[(entry[0] or 256, entry[1] or 256)] = ico[offset:offset + size]
+    if not expected:
+        raise ValueError("Canonical icon has no images")
+    icons, groups = {}, []
+    for kind in image.DIRECTORY_ENTRY_RESOURCE.entries:
+        if kind.id not in (3, 14):
+            continue
+        for resource in kind.directory.entries:
+            blobs = [image.get_data(language.data.struct.OffsetToData, language.data.struct.Size)
+                     for language in resource.directory.entries]
+            if kind.id == 3:
+                icons[resource.id] = blobs
+            elif kind.id == 14:
+                groups.append(blobs)
+    if not groups or not groups[0]:
+        raise ValueError("Primary Windows icon is missing")
+    for group in groups[0]:
+        if group[:4] != b"\x00\x00\x01\x00" or int.from_bytes(group[4:6], "little") != len(expected):
+            raise ValueError("Invalid primary icon group")
+        actual = {}
+        for index in range(int.from_bytes(group[4:6], "little")):
+            entry = group[6 + 14 * index:20 + 14 * index]
+            if len(entry) != 14:
+                raise ValueError("Invalid primary icon directory")
+            key = (entry[0] or 256, entry[1] or 256)
+            identifier = int.from_bytes(entry[12:14], "little")
+            actual[key] = icons.get(identifier, [])
+        if actual.keys() != expected.keys() or any(
+                not actual[key] or any(blob != expected[key] for blob in actual[key]) for key in expected):
+            raise ValueError("Primary Windows icon differs from canonical Companion artwork")
+    return sorted(width for width, _ in expected)
+
+
 def verify_inventory(directory: Path) -> None:
     directory = directory.resolve()
     if any(path.is_symlink() for path in directory.rglob("*")):
@@ -73,6 +115,7 @@ def verify_bundle(directory: Path, version: str, commit: str) -> dict:
                 if name.startswith(("msvcp", "vcruntime", "concrt", "opencv")) or not (system / name).is_file():
                     raise ValueError(f"Unresolved native import: {path.name} -> {name}")
     with pefile.PE(str(directory / "Companion.exe")) as image:
+        verify_icon_resources(image, Path(__file__).resolve().parents[1] / "packaging/icons/companion.ico")
         if image.FILE_HEADER.Machine != 0x8664:
             raise ValueError("Executable must be Windows x64")
         strings = {}

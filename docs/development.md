@@ -74,6 +74,16 @@ Self-test does not install the driver or send HID input, and does not establish 
 
 ## Documentation screenshots
 
+The canonical application mark is the white vector in `packaging/icons/logo.svg`. Rebuild its outputs with the pinned development-only generator:
+
+```powershell
+npm install --prefix build/icon-tools sharp@0.35.5 --no-audit --no-fund
+$env:NODE_PATH = (Resolve-Path build/icon-tools/node_modules).Path
+node tools/generate-app-icons.cjs
+```
+
+This writes the shared runtime PNG, nine-size Windows ICO and dark-on-light README SVG. The runtime window/taskbar, EXE, setup and uninstall shortcuts use that same app artwork. The thin dark edge maintains contrast on light Windows surfaces. Packaging verifies every primary PE icon image against the canonical ICO, including setup; color/transparency tests cover all nine sizes.
+
 On Windows, run `./tools/capture-docs.ps1` from a normal interactive desktop. It builds the `ui-smoke` feature, generates fresh isolated demonstration data with the `docs_fixture` example, and captures native views in the fixed Metin appearance under `docs/assets/`. They include the window grid, Recognition, calibration size review, overlay controls enabled/disabled, Actions and buff details, the four-class icon picker, Run, profile management, incomplete setup, a break, compact event history, Safety, Settings, individual action pages, manual Updates states, startup-update screens and helper installation stages. Screenshot names are stable (`run.png`, `actions.png`, `buff-icon-picker.png`, `size-review.png`) without appearance suffixes. The scene is a geometric fixture, not a game screenshot. Logs and temporary profiles stay under ignored `build/docs-capture/`; existing user data is never used. Use `-OnlyViews <names>` for a focused recapture. `-IncludeAllPages` adds QA-only recognition match/no-match/ambiguity/wait/failure states, new/incomplete/removed-item change reviews and narrow 150% layouts; direct those extra captures to an ignored build folder.
 
 Review every generated image before committing. Keep labels neutral, avoid personal/server information and retain the demonstration caption in the README. The `ui-smoke` feature is for verification and is not enabled in release packages. `--ui-size-review` requires both `--ui-fixture` and `--ui-screenshot`; the documentation case opens Recognition at 460 × 620 with a preserved-area review draft and no game input. Run `./tools/capture-docs.ps1 -OnlyViews size-review` for that case alone. Screenshot tests validate the registered PNGs, their expected dimensions, chunk integrity and distinct content. Standard views are 460 × 620, the window chooser is 780 × 600 and compact event history is 400 × 500.

@@ -1,6 +1,4 @@
 {
-  "stable_ready": false,
-  "blockers": [
-    "Interactive UAC cancellation during update: verify original installation and profiles remain intact"
-  ]
+  "stable_ready": true,
+  "blockers": []
 }

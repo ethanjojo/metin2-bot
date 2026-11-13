@@ -1,69 +1,53 @@
-<img src="packaging/icons/companion-256.png" alt="Companion logo" width="72">
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/companion-logo-light.svg">
+  <img src="packaging/icons/companion-256.png" alt="Companion logo" width="72">
+</picture>
 
 # Companion
 
-A compact Windows desktop app for visual target recognition and configurable actions, built with **Rust**, **egui** and **OpenCV**. Profiles and image processing stay on your computer.
+A **Metin2 bot for Windows** with a compact in-game-style panel. Configure target detection, buffs, loot and other actions, then follow the run beside your game window.
 
-[Download](https://github.com/ethanjojo/metin2-bot/releases) · [User guide](docs/user-guide.md) · [Development](docs/development.md) · [Changelog](CHANGELOG.md)
+[Download](https://github.com/ethanjojo/metin2-bot/releases) · [User guide](docs/user-guide.md) · [Actions guide](docs/actions.md) · [What's new](docs/release-notes.md)
 
-<a href="docs/assets/run.png"><img src="docs/assets/run.png" alt="Companion Run overview with activity, timers, statistics and mount controls" width="460"></a>
+<a href="docs/assets/run.png"><img src="docs/assets/run.png" alt="Run overview with activity, countdowns and session statistics" width="460"></a>
 
-*Screenshots are actual application views with an isolated demonstration profile and a synthetic scene; they do not show a live game session.*
+## What it does
 
-## Features
+- Finds Metins using your chosen color or detection preset and confirms targets through a captured HP-panel detail.
+- Handles timed or image-based buffs, loot, mount behavior, periodic actions and auto-puller items.
+- Reacts to captured visual conditions with a notification, pause, key press or click.
+- Shows target outlines over the game, upcoming actions, session statistics and event history.
+- Supports separate profiles, scheduled breaks, stop limits and updates inside the app.
 
-- **Run:** bare activity artwork, countdowns to the next timed step, session statistics, mount confirmation and recent events fitted to the available space.
-- **Recognition:** reusable Metin detection presets with color and shape settings; fixed HP-detail matching; direct frozen-capture selection and live game annotations.
-- **Actions:** ordered buffs with icon recognition, loot, mount behavior, periodic keys/clicks, visual rules, auto-puller and bounded attacks outside a selected target.
-- **Safety:** automatic stops, scheduled breaks, limited recovery, local notifications and emergency pause.
-- **Profiles:** independent calibration and actions, inline rename, Save/Revert/Undo/Redo, plus remembered per-client panel position and size.
-- **Updates:** startup checks, Stable/Preview channels and verified downloads. Confirm an update to follow download, installation and restart in Companion's own progress window.
+## Get started
 
-## Install and start
+Requires **64-bit Windows 10 version 2004 or newer**, with Direct3D 11 graphics support.
 
-Requires **Windows x64**, Windows 10 build 19041 or newer, and a D3D11-capable graphics device. Windows x64 setup is the only supported distribution.
+1. Download and run **CompanionSetup** from [Releases](https://github.com/ethanjojo/metin2-bot/releases).
+2. Read the installer disclosure and approve administrator access. The required input driver also changes Windows certificate trust and the GameInput service; see [installation details](docs/installation.md).
+3. Open Companion, choose your game window and create a profile.
+4. Set up **Recognition**, then choose the **Actions** and optional **Safety** settings you want.
+5. Save and press **F7** to start. **F8** pauses immediately.
 
-1. Download the setup and `SHA256SUMS.txt` from [Releases](https://github.com/ethanjojo/metin2-bot/releases) and compare the installer's SHA-256 checksum.
-2. Run setup and review its administrator, mandatory HIDMaestro driver, signing-certificate and GameInput service changes. Native dependencies are included; no installed .NET runtime is needed.
-3. Open Companion. If an update is offered, choose **Install update** or **Skip for now**, then choose a game window from the thumbnail grid and select or create a profile.
-4. In **Recognition**, select the search area, target color and a fixed HP-panel detail. Configure **Actions** and optional **Safety** limits, then save.
-5. Review readiness in **Run**. **F7** starts; **F8** pauses. Keep the selected game in the foreground.
+Companion starts paused. Keep the selected game in the foreground while the bot runs; switching to another app pauses gameplay input. [Follow the first-setup guide](docs/user-guide.md#first-setup).
 
-Companion starts paused. First installation uses the regular setup wizard; later updates use Companion's progress window with the same installer running behind it. Windows administrator approval may still be required. Startup checking is enabled by default; an existing explicit opt-out is preserved, and **Settings → Updates** keeps manual checks and channel preferences. Capture selection pauses automation and waits for held inputs to release. See the [setup guide](docs/user-guide.md) for calibration, shortcuts and troubleshooting.
+## Set it up your way
 
-**Release candidate:** the owner confirmed the integrated game cycle and successful in-app update on review.22. Interactive refusal of UAC during an update remains the final operator check before stable; each package must also pass its own Windows CI installation tests. App and setup are unsigned; `jojo` is product metadata, not a verified Windows publisher. Setup explains the shared driver's machine-wide changes and [removal policy](docs/user-guide.md#installation-and-hid-driver).
+<a href="docs/assets/calibration.png"><img src="docs/assets/calibration.png" alt="Recognition settings for search area, Metin color and HP reference" width="340"></a>
+<a href="docs/assets/actions.png"><img src="docs/assets/actions.png" alt="Buff list with shortcuts, ordering and timers" width="340"></a>
 
-## Screenshots
+Select areas and reference images directly over a frozen view of the game. Move or resize an existing selection, confirm it, or press Escape to cancel. Pin the panel beside the game or collapse it to its title bar.
 
-<a href="docs/assets/calibration.png"><img src="docs/assets/calibration.png" alt="Recognition controls for search, color, HP detail and game annotations" width="360"></a>
-<a href="docs/assets/actions.png"><img src="docs/assets/actions.png" alt="Ordered buffs with shortcut, timing and icon recognition settings" width="360"></a>
+*Screenshots show the actual app with a demonstration profile and synthetic game imagery.*
 
-<a href="docs/assets/window-chooser.png"><img src="docs/assets/window-chooser.png" alt="Searchable window selection with screenshot thumbnails" width="740" loading="lazy"></a>
+## Updates and your profiles
 
-<a href="docs/assets/startup-update-available.png"><img src="docs/assets/startup-update-available.png" alt="Startup update offer with Install update and Skip for now" width="360" loading="lazy"></a>
-<a href="docs/assets/update-installing.png"><img src="docs/assets/update-installing.png" alt="Companion update installation progress" width="360" loading="lazy"></a>
+Companion checks for updates when it opens. You can also check in **Settings → Updates**. **Stable** offers regular releases; **Preview** includes testing versions. Installation happens only after you choose it.
 
-*Update screenshots use offline demonstration metadata; the shown versions are illustrative.*
+Profiles and settings are stored in **%LOCALAPPDATA%/Companion**. Updates preserve them, and ordinary uninstall keeps your data. Back up the complete folder or export individual profiles from the profile selector.
 
-More views and explanations are in the [user guide](docs/user-guide.md).
+## Contributing
 
-## Your data
+For source builds and technical details, see [Development](docs/development.md), [Release procedure](docs/releasing.md) and the [Changelog](CHANGELOG.md).
 
-Installation: `Program Files/Companion`. Profiles, PNG references, settings and logs: `%LOCALAPPDATA%/Companion`.
-
-Back up the complete data folder. Upgrades preserve profiles and migrate previous default paths with verified backups; explicit custom data paths stay explicit. Uninstall retains user data and the shared driver by default. See [data and diagnostics](docs/user-guide.md#data-and-troubleshooting).
-
-## Build and contribute
-
-Use the pinned Rust toolchain and follow [development setup](docs/development.md) for native prerequisites, tests and reproducible screenshots. Release packages are built from clean, tested commits; see the [release procedure](docs/releasing.md).
-
-| Directory | Purpose |
-| --- | --- |
-| `crates/metin-core` | Profiles, validation, targeting and scheduling |
-| `crates/metin-vision` | Detection and image matching |
-| `crates/metin-platform` | Guarded Windows capture and input |
-| `crates/metin-desktop` | Interface, storage and runtime worker |
-| `native` | Pinned HID SDK adapter and NativeAOT bridge |
-| `tests`, `tools`, `packaging` | Fixtures, build checks and installation |
-
-Project-authored source code is [MIT licensed](LICENSE). Artwork and other third-party materials retain their original rights; see [licenses and notices](THIRD_PARTY_NOTICES.md).
+Project-authored code is [MIT licensed](LICENSE). Game artwork and dependencies retain their own terms; see [Third-party notices](THIRD_PARTY_NOTICES.md).
