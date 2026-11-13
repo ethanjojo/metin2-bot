@@ -118,7 +118,10 @@ impl MetinApp {
         self.cancel_overlay_capture();
         self.runtime.stop();
         let requested = Instant::now();
-        match self.runtime.send(Command::Snapshot { key }) {
+        match self.runtime.send(Command::Snapshot {
+            key,
+            purpose: crate::runtime::SnapshotPurpose::UpdateLiveEvidence,
+        }) {
             Ok(()) => {
                 self.overlay_request_id = self.overlay_request_id.wrapping_add(1);
                 self.pending_overlay = Some(PendingCapture {
@@ -354,7 +357,9 @@ impl MetinApp {
     ) {
         if self.snapshot.running
             || self.snapshot.arming
-            || (!self.editor.dirty() && self.metin_presets.draft.is_none())
+            || (!self.editor.dirty()
+                && self.metin_presets.draft.is_none()
+                && self.snapshot.recognition_evidence_matches_frame())
         {
             self.overlay_preview = None;
             return (self.snapshot.candidates.clone(), self.snapshot.panel_match);
@@ -752,6 +757,77 @@ mod tests {
         running.candidates = expected.clone();
         app.snapshot = Arc::new(running);
         assert_eq!(app.annotation_recognition().0, expected);
+        assert!(app.overlay_preview.is_none());
+        app.runtime.shutdown().unwrap();
+    }
+    #[test]
+    fn clean_paused_annotations_do_not_reuse_hp_bounds_from_an_older_raw_frame() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut app =
+            MetinApp::from_context(&egui::Context::default(), directory.path().to_owned()).unwrap();
+        app.editor.mark_saved(app.editor.profile.clone());
+        app.target = Some(metin_platform::TargetToken {
+            handle: 7,
+            pid: 8,
+            created: 9,
+        });
+        let key = app.key().unwrap();
+        let now = Instant::now();
+        let geometry = metin_platform::TargetState {
+            target: key.target,
+            left: 0,
+            top: 0,
+            width: 20,
+            height: 20,
+            visible: true,
+            foreground: false,
+        };
+        app.snapshot = Arc::new(RuntimeSnapshot {
+            key: Some(key),
+            revision: app.revision,
+            geometry: Some(geometry),
+            frame_id: 2,
+            frame: Some(metin_platform::Frame::new(20, 20, vec![0; 1200]).unwrap()),
+            captured_at: Some(now),
+            panel_match: Some(metin_vision::TemplateMatch {
+                score: 1.,
+                position: [8, 8],
+                width: 5,
+                height: 5,
+            }),
+            candidates: vec![metin_core::Candidate {
+                x: 8,
+                y: 8,
+                width: 5,
+                height: 5,
+                point: [10, 10],
+            }],
+            recognition_evidence: Some(crate::runtime::RecognitionEvidenceSource {
+                key,
+                revision: app.revision,
+                frame_id: 1,
+                captured_at: now - Duration::from_millis(10),
+                geometry,
+            }),
+            ..Default::default()
+        });
+        let annotations = app.annotation_recognition();
+        assert!(
+            annotations.0.is_empty() && annotations.1.is_none(),
+            "An older frame's target/HP bounds must not be drawn over new raw diagnostic pixels"
+        );
+        assert!(
+            app.overlay_preview.is_some(),
+            "Use the existing stateless paused-preview evaluator"
+        );
+        let mut matching = (*app.snapshot).clone();
+        matching.recognition_evidence.as_mut().unwrap().frame_id = matching.frame_id;
+        matching.recognition_evidence.as_mut().unwrap().captured_at = now;
+        app.snapshot = Arc::new(matching);
+        assert!(
+            app.annotation_recognition().1.is_some(),
+            "Same-frame derived evidence retains its fast reuse path"
+        );
         assert!(app.overlay_preview.is_none());
         app.runtime.shutdown().unwrap();
     }

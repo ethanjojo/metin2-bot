@@ -1,6 +1,50 @@
 use metin_core::Profile;
 use metin_desktop::storage::ProfileStore;
 #[test]
+fn legacy_entity_ids_load_without_writing_and_persist_only_on_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = ProfileStore::open(dir.path()).unwrap();
+    let profile = Profile::create("Legacy entities");
+    let folder = dir.path().join(profile.id.to_string());
+    std::fs::create_dir(&folder).unwrap();
+    let path = folder.join("profile.json");
+    let mut value = serde_json::to_value(&profile).unwrap();
+    value["buffs"]["skills"] = serde_json::json!([{"shortcut":"F1"}]);
+    value["masks"] = serde_json::json!([{"left":0.1,"top":0.2,"right":0.3,"bottom":0.4}]);
+    let original = value.to_string();
+    std::fs::write(&path, &original).unwrap();
+    let loaded = store.load(profile.id).unwrap().0;
+    assert_eq!(store.load(profile.id).unwrap().0, loaded);
+    assert_eq!(store.list().unwrap(), vec![loaded.clone()]);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+    let encoded = serde_json::to_value(&loaded).unwrap();
+    assert!(encoded["buffs"]["skills"][0]["id"].is_string());
+    assert!(encoded["masks"][0]["id"].is_string());
+    let mut renamed = loaded.clone();
+    renamed.name = "Renamed".into();
+    let saved = store.save(&renamed, None).unwrap().profile;
+    let on_disk: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(on_disk["buffs"], encoded["buffs"]);
+    assert_eq!(on_disk["masks"], encoded["masks"]);
+    assert_eq!(store.load(profile.id).unwrap().0, saved);
+}
+
+#[test]
+fn direct_legacy_save_matches_canonical_profile_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = ProfileStore::open(dir.path()).unwrap();
+    let mut value = serde_json::to_value(Profile::create("Direct legacy input")).unwrap();
+    value["buffs"]["skills"] = serde_json::json!([{"shortcut":"F1"}]);
+    value["masks"] = serde_json::json!([{"name":"Chat","region":{"left":0.1,"top":0.2,"right":0.3,"bottom":0.4}}]);
+    let direct: Profile = serde_json::from_value(value.clone()).unwrap();
+    let saved = store.save(&direct, None).unwrap().profile;
+    assert_eq!(saved, Profile::from_json(&value.to_string()).unwrap());
+    let encoded = serde_json::to_value(saved).unwrap();
+    assert!(encoded["buffs"]["skills"][0]["id"].is_string());
+    assert!(encoded["masks"][0]["id"].is_string());
+}
+#[test]
 fn obsolete_profile_window_choices_are_consumed_but_never_saved_again() {
     use metin_desktop::storage::UISettings;
     let dir = tempfile::tempdir().unwrap();

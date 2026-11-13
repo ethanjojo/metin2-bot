@@ -19,8 +19,19 @@ impl MetinApp {
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
 pub enum QolFixture {
     Changes,
+    ChangesRemoved,
+    ChangesReferences,
+    ChangesDraft,
+    ChangesNew,
     Import,
     Recognition,
+    RecognitionHpPositive,
+    RecognitionHpNegative,
+    RecognitionBuffActive,
+    RecognitionBuffInactive,
+    RecognitionBuffAmbiguous,
+    RecognitionWaiting,
+    RecognitionFailure,
     Paused,
     MetinPreset,
     MetinPresetNew,
@@ -73,11 +84,63 @@ impl MetinApp {
                 }
                 self.open_metin_preset(matches!(fixture, Some(QolFixture::MetinPresetNew)));
             }
-            Some(QolFixture::Changes) => {
-                self.editor.profile.loot.presses += 1;
-                self.editor.profile.timing.search_timeout += 1.;
-                if let Some(skill) = self.editor.profile.buffs.skills.first_mut() {
-                    skill.interval_seconds = Some(skill.interval_seconds.unwrap_or(120.) + 60.);
+            Some(
+                QolFixture::Changes
+                | QolFixture::ChangesRemoved
+                | QolFixture::ChangesReferences
+                | QolFixture::ChangesDraft
+                | QolFixture::ChangesNew,
+            ) => {
+                if matches!(fixture, Some(QolFixture::ChangesNew)) {
+                    self.editor.profile.id = uuid::Uuid::new_v4();
+                    self.editor.profile.name = "New hunting profile".into();
+                } else if matches!(fixture, Some(QolFixture::ChangesDraft)) {
+                    self.editor
+                        .profile
+                        .buffs
+                        .skills
+                        .push(metin_core::BuffSkill {
+                            name: "New buff without shortcut".into(),
+                            shortcut: String::new(),
+                            ..Default::default()
+                        });
+                } else if matches!(fixture, Some(QolFixture::ChangesRemoved)) {
+                    if !self.editor.profile.buffs.skills.is_empty() {
+                        self.editor.profile.buffs.skills.remove(0);
+                    }
+                } else if matches!(fixture, Some(QolFixture::ChangesReferences)) {
+                    self.editor.template = self.editor.template.as_ref().map(|frame| {
+                        metin_platform::Frame::new(
+                            frame.width,
+                            frame.height,
+                            frame.bgr.iter().map(|value| 255 - value).collect(),
+                        )
+                        .expect("fixture frame retains its dimensions")
+                    });
+                    if let Some(skill) = self.editor.profile.buffs.skills.first_mut() {
+                        skill.display_icon = Some(
+                            metin_core::SkillIconId::new(16).expect("known fixture buff artwork"),
+                        );
+                    }
+                } else {
+                    if let Some(color) = &mut self.editor.profile.color {
+                        color.hsv = [32, 180, 210];
+                    }
+                    if let Some(area) = self.editor.profile.masks.first_mut() {
+                        area.region.left += 0.005;
+                        area.region.right += 0.005;
+                    }
+                    self.editor.profile.buffs.skills.reverse();
+                }
+                if !matches!(
+                    fixture,
+                    Some(QolFixture::ChangesDraft | QolFixture::ChangesNew)
+                ) {
+                    self.editor.profile.loot.presses += 1;
+                    self.editor.profile.timing.search_timeout += 1.;
+                    if let Some(skill) = self.editor.profile.buffs.skills.first_mut() {
+                        skill.interval_seconds = Some(skill.interval_seconds.unwrap_or(120.) + 60.);
+                    }
                 }
                 self.editor.record();
                 ctx.data_mut(|data| {
@@ -86,6 +149,28 @@ impl MetinApp {
             }
             Some(QolFixture::Import) => self.prepare_profile_import_fixture(ctx)?,
             Some(QolFixture::Recognition) => self.prepare_recognition_check_fixture(ctx)?,
+            Some(
+                fixture @ (QolFixture::RecognitionHpPositive
+                | QolFixture::RecognitionHpNegative
+                | QolFixture::RecognitionBuffActive
+                | QolFixture::RecognitionBuffInactive
+                | QolFixture::RecognitionBuffAmbiguous
+                | QolFixture::RecognitionWaiting
+                | QolFixture::RecognitionFailure),
+            ) => {
+                use recognition_check::RecognitionCheckFixture as Check;
+                let check = match fixture {
+                    QolFixture::RecognitionHpPositive => Check::HpPositive,
+                    QolFixture::RecognitionHpNegative => Check::HpNegative,
+                    QolFixture::RecognitionBuffActive => Check::BuffActive,
+                    QolFixture::RecognitionBuffInactive => Check::BuffInactive,
+                    QolFixture::RecognitionBuffAmbiguous => Check::BuffAmbiguous,
+                    QolFixture::RecognitionWaiting => Check::Waiting,
+                    QolFixture::RecognitionFailure => Check::Failure,
+                    _ => unreachable!(),
+                };
+                self.prepare_recognition_check_state_fixture(ctx, check)?;
+            }
             Some(QolFixture::Paused) => {
                 let mut snapshot = (*self.snapshot).clone();
                 snapshot.running = false;
@@ -191,7 +276,7 @@ impl MetinApp {
             || self.metin_presets.draft.is_some()
             || self.binding.is_some()
             || self.profile_rename.is_some()
-            || self.recognition_check.is_pending()
+            || self.recognition_check.is_open()
         {
             return Err("Finish or cancel the current selection or edit before starting.".into());
         }

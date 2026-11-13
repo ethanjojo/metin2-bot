@@ -112,6 +112,7 @@ pub struct MetinApp {
     preview_demand: Option<(SessionKey, bool, u64)>,
     last_start_request: u64,
     recognition_check: recognition_check::RecognitionCheck,
+    changes_cache: Option<changes::CachedChanges>,
     tab: Tab,
     mode: EditMode,
     editing: bool,
@@ -269,6 +270,7 @@ impl MetinApp {
             preview_demand: None,
             last_start_request: 0,
             recognition_check: recognition_check::RecognitionCheck::default(),
+            changes_cache: None,
             tab: Tab::Run,
             mode: EditMode::World,
             editing: false,
@@ -449,6 +451,15 @@ impl MetinApp {
                         }
                     })
                     .collect();
+                snapshot.recognition_evidence = snapshot.geometry.and_then(|geometry| {
+                    Some(crate::runtime::RecognitionEvidenceSource {
+                        key: key?,
+                        revision: self.revision,
+                        frame_id: snapshot.frame_id,
+                        captured_at: snapshot.captured_at?,
+                        geometry,
+                    })
+                });
                 fixture.snapshot = Arc::new(snapshot);
             }
             return;
@@ -629,6 +640,9 @@ impl MetinApp {
         self.save_in_generation(None).map(|_| ())
     }
     fn save_in_generation(&mut self, expected: Option<u64>) -> Result<Option<u64>, String> {
+        if self.recognition_check.is_open() {
+            return Err("Close the recognition check before saving the profile.".into());
+        }
         if self.metin_presets.draft.is_some() {
             return Err(
                 "Apply or cancel the Metin detection editor before saving the profile.".into(),
@@ -671,6 +685,7 @@ impl MetinApp {
             }
         }
         self.editor.mark_saved(saved);
+        self.changes_cache = None;
         self.profiles = self.store.list().map_err(|e| e.to_string())?;
         let generation = self.configure_in_generation(expected)?;
         self.show_saved_feedback();
@@ -682,6 +697,7 @@ impl MetinApp {
             // A completed screenshot fixture discards only its synthetic draft.
             return true;
         }
+        self.close_recognition_check();
         if self.metin_presets.draft.is_some() {
             self.error =
                 Some("Apply or cancel the Metin detection editor before continuing.".into());
@@ -748,6 +764,11 @@ impl MetinApp {
             // screenshot frame. Production never rewrites source timestamps.
             let mut snapshot = (*self.snapshot).clone();
             snapshot.captured_at = Some(std::time::Instant::now());
+            if let Some(source) = &mut snapshot.recognition_evidence {
+                // Only existing explicitly synthetic derived evidence follows
+                // this static demonstration frame. Never invent a detector pass.
+                source.captured_at = snapshot.captured_at.expect("fixture timestamp");
+            }
             self.snapshot = Arc::new(snapshot);
         }
         self.reconcile_windows();
@@ -951,8 +972,12 @@ impl MetinApp {
             }
         });
         self.window_frame(ui);
+        let recognition_was_open = self.recognition_check.is_open();
         let preset_was_open = self.metin_presets.draft.is_some();
         self.metin_preset_dialog(ui.ctx());
+        if !preset_was_open && self.metin_presets.draft.is_none() {
+            self.recognition_check_dialog(ui.ctx());
+        }
         if self.editor.is_recalibrating()
             && ui.input(|i| i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::F8))
         {
@@ -962,6 +987,8 @@ impl MetinApp {
         self.sync_preview_demand();
         if !preset_was_open
             && self.metin_presets.draft.is_none()
+            && !recognition_was_open
+            && !self.recognition_check.is_open()
             && !history_was_open
             && !self.history_open
             && !binding_was_active

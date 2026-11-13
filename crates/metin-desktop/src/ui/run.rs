@@ -165,7 +165,10 @@ impl MetinApp {
             ui.horizontal(|ui| {
                 if !self.snapshot.running && !self.snapshot.arming && self.start_blocker().is_none() {
                     widgets::badge(ui, "Setup complete", widgets::GREEN);
-                } else if self.snapshot.schedule.break_ends_in.is_none() && self.snapshot.attack_remaining.is_none() {
+                } else if self.snapshot.schedule.break_ends_in.is_none()
+                    && self.snapshot.attack_remaining.is_none()
+                    && self.snapshot.recognition_evidence_matches_frame()
+                {
                     let targets = self.snapshot.candidates.len();
                     ui.label(egui::RichText::new(format!("{targets} found")).small().color(ui.visuals().weak_text_color()))
                         .on_hover_text("Candidates recognized in the current frame. Colored outlines are shown directly over the game window.");

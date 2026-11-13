@@ -109,10 +109,12 @@ impl ProfilePackage {
         if bytes.len() > MAX_PACKAGE_BYTES {
             return Err(invalid("Profile package exceeds the 16 MiB limit."));
         }
-        let document: PortableDocument = serde_json::from_slice(&bytes)?;
+        let mut document: PortableDocument = serde_json::from_slice(&bytes)?;
         if document.schema != PACKAGE_SCHEMA {
             return Err(invalid("Unsupported profile package version."));
         }
+        // Normalize under the source profile before import assigns a new parent ID.
+        document.profile.normalize_entity_ids();
         let template = document
             .template_png
             .map(|encoded| {
@@ -198,6 +200,35 @@ mod tests {
 
     fn sample() -> Frame {
         Frame::new(10, 10, (0..300).map(|n| (n % 251) as u8).collect()).unwrap()
+    }
+
+    #[test]
+    fn legacy_package_normalizes_before_copy_identity_and_never_changes_the_source() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = ProfileStore::open(root.path()).unwrap();
+        let path = root.path().join("legacy.companion-profile");
+        let mut document = serde_json::json!({"schema":1,"profile":Profile::create("Legacy package"),"template_png":null});
+        document["profile"]["buffs"]["skills"] = serde_json::json!([{"shortcut":"F1"}]);
+        document["profile"]["masks"] =
+            serde_json::json!([{"left":0.1,"top":0.2,"right":0.3,"bottom":0.4}]);
+        let source = document.to_string();
+        fs::write(&path, &source).unwrap();
+        let first = ProfilePackage::read(&path).unwrap();
+        let second = ProfilePackage::read(&path).unwrap();
+        assert_eq!(first.profile, second.profile);
+        let encoded = serde_json::to_value(&first.profile).unwrap();
+        assert!(encoded["buffs"]["skills"][0]["id"].is_string());
+        assert!(encoded["masks"][0]["id"].is_string());
+        let copy_one = store.import_profile(&first).unwrap();
+        let copy_two = store.import_profile(&second).unwrap();
+        assert_ne!(copy_one.id, copy_two.id);
+        assert_ne!(copy_one.id, first.profile.id);
+        assert_eq!(copy_one.buffs, first.profile.buffs);
+        assert_eq!(copy_two.masks, first.profile.masks);
+        assert_eq!(fs::read_to_string(&path).unwrap(), source);
+        let exported = store.export_profile(copy_one.id).unwrap();
+        assert_eq!(exported.profile.buffs, first.profile.buffs);
+        assert_eq!(exported.profile.masks, first.profile.masks);
     }
 
     #[test]

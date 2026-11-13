@@ -49,6 +49,7 @@ class DocumentationTests(unittest.TestCase):
             "out-of-target", "periodic", "visual-rules", "action-catalog",
             "buff-detail", "buff-icon-picker", "run-setup", "run-break",
             "profile-menu", "profile-rename", "overlay-controls", "overlay-controls-off", "size-review",
+            "unsaved-changes", "recognition-check", "buff-recognition-check",
             "updates", "update-available", "update-download", "update-ready", "update-error",
             "startup-update-check", "startup-update-available", "startup-update-download", "startup-update-error",
             "update-installing", "update-driver", "update-checking", "update-complete", "update-install-error",

@@ -78,6 +78,21 @@ pub struct PauseInfo {
     pub cause: PauseCause,
     pub details: String,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapshotPurpose {
+    /// Existing capture/preview controls also refresh the live recognition evidence.
+    UpdateLiveEvidence,
+    /// Inspection captures pixels without advancing temporal recognition or timers.
+    ReadOnlyRecognition,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RecognitionEvidenceSource {
+    pub key: SessionKey,
+    pub revision: u64,
+    pub frame_id: u64,
+    pub captured_at: Instant,
+    pub geometry: TargetState,
+}
 pub enum Command {
     TestNotification {
         sound: bool,
@@ -101,6 +116,7 @@ pub enum Command {
     },
     Snapshot {
         key: SessionKey,
+        purpose: SnapshotPurpose,
     },
     CalibrationReview {
         key: SessionKey,
@@ -163,6 +179,8 @@ pub struct RuntimeSnapshot {
     pub activity_progress: Option<metin_core::ActivityProgress>,
     pub buff_presence: Vec<metin_core::Presence>,
     pub buff_last_active_age_seconds: Vec<Option<f64>>,
+    /// Provenance of the derived recognition pass, independent of newer raw snapshots.
+    pub recognition_evidence: Option<RecognitionEvidenceSource>,
     pub safety_scores: Vec<(Uuid, f64)>,
     pub recoveries: u32,
     pub notification_status: String,
@@ -205,6 +223,7 @@ impl Default for RuntimeSnapshot {
             activity_progress: None,
             buff_presence: Vec::new(),
             buff_last_active_age_seconds: Vec::new(),
+            recognition_evidence: None,
             safety_scores: vec![],
             recoveries: 0,
             notification_status: "No notifications sent.".into(),
@@ -215,6 +234,24 @@ impl Default for RuntimeSnapshot {
     }
 }
 impl RuntimeSnapshot {
+    pub fn recognition_evidence_is_fresh(&self) -> bool {
+        self.recognition_evidence.is_some_and(|source| {
+            self.key == Some(source.key)
+                && self.revision == source.revision
+                && self.geometry == Some(source.geometry)
+                && source.geometry.target == source.key.target
+                && source.geometry.visible
+                && Instant::now()
+                    .checked_duration_since(source.captured_at)
+                    .is_some_and(|age| age <= Duration::from_millis(500))
+        })
+    }
+    pub fn recognition_evidence_matches_frame(&self) -> bool {
+        self.recognition_evidence_is_fresh()
+            && self.recognition_evidence.is_some_and(|source| {
+                source.frame_id == self.frame_id && Some(source.captured_at) == self.captured_at
+            })
+    }
     fn update_activity(
         &mut self,
         controller: Option<&Controller>,
@@ -399,7 +436,7 @@ struct Attached {
     applied_revision: Option<u64>,
     preview: bool,
     calibration_review: bool,
-    snapshot_requested: bool,
+    snapshot_requested: Option<SnapshotPurpose>,
 }
 impl Attached {
     fn new(
@@ -429,7 +466,7 @@ impl Attached {
             applied_revision: None,
             preview: false,
             calibration_review: false,
-            snapshot_requested: false,
+            snapshot_requested: None,
         })
     }
 }
@@ -441,6 +478,13 @@ fn clear_session_snapshot(snapshot: &mut RuntimeSnapshot) {
         capabilities: snapshot.capabilities.clone(),
         ..Default::default()
     };
+}
+
+fn publish_captured_frame(snapshot: &mut RuntimeSnapshot, captured: metin_platform::CapturedFrame) {
+    snapshot.frame = Some(captured.frame);
+    snapshot.geometry = Some(captured.geometry);
+    snapshot.frame_id = captured.id;
+    snapshot.captured_at = Some(captured.captured_at);
 }
 
 /// Stopped calibration must retain raw pixels even when saved references need
@@ -514,7 +558,7 @@ fn run(
             observed_generation = generation;
             armed = None;
             if let Some(a) = &mut attached {
-                a.snapshot_requested = false;
+                a.snapshot_requested = None;
                 a.controller.pause(now, "Paused (F8 / Pause).");
             }
             if let Err(e) = executor.release(backend.as_mut()) {
@@ -540,7 +584,7 @@ fn run(
                     observed_generation = generation;
                     armed = None;
                     if let Some(a) = &mut attached {
-                        a.snapshot_requested = false;
+                        a.snapshot_requested = None;
                         a.controller.pause(now, "Paused (F8 / Pause).");
                     }
                     if let Err(error) = executor.release(backend.as_mut()) {
@@ -551,7 +595,7 @@ fn run(
                 let requested_key = match &envelope.command {
                     Command::Arm { key }
                     | Command::SetPreview { key, .. }
-                    | Command::Snapshot { key }
+                    | Command::Snapshot { key, .. }
                     | Command::CalibrationReview { key, .. }
                     | Command::DeclareMount { key, .. }
                     | Command::ResetSession { key }
@@ -584,6 +628,7 @@ fn run(
                             }
                             snapshot.start_request = None;
                             snapshot.pause_info = None;
+                            snapshot.recognition_evidence = None;
                             snapshot.buff_presence.clear();
                             snapshot.buff_last_active_age_seconds.clear();
                             armed = None;
@@ -626,12 +671,17 @@ fn run(
                                 next_sample = Instant::now();
                             }
                         }
-                        Command::Snapshot { .. } => {
-                            attached
-                                .as_mut()
-                                .expect("validated session")
-                                .snapshot_requested = true;
-                            next_sample = Instant::now();
+                        Command::Snapshot { purpose, .. } => {
+                            let a = attached.as_mut().expect("validated session");
+                            if purpose == SnapshotPurpose::ReadOnlyRecognition
+                                && (a.controller.running || armed.is_some())
+                            {
+                                return Ok(());
+                            }
+                            a.snapshot_requested = Some(purpose);
+                            if purpose == SnapshotPurpose::UpdateLiveEvidence {
+                                next_sample = Instant::now();
+                            }
                         }
                         Command::CalibrationReview {
                             revision, active, ..
@@ -678,6 +728,7 @@ fn run(
                             }
                             snapshot.start_request = None;
                             snapshot.pause_info = None;
+                            snapshot.recognition_evidence = None;
                             snapshot.buff_presence.clear();
                             snapshot.buff_last_active_age_seconds.clear();
                             profile.validate().map_err(|e| e.to_string())?;
@@ -800,7 +851,8 @@ fn run(
                                 .release(backend.as_mut())
                                 .map_err(|error| error.to_string())?;
                             a.controller.reset_session(now);
-                            a.snapshot_requested = false;
+                            a.snapshot_requested = None;
+                            snapshot.recognition_evidence = None;
                             snapshot.buff_presence.clear();
                             snapshot.buff_last_active_age_seconds.clear();
                             snapshot.activity_progress = None;
@@ -852,7 +904,13 @@ fn run(
         if let Some(a) = &mut attached {
             let mut failure_cause = PauseCause::RuntimeFailure;
             let result = (|| -> Result<(), String> {
-                a.controller.tick(origin.elapsed().as_secs_f64());
+                let read_only_capture = a.snapshot_requested
+                    == Some(SnapshotPurpose::ReadOnlyRecognition)
+                    && !a.controller.running
+                    && armed.is_none();
+                if !read_only_capture {
+                    a.controller.tick(origin.elapsed().as_secs_f64());
+                }
                 let events = hotkeys.map_err(|e| e.to_string())?;
                 if events.stop {
                     snapshot.start_request = None;
@@ -926,11 +984,15 @@ fn run(
                 executor
                     .poll_attack(backend.as_mut(), &stop, generation)
                     .map_err(|e| e.to_string())?;
-                if !a.controller.running && armed.is_none() && !a.preview && !a.snapshot_requested {
+                if !a.controller.running
+                    && armed.is_none()
+                    && !a.preview
+                    && a.snapshot_requested.is_none()
+                {
                     backend.stop_capture();
                     return Ok(());
                 }
-                if Instant::now() < next_sample {
+                if Instant::now() < next_sample && !read_only_capture {
                     return Ok(());
                 }
                 executor.set_deadline(if a.controller.running {
@@ -943,12 +1005,18 @@ fn run(
                 let Some(capture_budget) = executor.capture_budget() else {
                     return Ok(());
                 };
-                next_sample = Instant::now()
-                    + Duration::from_secs_f64(a.controller.profile.timing.sample_interval);
-                a.snapshot_requested = false;
+                if !read_only_capture {
+                    next_sample = Instant::now()
+                        + Duration::from_secs_f64(a.controller.profile.timing.sample_interval);
+                }
+                a.snapshot_requested = None;
                 let captured =
                     match backend.capture(Instant::now() + capture_budget, &stop, generation) {
                         Ok(captured) => captured,
+                        Err(error) if read_only_capture => {
+                            tracing::warn!(%error, "Read-only recognition capture failed");
+                            return Ok(());
+                        }
                         // WGC can reject a frame when activation changes focus. No
                         // input has started while armed; wait for a fresh stable
                         // capture within the existing arming timeout. Running/HID
@@ -965,6 +1033,10 @@ fn run(
                         }
                     };
                 if captured.captured_at.elapsed() > Duration::from_millis(500) {
+                    if read_only_capture {
+                        tracing::warn!("Read-only recognition capture returned a stale frame");
+                        return Ok(());
+                    }
                     snapshot.geometry = None;
                     if armed.is_some() && !a.controller.running {
                         focus_since = None;
@@ -972,6 +1044,10 @@ fn run(
                     }
                     failure_cause = PauseCause::StaleFrame;
                     return Err("The game frame is stale. Waiting for a fresh capture is required before input.".into());
+                }
+                if read_only_capture {
+                    publish_captured_frame(&mut snapshot, captured);
+                    return Ok(());
                 }
                 executor
                     .poll_attack(backend.as_mut(), &stop, generation)
@@ -1050,6 +1126,13 @@ fn run(
                     .map_err(|e| e.to_string())?;
                 snapshot.buff_presence = states.clone();
                 snapshot.buff_last_active_age_seconds = a.buffs.last_active_ages(now);
+                snapshot.recognition_evidence = Some(RecognitionEvidenceSource {
+                    key: a.key,
+                    revision: a.revision,
+                    frame_id: captured.id,
+                    captured_at: captured.captured_at,
+                    geometry: captured.geometry,
+                });
                 let mut observation = metin_core::Observation {
                     ready: p.ready(),
                     candidates: stable,
@@ -1147,10 +1230,7 @@ fn run(
                 }
                 snapshot.selected_target = a.controller.selected_target();
                 snapshot.next_target = a.controller.next_preview_target(&observation.candidates);
-                snapshot.frame = Some(captured.frame);
-                snapshot.geometry = Some(captured.geometry);
-                snapshot.frame_id = captured.id;
-                snapshot.captured_at = Some(captured.captured_at);
+                publish_captured_frame(&mut snapshot, captured);
                 snapshot.candidates = candidates;
                 snapshot.panel_score = score;
                 snapshot.panel_match = panel_match;
@@ -1252,6 +1332,7 @@ fn run(
             snapshot.next_target = None;
             snapshot.panel_score = 0.;
             snapshot.panel_match = None;
+            snapshot.recognition_evidence = None;
             snapshot.buff_presence.clear();
             snapshot.buff_last_active_age_seconds.clear();
             snapshot.safety_scores.clear();
@@ -1269,11 +1350,8 @@ fn run(
             snapshot.update_activity(None, true, false, now);
             snapshot.activity_progress = Some(arming_progress(started.elapsed()));
         }
-        if snapshot.geometry.is_none()
-            || snapshot
-                .captured_at
-                .is_none_or(|at| at.elapsed() > Duration::from_millis(500))
-        {
+        if !snapshot.recognition_evidence_is_fresh() {
+            snapshot.recognition_evidence = None;
             snapshot.buff_presence.clear();
             snapshot.buff_last_active_age_seconds.clear();
             if let Some(a) = &mut attached {

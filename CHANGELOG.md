@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Group logical unsaved changes by section, with color/reference previews, compound settings, complete units and exact navigation. Separate incomplete buff drafts and new profiles from persisted changes.
+- Preserve durable buff/excluded-area identities across legacy loading, rename, reorder, undo and portable profile copies without changing runtime action equivalence.
+- Move read-only HP/buff recognition checks into a bounded dialog with fresh-image states, actual scores, larger previews, retry and source/context invalidation. Keep one-snapshot results separate from live buff stabilization.
 - Reusable named Metin detection presets with complete color/shape settings, private cancellable editor and self-contained per-profile copies. Recognition now owns detection and full-client HP-reference controls.
 - Stable header Save confirmation, aligned inline profile/exclusion rename controls and bounded select menus at narrow/scaled sizes.
 - Atlas-shaped native windows in expanded/collapsed/helper views, plus remembered per-client expanded size and position with a shared reset.
@@ -17,7 +20,7 @@
 - Canonical phase countdowns in Run, including the next search transition; bare activity artwork and complete recent-event rows fitted to the remaining space.
 - Consistent Settings/Safety headings and separators, Add buff terminology, and tooltips bounded to the viewport when resized or scaled.
 - Keep Windows capture runtime resources alive across repeated thumbnail/capture sessions, preventing premature native runtime teardown.
-- Real UAC/install/restart acceptance of the new update helper remains pending; offline fixtures and package checks do not establish that acceptance.
+- The owner confirmed the game cycle and successful in-app update/restart with retained profiles on review.22. Interactive UAC cancellation remains untested and blocks the first stable release.
 
 ## 0.1.0-rc.1
 
@@ -36,4 +39,4 @@ First public Companion release candidate for Windows x64.
 - Windows setup/checksums, native dependencies and third-party notices, exact-commit CI and installer acceptance.
 - MIT license for project-authored source code, with separate third-party/artwork terms.
 
-The complete integrated live-game cycle remains an acceptance requirement for a stable release. See [release notes](docs/release-notes.md).
+See [release notes](docs/release-notes.md) for current acceptance status and remaining stable-release checks.

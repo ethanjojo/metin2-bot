@@ -375,8 +375,10 @@ impl ProfileStore {
         list_profiles(&self.root)
     }
     pub fn save(&mut self, profile: &Profile, template: Option<&Frame>) -> Result<SaveOutcome> {
+        let mut profile = profile.clone();
+        profile.normalize_entity_ids();
         profile.validate()?;
-        validate_icons(profile)?;
+        validate_icons(&profile)?;
         let destination = self.folder(profile.id)?;
         let staging = if present(&destination)? {
             None
@@ -397,7 +399,6 @@ impl ProfileStore {
         } else {
             None
         };
-        let mut profile = profile.clone();
         let mut created = None;
         if let Some(image) = template {
             metin_vision::validate_template(image)?;

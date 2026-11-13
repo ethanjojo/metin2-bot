@@ -31,7 +31,7 @@ Requires **Windows x64**, Windows 10 build 19041 or newer, and a D3D11-capable g
 
 Companion starts paused. First installation uses the regular setup wizard; later updates use Companion's progress window with the same installer running behind it. Windows administrator approval may still be required. Startup checking is enabled by default; an existing explicit opt-out is preserved, and **Settings → Updates** keeps manual checks and channel preferences. Capture selection pauses automation and waits for held inputs to release. See the [setup guide](docs/user-guide.md) for calibration, shortcuts and troubleshooting.
 
-**Release candidate:** the complete integrated targeting, attack, buff and mount cycle still requires live-game acceptance. App and setup are unsigned; `jojo` is product metadata, not a verified Windows publisher. Setup explains the shared driver's machine-wide changes and [removal policy](docs/user-guide.md#installation-and-hid-driver).
+**Release candidate:** the owner confirmed the integrated game cycle and successful in-app update on review.22. Interactive refusal of UAC during an update remains the final operator check before stable; each package must also pass its own Windows CI installation tests. App and setup are unsigned; `jojo` is product metadata, not a verified Windows publisher. Setup explains the shared driver's machine-wide changes and [removal policy](docs/user-guide.md#installation-and-hid-driver).
 
 ## Screenshots
 

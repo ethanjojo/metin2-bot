@@ -194,8 +194,8 @@ impl MetinApp {
         if skill.mode == metin_core::BuffMode::Inactive {
             let presence = self
                 .snapshot
-                .captured_at
-                .filter(|time| time.elapsed() < std::time::Duration::from_millis(500))
+                .recognition_evidence_is_fresh()
+                .then_some(())
                 .and_then(|_| self.snapshot.buff_presence.get(index).copied())
                 .unwrap_or(metin_core::Presence::Unknown);
             return (

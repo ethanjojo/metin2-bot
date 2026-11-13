@@ -12,7 +12,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Documentation build failed.' }
     $session = Join-Path $root ('build/docs-capture/' + [Guid]::NewGuid().ToString())
     $data = Join-Path $session 'data'
-    cargo run -p metin-desktop --example docs_fixture --locked -- $data
+    cargo run -p metin-desktop --example docs_fixture --features ui-smoke --locked -- $data
     if ($LASTEXITCODE -ne 0) { throw 'Demonstration profile creation failed.' }
     $output = if ([IO.Path]::IsPathRooted($OutputDirectory)) { $OutputDirectory } else { Join-Path $root $OutputDirectory }
     New-Item -ItemType Directory -Force $output | Out-Null
@@ -38,6 +38,19 @@ try {
         @{name='profile-import';tab='run';run='looting';qol='import'},
         @{name='recognition-check';tab='calibration';qol='recognition'},
         @{name='buff-recognition-check';tab='actions';actions='buffs';buff_detail=$true;qol='recognition'},
+        @{name='recognition-hp-positive';tab='calibration';qol='recognition-hp-positive';qa=$true},
+        @{name='recognition-hp-negative';tab='calibration';qol='recognition-hp-negative';qa=$true},
+        @{name='recognition-buff-active';tab='actions';actions='buffs';buff_detail=$true;qol='recognition-buff-active';qa=$true},
+        @{name='recognition-buff-inactive';tab='actions';actions='buffs';buff_detail=$true;qol='recognition-buff-inactive';qa=$true},
+        @{name='recognition-buff-ambiguous';tab='actions';actions='buffs';buff_detail=$true;qol='recognition-buff-ambiguous';qa=$true},
+        @{name='recognition-waiting';tab='calibration';qol='recognition-waiting';qa=$true},
+        @{name='recognition-failure';tab='calibration';qol='recognition-failure';qa=$true},
+        @{name='recognition-failure-small-150';tab='calibration';qol='recognition-failure';zoom=1.5;small=$true;qa=$true},
+        @{name='changes-removed';tab='actions';qol='changes-removed';qa=$true},
+        @{name='changes-references';tab='actions';qol='changes-references';qa=$true},
+        @{name='changes-references-small-150';tab='actions';qol='changes-references';zoom=1.5;small=$true;qa=$true},
+        @{name='changes-draft';tab='actions';qol='changes-draft';qa=$true},
+        @{name='changes-new';tab='run';qol='changes-new';qa=$true},
         @{name='run-paused';tab='run';run='stopped';qol='paused'},
         @{name='ui-scale-150';tab='settings';settings='appearance';zoom=1.5;small=$true;qa=$true},
         @{name='changes-small-150';tab='run';run='looting';qol='changes';zoom=1.5;small=$true;qa=$true},

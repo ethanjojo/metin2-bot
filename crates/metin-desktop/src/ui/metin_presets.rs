@@ -80,6 +80,7 @@ impl MetinApp {
         Ok(())
     }
     pub(super) fn open_metin_preset(&mut self, new: bool) {
+        self.close_recognition_check();
         self.cancel_overlay_capture();
         self.runtime.stop();
         self.binding = None;

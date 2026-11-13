@@ -259,19 +259,19 @@ fn changed_fields_open_the_correct_secondary_page_and_primary_tabs_do_not_overla
     let (mut app, ctx, _dir) = setup();
     let before = app.editor.profile.clone();
     app.editor.profile.timing.search_timeout += 1.;
-    let rows = changes::profile_changes(&before, &app.editor.profile, false, false);
+    let rows = changes::profile_changes(&before, &app.editor.profile, [None, None], &[]);
     app.settings_page = SettingsPage::Diagnostics;
     app.open_profile_change(&rows[0]);
     assert_eq!(app.settings_page, SettingsPage::Combat);
     let before = app.editor.profile.clone();
     app.editor.profile.safety.sound = true;
-    let rows = changes::profile_changes(&before, &app.editor.profile, false, false);
+    let rows = changes::profile_changes(&before, &app.editor.profile, [None, None], &[]);
     app.open_profile_change(&rows[0]);
     assert_eq!(app.safety_page, SafetyPage::Notifications);
     app.editor.profile.color = Some(metin_core::ColorConfig::default());
     let before = app.editor.profile.clone();
     app.editor.profile.color.as_mut().unwrap().stable_frames += 1;
-    let rows = changes::profile_changes(&before, &app.editor.profile, false, false);
+    let rows = changes::profile_changes(&before, &app.editor.profile, [None, None], &[]);
     app.open_profile_change(&rows[0]);
     assert_eq!(app.tab, Tab::Calibration);
     let mut output = ctx.run_ui(

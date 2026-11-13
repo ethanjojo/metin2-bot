@@ -4,6 +4,8 @@ Companion for Windows x64: a compact Rust/egui desktop application for local vis
 
 ## Highlights
 
+- Grouped unsaved-change review counts logical edits instead of individual color channels or rectangle coordinates. It previews colors/references, tracks reordered items by stable identity, and separates incomplete buff drafts from saved settings.
+- Read-only recognition checks open a bounded dialog with fresh-image results, larger reference previews, actual scores, retry and clear capture failures. Checks never alter live buff evidence or send game input.
 - Named Metin detection presets group sampled color, tolerances, shape limits and confirmation. Profile copies remain independent; cancelled edits and failed writes preserve the current setup. HP-reference confirmation settings now live in Recognition.
 - A stable Save check, aligned inline rename controls, remembered expanded panel sizes and shaped native window edges refine the compact interface. Session throughput switches between Metins/min and complete-cycle seconds per target.
 - In-app updates keep profiles locked while verifying and copying their data without reading the transient lock file, fixing Windows error 33 during backup preparation.
@@ -35,8 +37,8 @@ Companion installs under `Program Files/Companion` and keeps profiles, reference
 - Windows x64 setup is the only supported distribution.
 - Keep the selected game in the foreground. Capture/input guards remain active; this is not unattended background control of an inactive window.
 - Windows capture privacy policy may retain a capture indicator when borderless permission is unavailable or denied.
-- The complete integrated targeting, attack, buff, mount and emergency-stop cycle still requires live-game acceptance before stable release.
-- Screenshot/update UI fixtures use isolated demonstration data; they do not establish live-game or interactive updater-install acceptance. Real UAC, installed update and restart acceptance for the integrated helper remain pending until an operator is available.
+- The owner confirmed the complete game cycle and successful in-app update/restart with retained profiles on review.22. Refusing UAC during an update has not been manually tested and remains the stable-release blocker.
+- Screenshot/update UI fixtures use isolated demonstration data. Each candidate still requires its own hosted Windows installation, upgrade, self-test and uninstall checks; screenshots do not establish that acceptance.
 
 Project-authored source is [MIT licensed](../LICENSE). Original artwork and third-party components retain their existing terms; see [notices](../THIRD_PARTY_NOTICES.md).
 

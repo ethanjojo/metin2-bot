@@ -1,9 +1,6 @@
 {
   "stable_ready": false,
   "blockers": [
-    "Real-client target/attack/buff/mount and emergency-stop acceptance",
-    "Exact-commit hosted Windows install/upgrade/uninstall acceptance",
-    "Elevated protected update-staging ACL inheritance and medium-token denial acceptance",
-    "Official-source in-app update, UAC cancellation, preserved data and restart acceptance"
+    "Interactive UAC cancellation during update: verify original installation and profiles remain intact"
   ]
 }

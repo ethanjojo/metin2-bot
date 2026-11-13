@@ -2,6 +2,20 @@ use metin_core::{Profile, Region};
 use metin_desktop::editor::{EditMode, Editor};
 
 #[test]
+fn editor_normalizes_direct_legacy_entities_before_saved_snapshot_without_dirtying() {
+    let mut value = serde_json::to_value(Profile::create("Old editor input")).unwrap();
+    value["buffs"]["skills"] = serde_json::json!([{"shortcut":"F1"}]);
+    value["masks"] = serde_json::json!([{"left":0.1,"top":0.2,"right":0.3,"bottom":0.4}]);
+    let editor = Editor::new(serde_json::from_value(value.clone()).unwrap(), None);
+    let canonical = Profile::from_json(&value.to_string()).unwrap();
+    assert_eq!(editor.profile, canonical);
+    assert!(!editor.dirty());
+    let encoded = serde_json::to_value(&editor.profile).unwrap();
+    assert!(encoded["buffs"]["skills"][0]["id"].is_string());
+    assert!(encoded["masks"][0]["id"].is_string());
+}
+
+#[test]
 fn named_exclusion_rename_geometry_edit_delete_and_undo_preserve_identity() {
     let mut editor = Editor::new(metin_core::Profile::create("Named exclusions"), None);
     editor.freeze(distinctive_frame(0)).unwrap();
@@ -11,20 +25,27 @@ fn named_exclusion_rename_geometry_edit_delete_and_undo_preserve_identity() {
     editor
         .set_region(EditMode::Mask(None), area(0.3, 0.3, 0.4, 0.4))
         .unwrap();
+    let first_id = editor.profile.masks[0].id;
+    let second_id = editor.profile.masks[1].id;
+    assert_ne!(first_id, second_id);
     editor.rename_excluded_area(0, "  Minimap  ").unwrap();
     assert_eq!(editor.profile.masks[0].name, "Minimap");
+    assert_eq!(editor.profile.masks[0].id, first_id);
     editor
         .set_region(EditMode::Mask(Some(0)), area(0.2, 0.2, 0.3, 0.3))
         .unwrap();
     assert_eq!(editor.profile.masks[0].name, "Minimap");
+    assert_eq!(editor.profile.masks[0].id, first_id);
     assert_eq!(
         editor.region(EditMode::Mask(Some(0))),
         Some(area(0.2, 0.2, 0.3, 0.3))
     );
     editor.delete(EditMode::Mask(Some(0))).unwrap();
     assert_eq!(editor.profile.masks[0].name, "Excluded area 2");
+    assert_eq!(editor.profile.masks[0].id, second_id);
     editor.undo();
     assert_eq!(editor.profile.masks[0].name, "Minimap");
+    assert_eq!(editor.profile.masks[0].id, first_id);
     assert_eq!(editor.profile.masks[1].name, "Excluded area 2");
     let before = editor.profile.clone();
     for name in ["", "Chat\nbox", &"a".repeat(81)] {

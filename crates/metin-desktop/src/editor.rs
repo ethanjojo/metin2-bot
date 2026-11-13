@@ -33,7 +33,8 @@ pub struct Editor {
 }
 type Result<T> = std::result::Result<T, String>;
 impl Editor {
-    pub fn new(profile: Profile, template: Option<Frame>) -> Self {
+    pub fn new(mut profile: Profile, template: Option<Frame>) -> Self {
+        profile.normalize_entity_ids();
         let saved = Snapshot {
             profile: profile.clone(),
             template: template.clone(),
@@ -61,8 +62,8 @@ impl Editor {
     pub(crate) fn saved_profile(&self) -> &Profile {
         &self.saved.profile
     }
-    pub(crate) fn template_changed(&self) -> bool {
-        self.template != self.saved.template
+    pub(crate) fn saved_template(&self) -> Option<&Frame> {
+        self.saved.template.as_ref()
     }
     /// A committed metadata rename must not save or undo unrelated draft edits.
     pub(crate) fn apply_saved_name(&mut self, name: &str) {

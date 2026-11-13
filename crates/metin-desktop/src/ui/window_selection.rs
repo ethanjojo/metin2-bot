@@ -191,6 +191,7 @@ impl MetinApp {
         {
             return Err("This window has closed. Choose another available window.".into());
         }
+        self.close_recognition_check();
         self.runtime.stop();
         self.cancel_overlay_capture();
         self.history_open = false;
@@ -201,6 +202,7 @@ impl MetinApp {
         Ok(())
     }
     pub(super) fn open_window_chooser(&mut self) {
+        self.close_recognition_check();
         self.metin_presets.draft = None;
         self.remember_latest_panel_position();
         self.cancel_size_review();

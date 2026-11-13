@@ -1,314 +1,109 @@
-//! Cached presentation of differences between the canonical saved and edited profiles.
+//! Product-level review of the settings that Save will persist.
 use super::*;
-use serde_json::Value;
+use crate::storage::MetinPreset;
+use metin_platform::Frame;
+use uuid::Uuid;
 
-#[derive(Clone)]
-pub(super) struct ProfileChange {
-    label: String,
-    before: String,
-    after: String,
-    action: SetupAction,
-    buff: Option<usize>,
-    path: Vec<String>,
-}
-
-#[derive(Clone)]
-struct CachedChanges {
-    profile: uuid::Uuid,
-    revision: u64,
-    unsaved_new: bool,
-    rows: Arc<Vec<ProfileChange>>,
-}
-
-fn short_value(value: &Value, image: bool) -> String {
-    if value.is_null() {
-        return "Not set".into();
-    }
-    if image {
-        return "Captured image".into();
-    }
-    match value {
-        Value::Bool(on) => if *on { "On" } else { "Off" }.into(),
-        Value::String(text) => {
-            let mut chars = text.chars();
-            let visible = chars.by_ref().take(80).collect::<String>();
-            if chars.next().is_some() {
-                format!("{visible}…")
-            } else if visible.is_empty() {
-                "Empty".into()
-            } else {
-                visible
-            }
-        }
-        Value::Number(n) => n
-            .as_f64()
-            .filter(|value| value.fract() == 0.)
-            .map_or_else(|| n.to_string(), |value| format!("{value:.0}")),
-        Value::Array(_) | Value::Object(_) => "Configured".into(),
-        Value::Null => unreachable!(),
-    }
-}
-
-fn destination(path: &[String]) -> (SetupAction, Option<usize>) {
-    let key = path.first().map(String::as_str).unwrap_or_default();
-    let action = match key {
-        "buffs"
-            if path.get(1).is_some_and(|key| {
-                matches!(
-                    key.as_str(),
-                    "fight_mounted" | "mount_shortcut" | "mount_wait_seconds"
-                )
-            }) =>
-        {
-            SetupAction::Actions(ActionsPage::Mount)
-        }
-        "buffs" => SetupAction::Actions(ActionsPage::Buffs),
-        "loot" => SetupAction::Actions(ActionsPage::Loot),
-        "periodic_actions" => SetupAction::Actions(ActionsPage::Periodic),
-        "puller" => SetupAction::Actions(ActionsPage::Puller),
-        "out_of_target" => SetupAction::Actions(ActionsPage::OutOfTarget),
-        "safety" if path.get(1).is_some_and(|key| key == "rules") => SetupAction::VisualRules,
-        "safety" => SetupAction::Safety,
-        "timing" => SetupAction::Settings,
-        _ => SetupAction::Calibration,
-    };
-    let buff = if key == "buffs" && path.get(1).is_some_and(|key| key == "skills") {
-        path.get(2).and_then(|index| index.parse().ok())
-    } else {
-        None
-    };
-    (action, buff)
-}
-
-fn field_label(path: &[String], profile: &Profile) -> String {
-    let name = path
-        .last()
-        .map(String::as_str)
-        .unwrap_or("Profile")
-        .replace('_', " ");
-    let field = match name.as_str() {
-        "interval seconds" => "Interval".into(),
-        "png" => "Reference image".into(),
-        "color preset id" => "Metin preset".into(),
-        _ => {
-            let mut chars = name.chars();
-            chars.next().map_or_else(String::new, |first| {
-                first.to_uppercase().collect::<String>() + chars.as_str()
-            })
-        }
-    };
-    let (section, buff) = destination(path);
-    let item_name = match path.first().map(String::as_str) {
-        Some("periodic_actions") => path
-            .get(1)
-            .and_then(|index| index.parse::<usize>().ok())
-            .and_then(|index| profile.periodic_actions.get(index))
-            .map(|action| action.name.as_str()),
-        Some("masks") => path
-            .get(1)
-            .and_then(|index| index.parse::<usize>().ok())
-            .and_then(|index| profile.masks.get(index))
-            .map(|area| area.name.as_str()),
-        Some("safety") if path.get(1).is_some_and(|key| key == "rules") => path
-            .get(2)
-            .and_then(|index| index.parse::<usize>().ok())
-            .and_then(|index| profile.safety.rules.get(index))
-            .map(|rule| rule.name.as_str()),
-        _ => None,
-    };
-    if let Some(name) = item_name {
-        return format!("{name} · {field}");
-    }
-    if let Some(index) = buff {
-        let label = profile
-            .buffs
-            .skills
-            .get(index)
-            .map(|skill| skill.name.clone())
-            .filter(|name| !name.is_empty())
-            .unwrap_or_else(|| format!("Buff {}", index + 1));
-        return format!("{label} · {field}");
-    }
-    let section = match section {
-        SetupAction::Actions(ActionsPage::Buffs) => "Buffs",
-        SetupAction::Actions(ActionsPage::Mount) => "Mount",
-        SetupAction::Actions(ActionsPage::Loot) => "Loot",
-        SetupAction::Actions(ActionsPage::Periodic) => "Periodic actions",
-        SetupAction::Actions(ActionsPage::Puller) => "Auto-puller",
-        SetupAction::Actions(ActionsPage::OutOfTarget) => "Out-of-target attack",
-        SetupAction::VisualRules => "Visual rules",
-        SetupAction::Safety => "Safety",
-        SetupAction::Settings => "Settings",
-        _ => "Recognition",
-    };
-    format!("{section} · {field}")
-}
-
-fn compare(
-    before: &Value,
-    after: &Value,
-    path: &mut Vec<String>,
-    profile: &Profile,
-    rows: &mut Vec<ProfileChange>,
-) {
-    if before == after {
-        return;
-    }
-    match (before, after) {
-        (Value::Object(old), Value::Object(new)) => {
-            let keys = old
-                .keys()
-                .chain(new.keys())
-                .collect::<std::collections::BTreeSet<_>>();
-            for key in keys {
-                path.push(key.clone());
-                compare(
-                    old.get(key).unwrap_or(&Value::Null),
-                    new.get(key).unwrap_or(&Value::Null),
-                    path,
-                    profile,
-                    rows,
-                );
-                path.pop();
-            }
-        }
-        (Value::Array(old), Value::Array(new)) => {
-            for index in 0..old.len().max(new.len()) {
-                path.push(index.to_string());
-                compare(
-                    old.get(index).unwrap_or(&Value::Null),
-                    new.get(index).unwrap_or(&Value::Null),
-                    path,
-                    profile,
-                    rows,
-                );
-                path.pop();
-            }
-        }
-        _ => {
-            let (action, buff) = destination(path);
-            let image = path.last().is_some_and(|key| key == "png");
-            let units = path.last().is_some_and(|key| key.ends_with("_seconds"))
-                || (path.first().is_some_and(|key| key == "timing")
-                    && path.last().is_some_and(|key| key != "max_rotations"));
-            let format = |value: &Value| {
-                if path.first().is_some_and(|key| key == "color_preset_id") {
-                    return if value.is_null() {
-                        "Custom"
-                    } else {
-                        "Named preset"
-                    }
-                    .to_owned();
-                }
-                let text = short_value(value, image);
-                if units && value.is_number() {
-                    format!("{text} s")
-                } else {
-                    text
-                }
-            };
-            rows.push(ProfileChange {
-                label: field_label(path, profile),
-                before: format(before),
-                after: format(after),
-                action,
-                buff,
-                path: path.clone(),
-            });
-        }
-    }
-}
+mod actions;
+mod model;
+mod recognition;
+mod safety;
+use model::*;
+#[cfg(test)]
+mod tests;
 
 pub(super) fn profile_changes(
     before: &Profile,
     after: &Profile,
-    image_changed: bool,
-    unsaved_new: bool,
+    images: [Option<&Frame>; 2],
+    presets: &[MetinPreset],
 ) -> Vec<ProfileChange> {
     let mut rows = Vec::new();
-    // These values are produced only from typed Profile data. No JSON from a file
-    // is interpreted here; validation and persistence remain owned by ProfileStore.
-    if let (Ok(before), Ok(after_value)) =
-        (serde_json::to_value(before), serde_json::to_value(after))
-    {
-        compare(&before, &after_value, &mut Vec::new(), after, &mut rows);
-    }
-    if image_changed {
-        rows.push(ProfileChange {
-            label: "Target HP reference image".into(),
-            before: "Saved image".into(),
-            after: "Updated image".into(),
-            action: SetupAction::Calibration,
-            buff: None,
-            path: vec!["template_file".into()],
-        });
-    }
-    if unsaved_new {
-        rows.insert(
-            0,
-            ProfileChange {
-                label: "New profile".into(),
-                before: "Not saved".into(),
-                after: after.name.clone(),
-                action: SetupAction::Calibration,
-                buff: None,
-                path: vec!["name".into()],
-            },
-        );
-    }
+    let geometry = Geometry([before.frame_size, after.frame_size]);
+    recognition::compare(&mut rows, before, after, images, presets, geometry);
+    actions::compare(&mut rows, before, after, geometry);
+    safety::compare(&mut rows, before, after, geometry);
     rows
 }
 
-impl MetinApp {
-    fn current_changes(&self, context: &egui::Context) -> Arc<Vec<ProfileChange>> {
-        let id = egui::Id::unique("profile-change-summary");
-        let unsaved_new = !self
-            .profiles
-            .iter()
-            .any(|profile| profile.id == self.editor.profile.id);
-        let cache = context.data(|data| data.get_temp::<CachedChanges>(id));
-        if let Some(cache) = cache
-            && cache.profile == self.editor.profile.id
-            && cache.revision == self.editor.change_id()
-            && cache.unsaved_new == unsaved_new
-        {
-            return cache.rows;
+struct Summary {
+    rows: Vec<ProfileChange>,
+    drafts: Vec<(Uuid, String)>,
+    new_profile: Option<String>,
+}
+impl Summary {
+    fn caption(&self) -> String {
+        if self.new_profile.is_some() {
+            return "New profile".into();
         }
-        let rows = Arc::new(profile_changes(
-            self.editor.saved_profile(),
-            &self.editor.profile,
-            self.editor.template_changed(),
-            unsaved_new,
-        ));
-        context.data_mut(|data| {
-            data.insert_temp(
-                id,
-                CachedChanges {
-                    profile: self.editor.profile.id,
-                    revision: self.editor.change_id(),
-                    unsaved_new,
-                    rows: rows.clone(),
-                },
-            )
-        });
-        rows
+        match self.rows.len() {
+            0 if !self.drafts.is_empty() => "Draft".into(),
+            1 => "1 change".into(),
+            n => format!("{n} changes"),
+        }
     }
+}
+pub(super) struct CachedChanges {
+    profile: Uuid,
+    revision: (u64, u64),
+    unsaved_new: bool,
+    preset_names: [Option<String>; 2],
+    summary: Arc<Summary>,
+}
 
-    fn changes_caption(&self, ctx: &egui::Context) -> String {
-        let count = self.current_changes(ctx).len();
-        if ctx.content_rect().width() < 380. {
-            count.to_string()
-        } else {
-            format!("{count} changes")
+impl MetinApp {
+    fn current_changes(&mut self) -> Arc<Summary> {
+        let before = self.editor.saved_profile();
+        let after = &self.editor.profile;
+        let unsaved_new = !self.profiles.iter().any(|profile| profile.id == after.id);
+        let revision = (self.revision, self.editor.change_id());
+        let preset_names = [before.color_preset_id, after.color_preset_id].map(|id| {
+            id.and_then(|id| self.metin_presets.catalog.iter().find(|p| p.id == id))
+                .map(|p| p.name.as_str())
+        });
+        if let Some(cache) = &self.changes_cache
+            && cache.profile == after.id
+            && cache.revision == revision
+            && cache.unsaved_new == unsaved_new
+            && cache.preset_names.each_ref().map(|n| n.as_deref()) == preset_names
+        {
+            return cache.summary.clone();
         }
+        let effective = self.profile_for_save();
+        let rows = profile_changes(
+            before,
+            &effective,
+            [self.editor.saved_template(), self.editor.template.as_ref()],
+            &self.metin_presets.catalog,
+        );
+        let drafts = after
+            .buffs
+            .skills
+            .iter()
+            .filter(|skill| !effective.buffs.skills.iter().any(|s| s.id == skill.id))
+            .map(|skill| (skill.id, actions::buff_name(skill).to_owned()))
+            .collect();
+        let summary = Arc::new(Summary {
+            rows,
+            drafts,
+            new_profile: unsaved_new.then(|| after.name.clone()),
+        });
+        self.changes_cache = Some(CachedChanges {
+            profile: after.id,
+            revision,
+            unsaved_new,
+            preset_names: preset_names.map(|s| s.map(str::to_owned)),
+            summary: summary.clone(),
+        });
+        summary
     }
-    pub(super) fn changes_width(&self, ui: &egui::Ui) -> f32 {
+    pub(super) fn changes_width(&mut self, ui: &egui::Ui) -> f32 {
         if !self.has_unsaved_profile() {
             return 0.;
         }
         ui.painter()
             .layout_no_wrap(
-                self.changes_caption(ui.ctx()),
+                self.current_changes().caption(),
                 egui::FontId::proportional(13.),
                 egui::Color32::WHITE,
             )
@@ -317,32 +112,30 @@ impl MetinApp {
             + 20.
             + ui.spacing().item_spacing.x
     }
-
     pub(super) fn changes_badge(&mut self, ui: &mut egui::Ui) {
         if !self.has_unsaved_profile() {
             return;
         }
-        let rows = self.current_changes(ui.ctx());
-        let response =
-            widgets::plain_button(ui, self.changes_caption(ui.ctx())).on_hover_text(format!(
-                "{} unsaved changes. Review before Save; Revert restores the saved profile.",
-                rows.len()
-            ));
+        let summary = self.current_changes();
+        let caption = summary.caption();
+        let response = widgets::plain_button(ui, &caption)
+            .on_hover_text("Review pending profile edits and incomplete drafts before Save.");
         response.widget_info(|| {
-            egui::WidgetInfo::labeled(
-                egui::Role::Button,
-                true,
-                format!("{} unsaved profile changes", rows.len()),
-            )
+            egui::WidgetInfo::labeled(egui::Role::Button, true, format!("Review {caption}"))
         });
         let mut selected = None;
+        let width = 360_f32.min((ui.ctx().content_rect().width() - 16.).max(1.));
+        let height =
+            (ui.ctx().content_rect().height() - response.rect.bottom() - 72.).clamp(72., 350.);
+        let frame = skin::popup_frame(ui);
         let popup = egui::Popup::from_toggle_button_response(&response)
-            .frame(skin::popup_frame(ui))
-            .width(330_f32.min(ui.ctx().content_rect().width() - 24.));
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .frame(frame)
+            .width(width);
         #[cfg(feature = "ui-smoke")]
         let popup = if ui
             .ctx()
-            .data(|data| data.get_temp::<bool>(egui::Id::unique("qol-changes-fixture")))
+            .data(|d| d.get_temp::<bool>(egui::Id::unique("qol-changes-fixture")))
             .unwrap_or(false)
         {
             popup.open(true)
@@ -350,129 +143,226 @@ impl MetinApp {
             popup
         };
         popup.show(|ui| {
-            ui.strong("Unsaved changes");
+            select::bound_popup_content(ui, width, frame);
+            ui.strong(if summary.new_profile.is_some() {
+                "New profile"
+            } else {
+                "Unsaved changes"
+            });
             ui.separator();
-            egui::ScrollArea::vertical()
-                .max_height(300.)
-                .show(ui, |ui| {
-                    for row in rows.iter() {
-                        if widgets::plain_button(ui, &row.label).clicked() {
-                            selected = Some(row.clone());
-                            ui.close();
-                        }
-                        ui.add(
-                            egui::Label::new(
-                                egui::RichText::new(format!("{} to {}", row.before, row.after))
-                                    .small(),
-                            )
-                            .wrap(),
-                        );
-                        ui.add_space(5.);
+            select::menu_scroll(
+                ui,
+                ("profile-changes", self.editor.profile.id),
+                height,
+                |ui| {
+                    if let Some(name) = &summary.new_profile {
+                        ui.label(format!(
+                            "Save creates the profile “{name}” with its current settings."
+                        ));
                     }
-                });
-            ui.small("Save and Revert are in the profile bar.");
+                    if !summary.drafts.is_empty() {
+                        ui.strong("Incomplete buffs");
+                        ui.small("Save omits each buff below until it has a shortcut.");
+                        for (id, name) in &summary.drafts {
+                            if widgets::plain_button(ui, name).clicked() {
+                                selected = Some(Subject::Buff(Some(*id)));
+                                ui.close();
+                            }
+                        }
+                    }
+                    let mut previous = None;
+                    for (i, row) in summary.rows.iter().enumerate() {
+                        let group = row.subject.group();
+                        if previous != Some(group) {
+                            ui.add_space(3.);
+                            ui.strong(group);
+                            previous = Some(group);
+                        }
+                        ui.push_id(("change", i), |ui| {
+                            if widgets::plain_button(ui, &row.field.label)
+                                .on_hover_text(format!("Open {} · {}", group, row.field.label))
+                                .clicked()
+                            {
+                                selected = Some(row.subject);
+                                ui.close();
+                            }
+                            self.show_change_values(ui, &row.field);
+                            if !row.details.is_empty() {
+                                egui::CollapsingHeader::new("Details")
+                                    .id_salt("change-details")
+                                    .show(ui, |ui| {
+                                        for detail in &row.details {
+                                            ui.small(&detail.label);
+                                            self.show_change_values(ui, detail);
+                                        }
+                                    });
+                            }
+                        });
+                    }
+                    if summary.rows.is_empty()
+                        && summary.new_profile.is_none()
+                        && summary.drafts.is_empty()
+                    {
+                        ui.small("Saved profile settings are unchanged.");
+                    }
+                },
+            );
         });
-        if let Some(row) = selected {
-            self.open_profile_change(&row);
+        if let Some(subject) = selected {
+            self.open_change_subject(subject);
         }
     }
+
+    fn show_change_values(&mut self, ui: &mut egui::Ui, field: &Field) {
+        ui.columns(2, |columns| {
+            for (side, (ui, value)) in columns
+                .iter_mut()
+                .zip([&field.before, &field.after])
+                .enumerate()
+            {
+                ui.small(if side == 0 { "Saved" } else { "Edited" });
+                match &value.preview {
+                    Some(Preview::Color(hsv)) => {
+                        let [r, g, b] = crate::ui_controls::sampled_hsv_to_srgb(*hsv);
+                        let (rect, _) =
+                            ui.allocate_exact_size(egui::vec2(32., 16.), egui::Sense::hover());
+                        skin::bevel(ui, rect, false);
+                        ui.painter().rect_filled(
+                            rect.shrink(2.),
+                            0.,
+                            egui::Color32::from_rgb(r, g, b),
+                        );
+                    }
+                    Some(Preview::Icon(id)) => {
+                        let (rect, _) =
+                            ui.allocate_exact_size(egui::Vec2::splat(32.), egui::Sense::hover());
+                        catalog::paint_skill(ui, *id, rect);
+                    }
+                    Some(Preview::Capture(icon)) => self.icon_thumbnail(ui, icon),
+                    Some(Preview::Frame(frame)) => {
+                        let id = ui.make_persistent_id(("hp-change-image", side));
+                        let texture = ui
+                            .ctx()
+                            .data(|d| d.get_temp::<(Frame, egui::TextureHandle)>(id))
+                            .filter(|(prev, _)| {
+                                prev.width == frame.width
+                                    && prev.height == frame.height
+                                    && Arc::ptr_eq(&prev.bgr, &frame.bgr)
+                            })
+                            .map(|(_, texture)| texture)
+                            .unwrap_or_else(|| {
+                                let texture = forms::frame_texture(
+                                    ui.ctx(),
+                                    "HP change",
+                                    frame,
+                                    egui::TextureOptions::NEAREST,
+                                );
+                                ui.ctx().data_mut(|d| {
+                                    d.insert_temp(id, (frame.clone(), texture.clone()))
+                                });
+                                texture
+                            });
+                        ui.add(
+                            egui::Image::new(&texture)
+                                .max_size(egui::vec2(ui.available_width(), 48.)),
+                        );
+                    }
+                    None => {}
+                }
+                ui.add(egui::Label::new(egui::RichText::new(&value.text).small()).wrap());
+            }
+        });
+    }
+
+    #[cfg(test)]
     pub(super) fn open_profile_change(&mut self, row: &ProfileChange) {
-        self.open_setup(row.action);
-        match row.action {
-            SetupAction::Settings => {
+        self.open_change_subject(row.subject);
+    }
+
+    fn open_change_subject(&mut self, subject: Subject) {
+        self.binding = None;
+        match subject {
+            Subject::Search | Subject::Color | Subject::Hp | Subject::Frame | Subject::Area(_) => {
+                self.open_setup(SetupAction::Calibration);
+                self.return_to_buffs = false;
+                self.return_to_safety = false;
+                self.editing = false;
+                self.mode =
+                    match subject {
+                        Subject::Area(id) => EditMode::Mask(id.and_then(|id| {
+                            self.editor.profile.masks.iter().position(|a| a.id == id)
+                        })),
+                        Subject::Color => EditMode::Color,
+                        Subject::Hp => EditMode::Template,
+                        _ => EditMode::World,
+                    };
+                if subject == Subject::Color {
+                    self.open_metin_preset(false);
+                }
+            }
+            Subject::Buff(id) => {
+                self.open_setup(SetupAction::Actions(ActionsPage::Buffs));
+                let index = id.and_then(|id| {
+                    self.editor
+                        .profile
+                        .buffs
+                        .skills
+                        .iter()
+                        .position(|v| v.id == id)
+                });
+                self.buff_detail = index.is_some();
+                if let Some(i) = index {
+                    self.selected_skill = i;
+                }
+            }
+            Subject::BuffArea => {
+                let skill = self
+                    .editor
+                    .profile
+                    .buffs
+                    .skills
+                    .iter()
+                    .find(|v| v.mode == metin_core::BuffMode::Inactive)
+                    .map(|v| v.id);
+                self.open_change_subject(Subject::Buff(skill));
+            }
+            Subject::Mount => self.open_setup(SetupAction::Mount),
+            Subject::Loot => self.open_setup(SetupAction::Actions(ActionsPage::Loot)),
+            Subject::Puller => self.open_setup(SetupAction::Actions(ActionsPage::Puller)),
+            Subject::OutOfTarget => self.open_setup(SetupAction::Actions(ActionsPage::OutOfTarget)),
+            Subject::Periodic(id) => {
+                self.open_setup(SetupAction::Actions(ActionsPage::Periodic));
+                self.selected_periodic = id.filter(|id| {
+                    self.editor
+                        .profile
+                        .periodic_actions
+                        .iter()
+                        .any(|v| v.id == *id)
+                });
+            }
+            Subject::Rule(id) => {
+                self.open_setup(SetupAction::VisualRules);
+                let index = id.and_then(|id| {
+                    self.editor
+                        .profile
+                        .safety
+                        .rules
+                        .iter()
+                        .position(|v| v.id == id)
+                });
+                self.visual_detail = index.is_some();
+                if let Some(i) = index {
+                    self.selected_safety = i;
+                }
+            }
+            Subject::Safety(page) => {
+                self.open_setup(SetupAction::Safety);
+                self.safety_page = page;
+            }
+            Subject::Timing => {
+                self.open_setup(SetupAction::Settings);
                 self.settings_page = SettingsPage::Combat;
             }
-            SetupAction::Safety => {
-                self.safety_page = match row.path.get(1).map(String::as_str) {
-                    Some("sound" | "system_notification") => SafetyPage::Notifications,
-                    Some("recovery_enabled" | "recovery_attempts" | "recovery_wait_seconds") => {
-                        SafetyPage::Recovery
-                    }
-                    _ => SafetyPage::Schedule,
-                }
-            }
-            SetupAction::Actions(ActionsPage::Periodic) => {
-                self.selected_periodic = row
-                    .path
-                    .get(1)
-                    .and_then(|index| index.parse::<usize>().ok())
-                    .and_then(|index| self.editor.profile.periodic_actions.get(index))
-                    .map(|action| action.id)
-            }
-            SetupAction::VisualRules => {
-                if let Some(index) = row
-                    .path
-                    .get(2)
-                    .and_then(|index| index.parse::<usize>().ok())
-                    .filter(|index| *index < self.editor.profile.safety.rules.len())
-                {
-                    self.selected_safety = index;
-                    self.visual_detail = true;
-                } else {
-                    self.visual_detail = false;
-                }
-            }
-            _ => {}
         }
-        if let Some(index) = row.buff
-            && index < self.editor.profile.buffs.skills.len()
-        {
-            self.selected_skill = index;
-            self.buff_detail = true;
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn recognition_changes_open_recognition_and_timing_opens_settings() {
-        for key in ["color", "panel", "color_preset_id"] {
-            let path = vec![key.to_owned(), "stable_frames".to_owned()];
-            assert!(
-                matches!(destination(&path).0, SetupAction::Calibration),
-                "{key}"
-            );
-        }
-        assert!(matches!(
-            destination(&["timing".to_owned(), "sample_interval".to_owned()]).0,
-            SetupAction::Settings
-        ));
-    }
-
-    #[test]
-    fn preset_provenance_summary_uses_product_labels_instead_of_storage_ids() {
-        let before = Profile::create("Main");
-        let mut after = before.clone();
-        after.color_preset_id = Some(uuid::Uuid::new_v4());
-        let rows = profile_changes(&before, &after, false, false);
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].label, "Recognition · Metin preset");
-        assert_eq!(rows[0].before, "Custom");
-        assert_eq!(rows[0].after, "Named preset");
-    }
-
-    #[test]
-    fn summary_routes_buff_interval_and_hides_image_bytes() {
-        let mut before = Profile::create("Main");
-        let skill = metin_core::BuffSkill {
-            name: "Blade".into(),
-            interval_seconds: Some(120.),
-            ..Default::default()
-        };
-        before.buffs.skills.push(skill);
-        let mut after = before.clone();
-        after.buffs.skills[0].interval_seconds = Some(180.);
-        let rows = profile_changes(&before, &after, true, false);
-        assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0].buff, Some(0));
-        assert_eq!(rows[0].before, "120 s");
-        assert!(rows[0].label.contains("Blade"));
-        assert_eq!(rows[0].after, "180 s");
-        assert_eq!(
-            short_value(&Value::String("SECRET IMAGE BYTES".into()), true),
-            "Captured image"
-        );
     }
 }

@@ -25,6 +25,7 @@ struct Controls {
     calls: Vec<(u16, bool)>,
     colored_candidates: bool,
     hp_detail: Option<[u32; 2]>,
+    frame_override: Option<Frame>,
     target_origin: [i32; 2],
     target_size: Option<[u32; 2]>,
     cursor: [i32; 2],
@@ -125,8 +126,15 @@ impl PlatformBackend for Fake {
                 }
             }
         }
+        let frame = self
+            .controls
+            .lock()
+            .unwrap()
+            .frame_override
+            .clone()
+            .unwrap_or(Frame::new(200, 200, pixels)?);
         Ok(CapturedFrame {
-            frame: Frame::new(200, 200, pixels)?,
+            frame,
             target: self.target,
             captured_at: if self.controls.lock().unwrap().stale_capture {
                 Instant::now() - Duration::from_secs(1)
@@ -356,7 +364,12 @@ fn connected_revision_cannot_arm_retained_configuration_until_it_is_applied() {
     wait_raw(&runtime, |snapshot| snapshot.revision == 2);
     assert_eq!(runtime.latest().unwrap().applied_revision, None);
     assert_eq!(runtime.latest().unwrap().mounted, Some(false));
-    runtime.send(Command::Snapshot { key }).unwrap();
+    runtime
+        .send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+        })
+        .unwrap();
     wait_raw(&runtime, |snapshot| {
         snapshot.frame_id > old_frame && snapshot.geometry.is_some()
     });
@@ -589,7 +602,12 @@ fn calibration_review_blocks_arm_and_f7_but_keeps_snapshot_and_preview_available
     assert!(!runtime.latest().unwrap().running);
     let before_snapshot = runtime.latest().unwrap().frame_id;
     runtime.send(Command::Arm { key }).unwrap();
-    runtime.send(Command::Snapshot { key }).unwrap();
+    runtime
+        .send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+        })
+        .unwrap();
     wait(&runtime, |snapshot| {
         snapshot.frame_id > before_snapshot && snapshot.released_generation.is_some()
     });
@@ -636,7 +654,12 @@ fn calibration_review_survives_focus_resize_restore_and_stop_generation_changes(
             control.toggle = true;
         }
         let previous = runtime.latest().unwrap().frame_id;
-        runtime.send(Command::Snapshot { key }).unwrap();
+        runtime
+            .send(Command::Snapshot {
+                key,
+                purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+            })
+            .unwrap();
         wait(&runtime, |snapshot| snapshot.frame_id > previous);
         let snapshot = runtime.latest().unwrap();
         assert!(snapshot.calibration_review);
@@ -648,7 +671,12 @@ fn calibration_review_survives_focus_resize_restore_and_stop_generation_changes(
     });
     controls.lock().unwrap().toggle = true;
     let previous = runtime.latest().unwrap().frame_id;
-    runtime.send(Command::Snapshot { key }).unwrap();
+    runtime
+        .send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+        })
+        .unwrap();
     wait(&runtime, |snapshot| snapshot.frame_id > previous);
     assert!(runtime.latest().unwrap().calibration_review);
     assert!(!runtime.latest().unwrap().running);
@@ -690,7 +718,12 @@ fn calibration_review_ignores_stale_begin_and_end_and_matching_cancel_allows_sta
             active: true,
         })
         .unwrap();
-    runtime.send(Command::Snapshot { key }).unwrap();
+    runtime
+        .send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+        })
+        .unwrap();
     wait(&runtime, |snapshot| snapshot.frame_id > previous);
     assert!(!runtime.latest().unwrap().calibration_review);
     runtime
@@ -721,7 +754,12 @@ fn calibration_review_ignores_stale_begin_and_end_and_matching_cancel_allows_sta
     }
     runtime.send(Command::Arm { key }).unwrap();
     let previous = runtime.latest().unwrap().frame_id;
-    runtime.send(Command::Snapshot { key }).unwrap();
+    runtime
+        .send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+        })
+        .unwrap();
     wait(&runtime, |snapshot| snapshot.frame_id > previous);
     assert!(runtime.latest().unwrap().calibration_review);
     assert!(!runtime.latest().unwrap().arming);
@@ -817,7 +855,12 @@ fn calibration_review_cannot_be_bypassed_by_reapplying_the_same_session() {
         })
         .unwrap();
     controls.lock().unwrap().toggle = true;
-    runtime.send(Command::Snapshot { key }).unwrap();
+    runtime
+        .send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+        })
+        .unwrap();
     wait(&runtime, |snapshot| snapshot.frame_id > 0);
     assert!(runtime.latest().unwrap().calibration_review);
     assert!(!runtime.latest().unwrap().running);
@@ -1172,6 +1215,174 @@ fn session_reset_interrupts_a_blocking_rotation_before_its_hold_finishes() {
 }
 
 #[test]
+fn recognition_snapshot_publishes_pixels_without_creating_live_evidence() {
+    let (runtime, controls) = runtime();
+    let mut profile = profile();
+    profile.buffs.skills.push(metin_core::BuffSkill::default());
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile, token(1), false, 1);
+    let before = runtime.latest().unwrap();
+    runtime
+        .send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::ReadOnlyRecognition,
+        })
+        .unwrap();
+    wait_raw(&runtime, |snapshot| snapshot.frame_id > before.frame_id);
+    let after = runtime.latest().unwrap();
+    assert!(after.frame.is_some());
+    assert_eq!(
+        after.buff_presence, before.buff_presence,
+        "A read-only snapshot must not advance or replace live buff evidence"
+    );
+    assert_eq!(
+        after.buff_last_active_age_seconds,
+        before.buff_last_active_age_seconds
+    );
+    assert_eq!(after.timers, before.timers);
+    assert!(controls.lock().unwrap().calls.is_empty());
+    runtime.shutdown().unwrap();
+}
+#[test]
+fn failed_readonly_capture_preserves_paused_controller_and_previous_pixels() {
+    let (runtime, controls) = runtime();
+    let profile = profile();
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    configure(&runtime, profile, key.target, false, 1);
+    runtime
+        .send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::ReadOnlyRecognition,
+        })
+        .unwrap();
+    wait_raw(&runtime, |snapshot| snapshot.frame.is_some());
+    let before = runtime.latest().unwrap();
+    let captures = controls.lock().unwrap().captures;
+    controls.lock().unwrap().fail_capture = true;
+    runtime
+        .send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::ReadOnlyRecognition,
+        })
+        .unwrap();
+    // The following command is a worker barrier: observe the failure, then inspect state.
+    runtime.send(Command::RefreshTargets).unwrap();
+    wait_raw(&runtime, |snapshot| {
+        snapshot.targets_revision > before.targets_revision
+            && controls.lock().unwrap().captures > captures
+    });
+    let after = runtime.latest().unwrap();
+    assert_eq!(after.reason, before.reason);
+    assert_eq!(after.state, before.state);
+    assert_eq!(after.pause_info, before.pause_info);
+    assert_eq!(after.frame_id, before.frame_id);
+    assert_eq!(after.geometry, before.geometry);
+    assert_eq!(after.timers, before.timers);
+    assert_eq!(after.events, before.events);
+    assert!(controls.lock().unwrap().calls.is_empty());
+    runtime.shutdown().unwrap();
+}
+#[test]
+fn readonly_snapshots_preserve_seeded_active_evidence_and_its_original_expiry() {
+    use base64::Engine;
+    let (runtime, controls) = runtime();
+    let active = Frame::new(
+        200,
+        200,
+        (0..200 * 200 * 3)
+            .map(|index| 128 + (index % 31) as u8)
+            .collect(),
+    )
+    .unwrap();
+    let changed = Frame::new(
+        200,
+        200,
+        (0..200 * 200 * 3)
+            .map(|index| ((index * 17 + index / 7 * 113) % 251) as u8)
+            .collect(),
+    )
+    .unwrap();
+    let area = metin_core::Region {
+        left: 0.,
+        top: 0.,
+        right: 0.05,
+        bottom: 0.05,
+    };
+    let reference = metin_vision::crop(&active, area).unwrap();
+    let mut profile = profile();
+    profile.buffs.icon_region = Some(area);
+    profile.buffs.skills.push(metin_core::BuffSkill {
+        mode: metin_core::BuffMode::Inactive,
+        interval_seconds: None,
+        active_hold_seconds: 1.5,
+        icon: Some(metin_core::BuffIcon {
+            png: base64::engine::general_purpose::STANDARD
+                .encode(metin_vision::encode_png(&reference).unwrap()),
+            region: Some(area),
+        }),
+        ..Default::default()
+    });
+    let key = SessionKey {
+        profile_id: profile.id,
+        target: token(1),
+    };
+    controls.lock().unwrap().frame_override = Some(active.clone());
+    configure(&runtime, profile, token(1), false, 1);
+    runtime
+        .send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+        })
+        .unwrap();
+    wait_raw(&runtime, |snapshot| {
+        snapshot.buff_presence == vec![metin_core::Presence::Active]
+    });
+    let seeded = runtime.latest().unwrap();
+    let source = seeded
+        .recognition_evidence
+        .expect("Actual live Active evidence");
+    controls.lock().unwrap().frame_override = Some(changed);
+    let mut after = seeded.clone();
+    while source.captured_at.elapsed() < Duration::from_millis(700) {
+        let frame_id = after.frame_id;
+        runtime
+            .send(Command::Snapshot {
+                key,
+                purpose: metin_desktop::runtime::SnapshotPurpose::ReadOnlyRecognition,
+            })
+            .unwrap();
+        wait_raw(&runtime, |snapshot| snapshot.frame_id > frame_id);
+        after = runtime.latest().unwrap();
+        if let Some(still_fresh) = after.recognition_evidence {
+            assert_eq!(
+                still_fresh, source,
+                "The request must not renew live evidence provenance"
+            );
+            assert_eq!(
+                after.buff_last_active_age_seconds,
+                seeded.buff_last_active_age_seconds
+            );
+            assert_eq!(after.buff_presence, seeded.buff_presence);
+        }
+        assert_eq!(after.timers, seeded.timers);
+        // Repeated checks of an actually Active image must not renew its hold.
+        controls.lock().unwrap().frame_override = Some(active.clone());
+    }
+    assert!(after.captured_at.unwrap().elapsed() < Duration::from_millis(500));
+    assert!(
+        after.recognition_evidence.is_none() && after.buff_presence.is_empty(),
+        "Raw checks must not keep original live evidence fresh beyond500ms"
+    );
+    assert!(controls.lock().unwrap().calls.is_empty());
+    runtime.shutdown().unwrap();
+}
+#[test]
 fn buff_presence_is_published_with_fresh_pixels_and_retired_when_the_frame_expires() {
     let (runtime, _) = runtime();
     let mut profile = profile();
@@ -1181,7 +1392,12 @@ fn buff_presence_is_published_with_fresh_pixels_and_retired_when_the_frame_expir
         target: token(1),
     };
     configure(&runtime, profile, key.target, false, 1);
-    runtime.send(Command::Snapshot { key }).unwrap();
+    runtime
+        .send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+        })
+        .unwrap();
     wait(&runtime, |snapshot| {
         snapshot.frame_id > 0 && snapshot.buff_presence == vec![metin_core::Presence::Unknown]
     });
@@ -1397,7 +1613,11 @@ fn capture_snapshot_has_current_geometry_and_matching_release_ack() {
     configure(&r, p, token(1), false, 1);
     r.stop();
     let generation = r.stop_generation();
-    r.send(Command::Snapshot { key }).unwrap();
+    r.send(Command::Snapshot {
+        key,
+        purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+    })
+    .unwrap();
     wait(&r, |s| {
         s.frame_id > 0 && s.released_generation == Some(generation)
     });
@@ -1435,7 +1655,11 @@ fn oversized_hp_detail_still_publishes_raw_snapshots_for_repair_but_blocks_runni
     })
     .unwrap();
     wait(&r, |s| s.revision == 2);
-    r.send(Command::Snapshot { key }).unwrap();
+    r.send(Command::Snapshot {
+        key,
+        purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+    })
+    .unwrap();
     wait(&r, |s| s.frame_id > 0 && s.geometry.is_some());
     let snapshot = r.latest().unwrap();
     assert!(snapshot.frame.is_some());
@@ -1490,7 +1714,11 @@ fn shrunk_client_with_enabled_visual_reference_still_provides_raw_repair_capture
         target: token(1),
     };
     configure(&r, p, token(1), false, 1);
-    r.send(Command::Snapshot { key }).unwrap();
+    r.send(Command::Snapshot {
+        key,
+        purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+    })
+    .unwrap();
     wait(&r, |s| s.frame_id > 0 && s.geometry.is_some());
     let snapshot = r.latest().unwrap();
     assert_eq!(
@@ -1658,11 +1886,16 @@ fn preview_and_snapshot_are_explicit_and_old_session_requests_are_ignored() {
             target: token(2),
             ..key
         },
+        purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
     })
     .unwrap();
     std::thread::sleep(Duration::from_millis(150));
     assert_eq!(controls.lock().unwrap().captures, 0);
-    r.send(Command::Snapshot { key }).unwrap();
+    r.send(Command::Snapshot {
+        key,
+        purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+    })
+    .unwrap();
     wait(&r, |s| s.frame_id > 0);
     std::thread::sleep(Duration::from_millis(200));
     assert_eq!(
@@ -1715,13 +1948,23 @@ fn idle_snapshot_detach_and_shutdown_close_capture_resources_but_preview_can_res
         .unwrap();
     wait(&runtime, |_| !controls.lock().unwrap().capture_active);
     let previous = runtime.latest().unwrap().frame_id;
-    runtime.send(Command::Snapshot { key }).unwrap();
+    runtime
+        .send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+        })
+        .unwrap();
     wait(&runtime, |snapshot| {
         snapshot.frame_id > previous && !controls.lock().unwrap().capture_active
     });
     controls.lock().unwrap().fail_capture = true;
     let previous_attempts = controls.lock().unwrap().captures;
-    runtime.send(Command::Snapshot { key }).unwrap();
+    runtime
+        .send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+        })
+        .unwrap();
     wait(&runtime, |snapshot| {
         snapshot.reason.contains("Injected capture failure")
             && controls.lock().unwrap().captures > previous_attempts
@@ -1782,7 +2025,11 @@ fn hp_matching_tracks_all_connected_client_corners_independent_of_target_area_an
     configure(&r, p, token(1), false, 1);
     for position in [[0, 0], [190, 0], [0, 190], [190, 190]] {
         controls.lock().unwrap().hp_detail = Some(position);
-        r.send(Command::Snapshot { key }).unwrap();
+        r.send(Command::Snapshot {
+            key,
+            purpose: metin_desktop::runtime::SnapshotPurpose::UpdateLiveEvidence,
+        })
+        .unwrap();
         wait(&r, |s| {
             s.panel_match
                 .is_some_and(|found| found.position == position && found.score > 0.9999)

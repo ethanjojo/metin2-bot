@@ -163,7 +163,7 @@ fn draw_at_size(
     output.textures_delta.clear();
     output
 }
-fn setup() -> (MetinApp, egui::Context, tempfile::TempDir) {
+pub(super) fn setup() -> (MetinApp, egui::Context, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let ctx = egui::Context::default();
     let mut app = MetinApp::from_context(&ctx, dir.path().to_owned()).unwrap();
@@ -773,7 +773,7 @@ fn minimum_window_and_simulated_hidpi_render_all_tabs_with_eight_skills() {
     app.runtime.shutdown().unwrap();
 }
 
-fn text_regions(output: &egui::FullOutput) -> Vec<(String, egui::Rect)> {
+pub(super) fn text_regions(output: &egui::FullOutput) -> Vec<(String, egui::Rect)> {
     fn visit(shape: &egui::Shape, regions: &mut Vec<(String, egui::Rect)>) {
         match shape {
             egui::Shape::Text(text) => regions.push((

@@ -1,6 +1,138 @@
 use metin_core::{Profile, Region, Shortcut};
 
 #[test]
+fn legacy_entity_identities_are_stable_across_load_rename_and_roundtrip() {
+    let mut source = serde_json::to_value(Profile::create("Old profile")).unwrap();
+    source["id"] = "8591a09f-25dc-4ca4-b858-cafe68231dfc".into();
+    source["buffs"]["skills"] = serde_json::json!([{"shortcut":"F1"}, {"shortcut":"F2"}]);
+    source["masks"] = serde_json::json!([
+        {"left":0.1,"top":0.2,"right":0.3,"bottom":0.4},
+        {"name":"Chat","region":{"left":0.5,"top":0.6,"right":0.7,"bottom":0.8}}
+    ]);
+    let first = Profile::from_json(&source.to_string()).unwrap();
+    let encoded = serde_json::to_value(&first).unwrap();
+    let buff_id = encoded["buffs"]["skills"][0]["id"]
+        .as_str()
+        .expect("durable buff identity");
+    let area_id = encoded["masks"][0]["id"]
+        .as_str()
+        .expect("durable exclusion identity");
+    // Fixed legacy compatibility fixture: later loaders must keep these identities.
+    assert_eq!(buff_id, "eae8e050-179e-56f2-9eaa-e4580dbab56c");
+    assert_eq!(area_id, "b979738c-e213-538a-93bd-6ba377e61084");
+    assert_ne!(buff_id, area_id);
+    assert_ne!(
+        encoded["buffs"]["skills"][0]["id"],
+        encoded["buffs"]["skills"][1]["id"]
+    );
+    assert_ne!(encoded["masks"][0]["id"], encoded["masks"][1]["id"]);
+    assert_eq!(first, Profile::from_json(&source.to_string()).unwrap());
+    source["name"] = "Renamed profile".into();
+    let renamed = serde_json::to_value(Profile::from_json(&source.to_string()).unwrap()).unwrap();
+    assert_eq!(renamed["buffs"], encoded["buffs"]);
+    assert_eq!(renamed["masks"], encoded["masks"]);
+    source["buffs"]["skills"][0]["name"] = "Aura".into();
+    source["masks"][1]["name"] = "Renamed chat".into();
+    let renamed = serde_json::to_value(Profile::from_json(&source.to_string()).unwrap()).unwrap();
+    assert_eq!(
+        renamed["buffs"]["skills"][0]["id"],
+        encoded["buffs"]["skills"][0]["id"]
+    );
+    assert_eq!(renamed["masks"][1]["id"], encoded["masks"][1]["id"]);
+    assert_eq!(first, Profile::from_json(&encoded.to_string()).unwrap());
+}
+
+#[test]
+fn duplicate_entity_identities_are_rejected_without_repairing_explicit_ids() {
+    let mut source = serde_json::to_value(Profile::create("Bad identities")).unwrap();
+    let id = "8591a09f-25dc-4ca4-b858-cafe68231dfc";
+    source["buffs"]["skills"] = serde_json::json!([
+        {"id":id,"shortcut":"F1"}, {"id":id,"shortcut":"F2"}
+    ]);
+    assert!(
+        Profile::from_json(&source.to_string())
+            .unwrap_err()
+            .to_string()
+            .contains("identity")
+    );
+    source["buffs"]["skills"] = serde_json::json!([]);
+    source["masks"] = serde_json::json!([
+        {"id":id,"name":"One","region":{"left":0.1,"top":0.2,"right":0.3,"bottom":0.4}},
+        {"id":id,"name":"Two","region":{"left":0.5,"top":0.6,"right":0.7,"bottom":0.8}}
+    ]);
+    assert!(
+        Profile::from_json(&source.to_string())
+            .unwrap_err()
+            .to_string()
+            .contains("identity")
+    );
+}
+
+#[test]
+fn new_entities_have_fresh_ids_and_legacy_nil_ids_preserve_existing_identities() {
+    let region = Region {
+        left: 0.1,
+        top: 0.2,
+        right: 0.3,
+        bottom: 0.4,
+    };
+    let first = serde_json::to_value(metin_core::BuffSkill::default()).unwrap();
+    let second = serde_json::to_value(metin_core::BuffSkill::default()).unwrap();
+    assert!(first["id"].is_string());
+    assert_ne!(first["id"], second["id"]);
+    let first = serde_json::to_value(metin_core::ExcludedArea::new("One", region)).unwrap();
+    let second = serde_json::to_value(metin_core::ExcludedArea::new("Two", region)).unwrap();
+    assert!(first["id"].is_string());
+    assert_ne!(first["id"], second["id"]);
+
+    let mut source = serde_json::to_value(Profile::create("Mixed identities")).unwrap();
+    let nil = "00000000-0000-0000-0000-000000000000";
+    let existing = "8591a09f-25dc-4ca4-b858-cafe68231dfc";
+    source["buffs"]["skills"] = serde_json::json!([
+        {"shortcut":"F1","id":nil}, {"shortcut":"F2","id":existing}, {"shortcut":"F3"}
+    ]);
+    source["masks"] = serde_json::json!([
+        {"id":nil,"name":"Old","region":region}, {"id":existing,"name":"Saved","region":region}
+    ]);
+    let loaded = Profile::from_json(&source.to_string()).unwrap();
+    let encoded = serde_json::to_value(&loaded).unwrap();
+    assert_ne!(encoded["buffs"]["skills"][0]["id"], nil);
+    assert_ne!(encoded["buffs"]["skills"][2]["id"], nil);
+    assert_eq!(encoded["buffs"]["skills"][1]["id"], existing);
+    assert_ne!(encoded["masks"][0]["id"], nil);
+    assert_eq!(encoded["masks"][1]["id"], existing);
+    assert_eq!(loaded, Profile::from_json(&source.to_string()).unwrap());
+}
+
+#[test]
+fn buff_editor_identities_do_not_reset_equivalent_runtime_configuration() {
+    let first = metin_core::BuffConfig {
+        skills: vec![metin_core::BuffSkill::default()],
+        ..Default::default()
+    };
+    let second = metin_core::BuffConfig {
+        skills: vec![metin_core::BuffSkill::default()],
+        ..Default::default()
+    };
+    assert!(first.execution_eq(&second));
+}
+
+#[test]
+fn legacy_generated_ids_do_not_collide_with_explicit_existing_ids() {
+    let mut source = serde_json::to_value(Profile::create("Reserved identity")).unwrap();
+    source["buffs"]["skills"] = serde_json::json!([{"shortcut":"F1"}]);
+    let first = Profile::from_json(&source.to_string()).unwrap();
+    let reserved = first.buffs.skills[0].id;
+    source["buffs"]["skills"] = serde_json::json!([
+        {"shortcut":"F1"}, {"shortcut":"F2","id":reserved}
+    ]);
+    let migrated = Profile::from_json(&source.to_string()).unwrap();
+    assert_eq!(migrated.buffs.skills[1].id, reserved);
+    assert_ne!(migrated.buffs.skills[0].id, reserved);
+    assert_eq!(migrated, Profile::from_json(&source.to_string()).unwrap());
+}
+
+#[test]
 fn preset_provenance_is_optional_and_never_replaces_self_contained_color() {
     let old = serde_json::to_value(Profile::create("Existing profile")).unwrap();
     assert!(old.get("color_preset_id").is_none());

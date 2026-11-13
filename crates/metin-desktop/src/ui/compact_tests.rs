@@ -315,7 +315,7 @@ fn profile_menu_keyboard_keeps_a_long_list_visible_and_accepts_the_focused_profi
 #[test]
 fn active_buff_artwork_rejects_other_sessions_revisions_and_draft_order() {
     let (mut app, _ctx, _dir) = setup();
-    app.editor.profile.buffs.skills = vec![metin_core::BuffSkill::default(); 2];
+    app.editor.profile.buffs.skills = (0..2).map(|_| metin_core::BuffSkill::default()).collect();
     app.editor.mark_saved(app.editor.profile.clone());
     app.target = Some(window_catalog()[0].token);
     app.snapshot = Arc::new(RuntimeSnapshot {
@@ -1630,11 +1630,31 @@ fn compact_skill_bars_use_regular_intervals_and_fresh_presence_without_editing()
         captured_at: Some(std::time::Instant::now()),
         ..Default::default()
     };
+    let geometry = metin_platform::TargetState {
+        target: app.target.unwrap(),
+        left: 0,
+        top: 0,
+        width: 200,
+        height: 200,
+        visible: true,
+        foreground: false,
+    };
+    snapshot.geometry = Some(geometry);
+    snapshot.recognition_evidence = Some(crate::runtime::RecognitionEvidenceSource {
+        key: app.key().unwrap(),
+        revision: app.revision,
+        frame_id: snapshot.frame_id,
+        captured_at: snapshot.captured_at.unwrap(),
+        geometry,
+    });
     app.snapshot = Arc::new(snapshot.clone());
     assert_eq!(app.skill_timing(0).1, Some(0.5));
     assert!(app.skill_timing(0).0.contains("paused"));
     assert_eq!(app.skill_timing(1), ("Active".into(), None));
-    snapshot.captured_at = Some(std::time::Instant::now() - std::time::Duration::from_secs(1));
+    snapshot.recognition_evidence.as_mut().unwrap().captured_at =
+        std::time::Instant::now() - std::time::Duration::from_secs(1);
+    // A newer raw diagnostic image does not renew derived buff evidence.
+    snapshot.captured_at = Some(std::time::Instant::now());
     app.snapshot = Arc::new(snapshot.clone());
     assert_eq!(app.skill_timing(1), ("Unknown".into(), None));
     snapshot.captured_at = Some(std::time::Instant::now());

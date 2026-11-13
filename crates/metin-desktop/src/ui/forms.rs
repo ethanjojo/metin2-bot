@@ -1,4 +1,26 @@
 use super::*;
+
+/// Upload an already validated BGR reference; callers retain/cache the handle.
+pub(super) fn frame_texture(
+    context: &egui::Context,
+    name: impl Into<String>,
+    frame: &metin_platform::Frame,
+    options: egui::TextureOptions,
+) -> egui::TextureHandle {
+    let rgb = frame
+        .bgr
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .flat_map(|pixel| [pixel[2], pixel[1], pixel[0]])
+        .collect::<Vec<_>>();
+    context.load_texture(
+        name,
+        egui::ColorImage::from_rgb([frame.width as usize, frame.height as usize], &rgb),
+        options,
+    )
+}
+
 impl MetinApp {
     pub(super) fn action_input_editor(
         &mut self,
@@ -249,18 +271,7 @@ pub(super) fn icon_texture(
         && let Ok(bytes) = icon.png_bytes()
         && let Ok(frame) = metin_vision::decode_png(&bytes)
     {
-        let pixels = frame
-            .bgr
-            .as_chunks::<3>()
-            .0
-            .iter()
-            .flat_map(|p| [p[2], p[1], p[0]])
-            .collect::<Vec<_>>();
-        let texture = ui.ctx().load_texture(
-            "buff-icon",
-            egui::ColorImage::from_rgb([frame.width as usize, frame.height as usize], &pixels),
-            egui::TextureOptions::NEAREST,
-        );
+        let texture = frame_texture(ui.ctx(), "buff-icon", &frame, egui::TextureOptions::NEAREST);
         if textures.len() > 32 {
             textures.clear();
         }

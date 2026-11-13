@@ -202,6 +202,9 @@ impl From<SkillIconId> for u16 {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct BuffSkill {
+    /// Durable editor identity; missing legacy IDs are normalized by Profile.
+    #[serde(default = "Uuid::nil")]
+    pub id: Uuid,
     pub shortcut: String,
     pub wait_seconds: f64,
     pub mode: BuffMode,
@@ -217,6 +220,7 @@ pub struct BuffSkill {
 impl Default for BuffSkill {
     fn default() -> Self {
         Self {
+            id: Uuid::new_v4(),
             shortcut: "F1".into(),
             wait_seconds: 1.5,
             mode: BuffMode::Refresh,
@@ -291,6 +295,7 @@ impl BuffConfig {
         let normalize = |c: &Self| {
             let mut c = c.clone();
             for s in &mut c.skills {
+                s.id = Uuid::nil();
                 s.name.clear();
                 s.display_icon = None;
             }
@@ -307,7 +312,12 @@ impl BuffConfig {
             "Configure one to eight buffs when buffing is enabled.",
         )?;
         let mut seen = std::collections::HashSet::new();
+        let mut identities = std::collections::HashSet::new();
         for skill in &self.skills {
+            require(
+                skill.id.is_nil() || identities.insert(skill.id),
+                "Each buff must have a unique identity.",
+            )?;
             skill.validate()?;
             let key = Shortcut::parse(&skill.shortcut)?;
             require(
@@ -325,12 +335,15 @@ impl BuffConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExcludedArea {
+    #[serde(default)]
+    pub id: Uuid,
     pub name: String,
     pub region: Region,
 }
 impl ExcludedArea {
     pub fn new(name: impl Into<String>, region: Region) -> Self {
         Self {
+            id: Uuid::new_v4(),
             name: name.into(),
             region,
         }
@@ -366,9 +379,11 @@ fn deserialize_exclusions<'de, D: serde::Deserializer<'de>>(
             .enumerate()
             .map(|(index, area)| match area {
                 StoredArea::Named(area) => area,
-                StoredArea::Legacy(region) => {
-                    ExcludedArea::new(format!("Excluded area {}", index + 1), region)
-                }
+                StoredArea::Legacy(region) => ExcludedArea {
+                    id: Uuid::nil(),
+                    name: format!("Excluded area {}", index + 1),
+                    region,
+                },
             })
             .collect()
     })
@@ -458,6 +473,46 @@ impl TimingPreset {
     }
 }
 impl Profile {
+    /// Fill missing legacy identities without changing real IDs or any user values.
+    /// Profile identity and original list position make repeat reads deterministic;
+    /// names and editable content deliberately do not participate. Save persists IDs.
+    pub fn normalize_entity_ids(&mut self) {
+        fn normalize<'a>(namespace: Uuid, kind: &str, ids: impl Iterator<Item = &'a mut Uuid>) {
+            let mut ids: Vec<_> = ids.collect();
+            let mut used: std::collections::HashSet<_> = ids
+                .iter()
+                .map(|id| **id)
+                .filter(|id| !id.is_nil())
+                .collect();
+            for (index, id) in ids.iter_mut().enumerate() {
+                if !id.is_nil() {
+                    continue;
+                }
+                let mut attempt = 0;
+                loop {
+                    // This stable namespace path is part of legacy migration.
+                    let name = format!("metinbot/{kind}/{index}/{attempt}");
+                    let candidate = Uuid::new_v5(&namespace, name.as_bytes());
+                    if used.insert(candidate) {
+                        **id = candidate;
+                        break;
+                    }
+                    attempt += 1;
+                }
+            }
+        }
+        normalize(
+            self.id,
+            "buff",
+            self.buffs.skills.iter_mut().map(|s| &mut s.id),
+        );
+        normalize(
+            self.id,
+            "exclusion",
+            self.masks.iter_mut().map(|a| &mut a.id),
+        );
+    }
+
     pub fn create(name: impl Into<String>) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -502,7 +557,12 @@ impl Profile {
             "Profile name must contain 1–80 characters.",
         )?;
         require(self.masks.len() <= 30, "Configure at most 30 masks.")?;
+        let mut identities = std::collections::HashSet::new();
         for area in &self.masks {
+            require(
+                area.id.is_nil() || identities.insert(area.id),
+                "Each excluded area must have a unique identity.",
+            )?;
             area.validate()?;
         }
         for r in [self.region, self.template_region].iter().flatten() {
@@ -632,8 +692,9 @@ impl Profile {
                 }
             }
         }
-        let profile: Self =
+        let mut profile: Self =
             serde_json::from_value(v).map_err(|e| ValidationError(e.to_string()))?;
+        profile.normalize_entity_ids();
         profile.validate()?;
         Ok(profile)
     }
